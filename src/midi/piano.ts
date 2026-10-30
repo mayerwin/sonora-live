@@ -156,7 +156,7 @@ export class Piano {
 
   private build(ctx: AudioContext): void {
     this.bus = ctx.createGain();
-    this.bus.gain.value = 0.42;
+    this.bus.gain.value = 0.6;
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -9;
     limiter.knee.value = 8;

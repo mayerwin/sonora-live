@@ -165,11 +165,12 @@ export class Room {
     this.clearTimers();
     this.phase = 'in';
     this.hooks.onFounded();
-    this.startBeacon();
+    this.startBeacon(true);
   }
 
-  private startBeacon(): void {
-    this.hello();
+  /** While alone in the room, say so now and then (`now`: right away too). */
+  private startBeacon(now: boolean): void {
+    if (now) this.hello();
     this.every(BEACON_EVERY_MS, () => {
       if (this.phase === 'in' && this.alone() && !this.hooks.busy()) this.hello();
     });
@@ -245,18 +246,19 @@ export class Room {
         if (toMe) {
           // admitted (or, while alone in a room, merged into an existing group)
           if (!policy) return;
-          if (this.phase === 'joining' || this.phase === 'knocking' || (this.phase === 'in' && this.alone())) {
+          // (the leader may answer several hellos: only the first welcome counts, and a merge only while idle)
+          const merge = this.phase === 'in' && this.alone() && !this.hooks.busy();
+          if (this.phase === 'joining' || this.phase === 'knocking' || merge) {
             this.clearTimers();
             this.phase = 'in';
             this.hooks.onWelcome(members, policy);
-            this.startBeacon();
+            this.startBeacon(false);
           }
         } else if (to) {
           // another newcomer was let in: count it, and accept its connection
           const info = members.find((x) => x.id === to) ?? null;
-          const again = this.hooks.members().some((x) => x.id === to);
           this.pending.set(to, Date.now());
-          if (info && this.phase === 'in') this.hooks.onAdmitted(info, again);
+          if (info && this.phase === 'in') this.hooks.onAdmitted(info, this.reloaded(info));
         }
         break;
       }
@@ -289,6 +291,7 @@ export class Room {
     if (!validInfo(info) || info.id !== m.from) return;
     const members = this.hooks.members();
     const isMember = members.some((x) => x.id === info.id);
+    const reloaded = this.reloaded(info);
     const policy = this.hooks.policy();
     const full = policy.locked && this.headcount() >= policy.limit && !isMember && !this.pending.has(info.id);
     if (!this.isLeader) {
@@ -309,7 +312,13 @@ export class Room {
     const list = members.map((x) => (x.id === this.self.id ? this.self : x)).filter((x) => x.id !== info.id);
     this.pending.set(info.id, Date.now());
     this.post({ t: 'welcome', to: info.id, members: [...list, info], policy });
-    this.hooks.onAdmitted(info, isMember);
+    this.hooks.onAdmitted(info, reloaded);
+  }
+
+  /** `info` is a member that entered again (its page reloaded: same tab id, a later arrival time). */
+  private reloaded(info: MemberInfo): boolean {
+    const m = this.hooks.members().find((x) => x.id === info.id);
+    return !!m && m.since !== info.since;
   }
 
   private knock(info: MemberInfo): void {

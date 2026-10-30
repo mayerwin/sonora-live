@@ -71,6 +71,26 @@ describe('room rendezvous', () => {
     b.room.leave();
   });
 
+  it('a normal join is admitted once, never mistaken for a reload', async () => {
+    const code = newRoomCode();
+    const a = new Member('Ana');
+    const b = new Member('Ben');
+    let welcomes = 0;
+    const orig = b.room['hooks'].onWelcome;
+    b.room['hooks'].onWelcome = (m, p) => {
+      welcomes++;
+      orig(m, p);
+    };
+    await a.room.enter(code, true);
+    await b.room.enter(code, false);
+    await until(() => a.peers.has(b.id));
+    await new Promise((r) => setTimeout(r, 3500)); // a beacon period
+    expect(welcomes).toBe(1);
+    expect(a.admittedAgain).toEqual([]);
+    a.room.leave();
+    b.room.leave();
+  });
+
   it('a locked room refuses a third person, who knocks and can be let in', async () => {
     const code = newRoomCode();
     const a = new Member('Ana');

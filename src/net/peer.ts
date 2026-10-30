@@ -261,14 +261,17 @@ export class PeerLink {
     const set = async (slot: Slot, f: (e: RTCRtpEncodingParameters) => void, degradation?: RTCDegradationPreference) => {
       const s = this.tx[slot]?.sender;
       if (!s) return;
-      try {
-        const p = s.getParameters();
-        if (!p.encodings?.length) return;
-        for (const e of p.encodings) f(e);
-        if (degradation) (p as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = degradation;
-        await s.setParameters(p);
-      } catch {
-        // not negotiated yet, or a browser without that parameter
+      for (const withDegradation of degradation ? [true, false] : [false]) {
+        try {
+          const p = s.getParameters();
+          if (!p.encodings?.length) return;
+          for (const e of p.encodings) f(e);
+          if (withDegradation) (p as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = degradation;
+          await s.setParameters(p);
+          return;
+        } catch {
+          // not negotiated yet, or a browser without that parameter: try the essentials
+        }
       }
     };
     await set('audio', (e) => {

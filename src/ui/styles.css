@@ -40,8 +40,8 @@
   --r-xl: 28px;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 40px -12px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 80px -20px rgba(0, 0, 0, 0.75);
-  --font: 'Instrument Sans Variable', 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    sans-serif;
+  --font: 'Instrument Sans Variable', 'Instrument Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --display: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1734,21 +1734,20 @@ a:hover {
 
 .mic-level {
   position: absolute;
-  left: 50%;
-  bottom: 6px;
-  width: 26px;
-  height: 3px;
+  top: 9px;
+  left: calc(50% + 15px);
+  width: 4px;
+  height: 22px;
   border-radius: 2px;
-  transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
   overflow: hidden;
 }
 
 .mic-level i {
-  display: block;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   background: var(--green);
-  transform-origin: left;
+  transform-origin: bottom;
   transition: transform 0.06s linear;
 }
 
@@ -2628,14 +2627,9 @@ emoji-picker {
 }
 
 .pedal.on {
-  color: var(--gold-ink);
-  background: var(--gold);
-  border-color: var(--gold);
-}
-
-.pedal.remote.on {
-  background: var(--rc);
-  border-color: var(--rc);
+  color: #141018;
+  background: var(--rc, var(--gold));
+  border-color: var(--rc, var(--gold));
 }
 
 .keyboard {

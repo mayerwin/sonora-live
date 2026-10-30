@@ -75,7 +75,15 @@ export function Room() {
       <TopBar />
       <main class="stage">
         <Banners />
-        {denied ? <Knocking /> : rp === 'joining' ? <Joining /> : peers.length === 0 ? <Waiting /> : <TileGrid />}
+        {denied ? (
+          <Knocking />
+        ) : rp === 'joining' ? (
+          <Joining />
+        ) : peers.filter((p) => !p.quiet).length === 0 ? (
+          <Waiting />
+        ) : (
+          <TileGrid />
+        )}
         {!denied && rp !== 'joining' && <SelfPip />}
         <Reactions />
       </main>
@@ -106,6 +114,7 @@ function TileGrid() {
   const peers = session.peers.value;
   const tiles: { peer: (typeof peers)[number]; extra: boolean }[] = [];
   for (const p of peers) {
+    if (p.quiet && p.link !== 'connected') continue;
     if (p.remote?.extra && p.extra) tiles.push({ peer: p, extra: true });
     tiles.push({ peer: p, extra: false });
   }
@@ -114,7 +123,7 @@ function TileGrid() {
   return (
     <div class={`tiles ${cls}`}>
       {tiles.map((t) => (
-        <PeerTile key={`${t.peer.id}${t.extra ? ':x' : ''}`} peer={t.peer} extra={t.extra} />
+        <PeerTile key={`${t.peer.id}${t.extra ? ':x' : ''}`} peer={t.peer} extra={t.extra} ambient={n === 1} />
       ))}
     </div>
   );
@@ -367,7 +376,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <span>{mic ? 'Mute' : 'Unmute'}</span>
           {mic && (
             <span class="mic-level">
-              <i style={{ transform: `scaleX(${level})` }} />
+              <i style={{ transform: `scaleY(${level})` }} />
             </span>
           )}
         </button>

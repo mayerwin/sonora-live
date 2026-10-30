@@ -150,7 +150,6 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
         {peers.map((p) => (
           <span class="legend" data-role={p.info.role}>
             <i /> {p.info.name}
-            {p.remote?.midi.sending ? '' : ' (no MIDI)'}
           </span>
         ))}
         <span class={`pedal ${pedals.local ? 'on' : ''}`} data-role={me.role} title="Your sustain pedal">

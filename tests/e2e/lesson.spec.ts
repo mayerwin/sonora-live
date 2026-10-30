@@ -220,3 +220,52 @@ test('leaving tells the others', async ({ browser }) => {
   await a.context().close();
   await b.context().close();
 });
+
+test('a MIDI instrument plays on the other side’s instrument, without echoing back', async ({ browser }) => {
+  const { fakeMidiScript } = await import('./fake-midi.ts');
+  const mk = async (name: string, role: Role, piano: string, thru: boolean, hash = '') => {
+    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    await ctx.addInitScript(fakeMidiScript(piano, thru));
+    const page = await ctx.newPage();
+    await page.goto(`/${hash ? `#${hash}` : ''}`);
+    await page.getByPlaceholder('e.g. Clara').fill(name);
+    await page.locator(`button.role[data-role=${role}]`).click();
+    return page;
+  };
+  const a = await mk('Clara', 'teacher', 'Roland FP-30X', false);
+  await enter(a);
+  const code = await codeOf(a);
+  // the student's piano has MIDI thru on: whatever it receives, it sends back
+  const b = await mk('Leo', 'student', 'MIDIIN2 (Yamaha P-125)', true, code);
+  await enter(b);
+  await connected(a, 1);
+
+  // tap MIDI, pick the instrument: done
+  for (const [p, name] of [[a, 'Roland FP-30X'], [b, 'Yamaha P-125']] as const) {
+    await p.getByTestId('btn-midi').click();
+    await p.getByTestId('midi-instrument').filter({ hasText: name }).click();
+    await expect(p.getByTestId('midi-instrument').filter({ hasText: name })).toHaveAttribute('aria-checked', 'true');
+    await p.keyboard.press('Escape');
+  }
+  await expect(b.getByTestId('tile')).toContainText('Roland FP-30X');
+
+  // the teacher plays: the student's piano plays it
+  await a.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x90, 64, 100]));
+  await expect.poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x90, 64, 100]);
+  await a.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x80, 64, 0]));
+  await expect.poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x80, 64, 0]);
+  // ...and the echo from the student's piano never comes back to the teacher
+  await a.waitForTimeout(800);
+  expect(await a.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toEqual([]);
+
+  // the student plays: the teacher hears it on their instrument
+  await b.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x90, 48, 70]));
+  await expect.poll(() => a.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x90, 48, 70]);
+
+  // both pianos travel as MIDI now: microphones switch to voice mode (Auto)
+  await expect(a.getByTestId('btn-sound')).toContainText('Voice');
+  await expect(b.getByTestId('btn-sound')).toContainText('Voice');
+
+  await a.context().close();
+  await b.context().close();
+});

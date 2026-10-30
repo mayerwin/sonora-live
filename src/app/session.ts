@@ -26,6 +26,7 @@ import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, updateMidi } from './settings.ts';
+import { log } from './log.ts';
 
 export const ROLE_LABEL: Record<Role, string> = { student: 'Student', teacher: 'Teacher', observer: 'Observer' };
 
@@ -50,6 +51,8 @@ export interface PeerView {
   extra: MediaStream | null;
   stats: LinkStats | null;
   joinedAt: number;
+  /** a background repair attempt: not shown until it connects */
+  quiet?: boolean;
 }
 
 export interface Reaction {
@@ -113,6 +116,8 @@ export class Session {
   private room: Room;
   private links = new Map<string, PeerLink>();
   private creating = new Map<string, Promise<PeerLink>>();
+  /** members others are connected to and we are not (id -> first noticed) */
+  private missing = new Map<string, number>();
   private since = Date.now();
   private statsTimer: ReturnType<typeof setInterval> | null = null;
   private audioEls = new Map<string, HTMLAudioElement>();
@@ -138,15 +143,18 @@ export class Session {
       policy: () => this.policy.peek(),
       onWelcome: (members, policy) => this.onWelcome(members, policy),
       onDeny: (reason, policy) => {
+        log('denied', reason, policy);
         this.policy.value = policy;
         this.denied.value = reason;
         this.roomPhase.value = this.room.phase;
       },
       onFounded: () => {
+        log('founded the room');
         this.roomPhase.value = 'in';
         this.denied.value = null;
       },
       onAdmitted: (info, again) => {
+        log('admitted', info.name, again ? '(again)' : '');
         if (again) {
           // it reloaded its page: the old connection is dead
           const old = this.links.get(info.id);
@@ -256,7 +264,13 @@ export class Session {
     await this.room.enter(this.code.peek(), fresh);
     this.roomPhase.value = this.room.phase;
     this.fresh.value = false;
-    if (!this.statsTimer) this.statsTimer = setInterval(() => void this.pollStats(), STATS_EVERY_MS);
+    if (!this.statsTimer) {
+      let tick = 0;
+      this.statsTimer = setInterval(() => {
+        void this.pollStats();
+        if (++tick % 3 === 0) this.sendRoster();
+      }, STATS_EVERY_MS);
+    }
     void this.lockScreen();
   }
 
@@ -290,6 +304,7 @@ export class Session {
   }
 
   private onWelcome(members: MemberInfo[], policy: Policy): void {
+    log('welcome', members.map((m) => `${m.name}#${m.id.slice(0, 4)}`), policy);
     this.policy.value = newerPolicy(this.policy.peek(), policy);
     this.denied.value = null;
     this.roomPhase.value = 'in';
@@ -336,6 +351,7 @@ export class Session {
     const servers = await this.warmIce();
     const existing = this.links.get(info.id);
     if (existing) return existing;
+    log('link', initiator ? 'to' : 'from', `${info.name}#${info.id.slice(0, 4)}`);
     const link = new PeerLink({
       id: info.id,
       selfId: this.selfId,
@@ -385,7 +401,10 @@ export class Session {
       if (!d.description || d.description.type !== 'offer' || viaLink) return;
       const p = this.policy.peek();
       const others = this.memberList().filter((m) => m.id !== from && m.id !== this.selfId).length;
-      if (p.locked && others + 1 >= p.limit) return;
+      if (p.locked && others + 1 >= p.limit) {
+        log('offer refused (room full)', from, p);
+        return;
+      }
       link = await this.link({ id: from, name: '…', role: 'student', since: Date.now() }, false);
     }
     await link.receiveSignal(d);
@@ -407,7 +426,8 @@ export class Session {
   private onLinkState(link: PeerLink, s: LinkState): void {
     const p = this.peers.peek().find((x) => x.id === link.id);
     const firstConnect = s === 'connected' && p?.link === 'connecting';
-    this.patchPeer(link.id, { link: s });
+    log('link', link.id.slice(0, 4), s);
+    this.patchPeer(link.id, s === 'connected' ? { link: s, quiet: false } : { link: s });
     if (s === 'connected') {
       this.room.connected(link.id);
       // introduce ourselves on the new channel
@@ -417,6 +437,7 @@ export class Session {
       if (hist.length) link.sendControl({ t: 'history', messages: hist });
       link.sendMidi(this.midi.helloPacket());
       link.setParams(this.sendParams());
+      this.sendRoster();
       if (firstConnect) this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
     }
   }
@@ -433,6 +454,7 @@ export class Session {
   }
 
   private dropLink(id: string, bye: boolean, silent = false): void {
+    log('drop', id.slice(0, 4), bye ? 'bye' : 'lost', silent ? 'silent' : '');
     const link = this.links.get(id);
     const peer = this.peers.peek().find((p) => p.id === id);
     if (link) {
@@ -754,6 +776,40 @@ export class Session {
       case 'bye':
         this.dropLink(id, true);
         break;
+      case 'roster':
+        this.onRoster(msg.members);
+        break;
+    }
+  }
+
+  /** Tell everyone who this browser is connected to. */
+  private sendRoster(): void {
+    const members = this.peers
+      .peek()
+      .filter((p) => p.link === 'connected' && p.remote)
+      .map((p) => p.info);
+    for (const l of this.links.values()) l.sendControl({ t: 'roster', members });
+  }
+
+  /**
+   * Another member is connected to someone we are not (our connection to them dropped, or the welcome missed
+   * them): connect. Only the smaller id starts, so both sides do not start at once.
+   */
+  private onRoster(list: unknown): void {
+    if (!Array.isArray(list) || this.phase.peek() !== 'room') return;
+    const now = Date.now();
+    for (const m of list.slice(0, 16)) {
+      if (!validInfo(m) || m.id === this.selfId) continue;
+      if (this.links.has(m.id) || this.creating.has(m.id)) {
+        this.missing.delete(m.id);
+        continue;
+      }
+      // a newcomer connects to everyone itself: only step in when that clearly did not happen
+      const since = this.missing.get(m.id) ?? now;
+      this.missing.set(m.id, since);
+      if (now - since < 8000 || this.selfId > m.id) continue;
+      this.missing.delete(m.id);
+      void this.link(m, true).then((l) => this.patchPeer(l.id, { quiet: true }));
     }
   }
 
@@ -870,7 +926,7 @@ export class Session {
       if (m.t === 'file' && typeof m.id === 'string') {
         const size = Math.min(MAX_FILE_BYTES, Number(m.size) || 0);
         const name = String(m.name ?? 'file').slice(0, 120);
-        const mime = String(m.mime || 'application/octet-stream');
+        const mime = safeMime(String(m.mime || ''));
         this.fileIn.set(from, { id: m.id, chunks: [], got: 0, size, mime, name });
         const peer = this.peers.peek().find((p) => p.id === from);
         const msg: ChatMessage = {
@@ -923,6 +979,18 @@ export class Session {
   get isLeader(): boolean {
     return this.room.isLeader;
   }
+}
+
+/**
+ * Files from others open from a blob: URL of this site, so only types that cannot run script keep their type
+ * (HTML or SVG would run in our origin); anything else is downloaded instead of opened.
+ */
+export function safeMime(mime: string): string {
+  const m = mime.toLowerCase().trim();
+  if (/^image\/(png|jpe?g|gif|webp|avif|bmp)$/.test(m)) return m;
+  if (/^audio\/[a-z0-9.+-]+$/.test(m) || /^video\/(mp4|webm|ogg)$/.test(m)) return m;
+  if (m === 'application/pdf' || m === 'text/plain') return m;
+  return 'application/octet-stream';
 }
 
 export const session = new Session();

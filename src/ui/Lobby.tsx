@@ -348,7 +348,7 @@ export function Lobby() {
           <div class="hint">
             <Headphones />
             <span>
-              Use headphones: your microphone sends pure, unfiltered sound, so speakers would echo back to the other side.
+              Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.
             </span>
           </div>
 

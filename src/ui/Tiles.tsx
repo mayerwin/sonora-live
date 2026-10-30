@@ -9,7 +9,7 @@ import { LevelBars, Qr, SignalBars, VideoView } from './common.tsx';
 import { initials, RoleIcon } from './icons.tsx';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
 
-export function PeerTile({ peer, extra = false }: { peer: PeerView; extra?: boolean }) {
+export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerView; extra?: boolean; ambient?: boolean }) {
   const r = peer.remote;
   const role = peer.info.role;
   const stream = extra ? peer.extra : peer.video;
@@ -20,7 +20,7 @@ export function PeerTile({ peer, extra = false }: { peer: PeerView; extra?: bool
     <div class={`tile ${extra ? 'extra' : ''}`} data-role={role} data-testid={extra ? 'tile-extra' : 'tile'} data-peer={peer.id}>
       {showVideo ? (
         <>
-          {!extra && portrait && <VideoView stream={stream} class="backdrop" />}
+          {(ambient || (!extra && portrait)) && <VideoView stream={stream} class="backdrop" />}
           <VideoView stream={stream} onResize={(w, h) => setPortrait(h > w)} />
         </>
       ) : (

@@ -90,7 +90,7 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
         {mode === 'pure' && !looksLikeHeadphones(speakerLabel) && (
           <div class="hint hint-warn">
             <Headphones />
-            <span>Pure sound has no echo cancelling: use headphones, or the others will hear themselves.</span>
+            <span>Pure sound has no echo cancelling: use headphones (wired ones add no delay), or the others will hear themselves.</span>
           </div>
         )}
       </div>

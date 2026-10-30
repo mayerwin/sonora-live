@@ -1,39 +1,33 @@
 import { Eye, GraduationCap, Music4 } from 'lucide-preact';
 import type { Role } from '../net/room.ts';
 
-/** The Sonora Live mark: a sound wave rising out of the keys. */
+/** The Sonora Live mark: piano keys sounding live, both ways (teacher and student). */
 export function Logo({ size = 34, class: cls = 'brand-mark' }: { size?: number; class?: string }) {
   return (
     <svg class={cls} width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id="sl-bg" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#2a2633" />
-          <stop offset="1" stop-color="#16141b" />
+          <stop stop-color="#2b2734" />
+          <stop offset="1" stop-color="#141218" />
         </linearGradient>
-        <linearGradient id="sl-wave" x1="10" y1="10" x2="54" y2="44" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#ffd58a" />
-          <stop offset="1" stop-color="#f09a2c" />
+        <linearGradient id="sl-gold" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#ffd98f" />
+          <stop offset="1" stop-color="#f0962a" />
+        </linearGradient>
+        <linearGradient id="sl-ivory" x1="0" y1="14" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#fffaf2" />
+          <stop offset="1" stop-color="#e6ddcf" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="17" fill="url(#sl-bg)" />
-      <rect x="0.5" y="0.5" width="63" height="63" rx="16.5" stroke="#fff" stroke-opacity=".09" />
-      <g fill="#f4efe7">
-        <rect x="11" y="40" width="9" height="15" rx="2.2" />
-        <rect x="22" y="40" width="9" height="15" rx="2.2" />
-        <rect x="33" y="40" width="9" height="15" rx="2.2" />
-        <rect x="44" y="40" width="9" height="15" rx="2.2" />
+      <rect x=".5" y=".5" width="63" height="63" rx="16.5" stroke="#fff" stroke-opacity=".08" />
+      <rect x="21" y="16" width="10.4" height="32" rx="3" fill="url(#sl-ivory)" />
+      <rect x="32.6" y="16" width="10.4" height="32" rx="3" fill="url(#sl-ivory)" />
+      <rect x="27.6" y="16" width="8.8" height="19" rx="2.2" fill="#141218" />
+      <g stroke="url(#sl-gold)" stroke-width="4.4" stroke-linecap="round">
+        <path d="M16.44 42.9a19 19 0 0 1 0-21.8M47.56 21.1a19 19 0 0 1 0 21.8" />
+        <path d="M9.05 45.25a26.5 26.5 0 0 1 0-26.5M54.95 18.75a26.5 26.5 0 0 1 0 26.5" stroke-opacity=".55" />
       </g>
-      <g fill="#16141b">
-        <rect x="17.5" y="40" width="5" height="8.5" rx="1.4" />
-        <rect x="28.5" y="40" width="5" height="8.5" rx="1.4" />
-        <rect x="41.5" y="40" width="5" height="8.5" rx="1.4" />
-      </g>
-      <path
-        d="M11.5 30.5c4.2-9.6 8.6-14.4 13-14.4 7.6 0 7.4 15.8 15 15.8 4.4 0 8.4-4.8 13-14.4"
-        stroke="url(#sl-wave)"
-        stroke-width="5.2"
-        stroke-linecap="round"
-      />
     </svg>
   );
 }
