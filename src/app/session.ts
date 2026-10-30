@@ -7,7 +7,7 @@ import { LocalMedia } from '../media/local.ts';
 import { Meter, resumeMeters } from '../media/meter.ts';
 import { MidiHub } from '../midi/hub.ts';
 import { newRoomCode, normalizeRoomCode } from '../net/code.ts';
-import { iceServers } from '../net/ice.ts';
+import { hasBuiltInTurn, iceServers } from '../net/ice.ts';
 import { fingerprintOf, PeerLink, type LinkState, type LinkStats, type SignalData, type Slot } from '../net/peer.ts';
 import { createRelay, type Relay } from '../net/relay.ts';
 import {
@@ -276,8 +276,12 @@ export class Session {
   }
 
   private async warmIce(): Promise<RTCIceServer[]> {
-    if (!this.iceCache) this.iceCache = await iceServers(settings.peek().turn);
-    return this.iceCache;
+    if (this.iceCache) return this.iceCache;
+    const list = await iceServers(settings.peek().turn);
+    // a relay that could not be fetched this time is asked for again by the next connection
+    const relay = list.some((s) => [s.urls].flat().some((u) => /^turns?:/i.test(u)));
+    if (relay || !hasBuiltInTurn()) this.iceCache = list;
+    return list;
   }
 
   /** Use another room code (typed, or from a link). */
