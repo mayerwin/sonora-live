@@ -500,4 +500,8 @@ export const FR: Record<string, string> = spaced({
   'Send the link (or the code) to the other person.': 'Envoyez le lien (ou le code) à l’autre personne.',
   'They open it, choose their role, and you see and hear each other.':
     'Elle l’ouvre, choisit son rôle, et vous vous voyez et vous entendez.',
+  'Your camera shows a still image, not you: Windows is blocking it. Check Settings → Privacy & security → Camera, the camera key or cover, and close other apps using it (Teams, Zoom). Then turn the camera off and on below.':
+    'Votre caméra affiche une image fixe, pas vous : Windows la bloque. Vérifiez Paramètres → Confidentialité et sécurité → Caméra, la touche ou le cache de la caméra, et fermez les autres applications qui l’utilisent (Teams, Zoom). Puis coupez et rallumez la caméra ci-dessous.',
+  'Your camera shows a still image, not you: it may be blocked by the system or used by another app. Close other apps using it, then turn the camera off and on below.':
+    'Votre caméra affiche une image fixe, pas vous : elle est peut-être bloquée par le système ou utilisée par une autre application. Fermez les autres applications qui l’utilisent, puis coupez et rallumez la caméra ci-dessous.',
 });

@@ -39,6 +39,8 @@ export class LocalMedia {
 
   private micId = '';
   private camId = '';
+  /** the camera last used, still shown in the list while it is off */
+  private lastCamId: string | undefined;
   private quality: VideoQuality = 'hd';
   private busy = Promise.resolve();
 
@@ -135,6 +137,7 @@ export class LocalMedia {
       if (this.video.value === t && this.camOn.value) void this.restartVideo('');
     });
     this.video.value = t;
+    this.lastCamId = t.getSettings().deviceId;
     this.picture.watch(t);
     this.onTrack('video', t);
     if (old && old !== t) old.stop();
@@ -284,7 +287,7 @@ export class LocalMedia {
   }
 
   get cameraId(): string {
-    return this.video.value?.getSettings().deviceId ?? this.camId;
+    return this.video.value?.getSettings().deviceId ?? this.lastCamId ?? this.camId;
   }
 
   get microphoneId(): string {

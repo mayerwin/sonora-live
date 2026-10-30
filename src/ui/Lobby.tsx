@@ -22,7 +22,8 @@ import {
 import { session, roleLabel } from '../app/session.ts';
 import { askNotifications, notifyPermission } from '../app/notify.ts';
 import { settings, update, updateMidi } from '../app/settings.ts';
-import { browserName, REPO_URL } from '../app/platform.ts';
+import { browserName, os, REPO_URL } from '../app/platform.ts';
+import type { Picture } from '../media/picture.ts';
 import { listDevices, type DeviceLists, type MediaProblem } from '../media/local.ts';
 import { normalizeRoomCode, prettyCode } from '../net/code.ts';
 import type { Role } from '../net/room.ts';
@@ -65,6 +66,22 @@ export function problemText(p: MediaProblem, what: 'camera' | 'microphone'): str
     default:
       return cam ? t('The camera could not start.') : t('The microphone could not start.');
   }
+}
+
+/** Why the camera shows no real picture, and what to do (see src/media/picture.ts). */
+function pictureHelp(p: Picture): string {
+  if (p === 'dark')
+    return t('Your camera sends a black picture: is its cover closed, or is it switched off by a key on the keyboard?');
+  if (p === 'frozen') {
+    return os === 'windows'
+      ? t(
+          'Your camera shows a still image, not you: Windows is blocking it. Check Settings → Privacy & security → Camera, the camera key or cover, and close other apps using it (Teams, Zoom). Then turn the camera off and on below.',
+        )
+      : t(
+          'Your camera shows a still image, not you: it may be blocked by the system or used by another app. Close other apps using it, then turn the camera off and on below.',
+        );
+  }
+  return t('No picture from your camera: another app may be using it, or it is switched off by a key on the keyboard.');
 }
 
 export function Lobby() {
@@ -218,18 +235,10 @@ export function Lobby() {
             {stream && media.camOn.value ? (
               <>
                 <VideoView stream={stream} class={s.mirror ? 'mirror' : ''} />
-                {(picture === 'dark' || picture === 'none') && (
+                {picture !== 'ok' && picture !== 'unknown' && (
                   <div class="preview-note" data-testid="camera-dark">
                     <VideoOff />
-                    <span>
-                      {picture === 'dark'
-                        ? t(
-                            'Your camera sends a black picture: is its cover closed, or is it switched off by a key on the keyboard?',
-                          )
-                        : t(
-                            'No picture from your camera: another app may be using it, or it is switched off by a key on the keyboard.',
-                          )}
-                    </span>
+                    <span>{pictureHelp(picture)}</span>
                   </div>
                 )}
               </>
