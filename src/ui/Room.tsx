@@ -527,7 +527,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           </button>
           {open === 'more' && (
             <div class="menu" role="menu" style="left:auto;right:-60px;transform:none;min-width:250px">
-              <div class="emoji-row" style="flex-wrap:wrap">
+              <div class="emoji-row" style="justify-content:space-between">
                 {REACTIONS.slice(0, 5).map((e) => (
                   <button
                     onClick={() => {

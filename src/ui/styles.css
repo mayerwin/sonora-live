@@ -667,6 +667,55 @@ a:hover {
   margin: 0 auto 12px;
 }
 
+.steps {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.steps li::marker {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.preview-empty .btn {
+  margin: 14px auto 0;
+}
+
+.preview-empty b {
+  display: block;
+  max-width: 340px;
+  color: var(--text);
+}
+
+.preview-note {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 58px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: rgba(15, 14, 19, 0.82);
+  border: 1px solid rgba(245, 181, 68, 0.4);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 2;
+}
+
+.preview-note svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+}
+
 .preview-bar {
   position: absolute;
   left: 50%;
@@ -1312,6 +1361,52 @@ a:hover {
   font-weight: 600;
 }
 
+.tile video.pending {
+  opacity: 0;
+}
+
+.tile-overlay.no-path {
+  padding: 18px;
+}
+
+.no-path-card {
+  max-width: 440px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.no-path-card b {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.no-path-card p,
+.no-path-card ul {
+  margin: 0;
+}
+
+.no-path-card ul {
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.no-path-card small {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.no-path-card .spinner {
+  width: 14px;
+  height: 14px;
+}
+
 .pip {
   position: absolute;
   z-index: 5;
@@ -1626,6 +1721,8 @@ a:hover {
   gap: 8px;
   padding: 8px 16px calc(12px + var(--safe-b));
   position: relative;
+  /* its menus open above the stage, over the small self view */
+  z-index: 30;
 }
 
 .bar-group {
@@ -2805,6 +2902,21 @@ emoji-picker {
 }
 
 @media (max-width: 640px) {
+  /* on a phone, messages appear at the top: the controls and the self view stay free */
+  .toasts {
+    top: calc(64px + var(--safe-t, 0px));
+    bottom: auto;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .emoji-row button {
+    width: 40px;
+    height: 40px;
+    font-size: 23px;
+  }
+
   .topbar {
     padding-left: 12px;
     padding-right: 12px;
@@ -2871,12 +2983,6 @@ emoji-picker {
     padding: 0 8px 2px;
   }
 
-  .toasts {
-    left: 12px;
-    right: 12px;
-    width: auto;
-    bottom: calc(84px + var(--safe-b));
-  }
 
   .tile-label {
     font-size: 13px;

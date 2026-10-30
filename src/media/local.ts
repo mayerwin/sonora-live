@@ -2,6 +2,7 @@
 // RTCRtpSender.replaceTrack, so switching devices or sound modes is seamless for the other side.
 
 import { signal } from '@preact/signals';
+import { PictureWatch } from './picture.ts';
 import { audioConstraints, videoConstraints, type SoundMode, type VideoQuality } from './constraints.ts';
 import type { Slot } from '../net/peer.ts';
 
@@ -29,6 +30,10 @@ export class LocalMedia {
   /** the microphone delivers stereo */
   readonly stereo = signal(false);
   readonly facing = signal<'user' | 'environment'>('user');
+  /** waiting for the browser's permission prompt (or the devices) to answer */
+  readonly asking = signal(false);
+  /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
+  readonly picture = new PictureWatch();
   /** a track the peers should send now changed */
   onTrack: (slot: Slot, track: MediaStreamTrack | null) => void = () => {};
 
@@ -52,7 +57,13 @@ export class LocalMedia {
   }
 
   /** Ask for camera and microphone together (one permission prompt). */
-  start(opts: { mode: SoundMode; micId: string; camId: string; quality: VideoQuality; wantVideo: boolean }): Promise<void> {
+  start(opts: {
+    mode: SoundMode;
+    micId: string;
+    camId: string;
+    quality: VideoQuality;
+    wantVideo: boolean;
+  }): Promise<void> {
     return this.run(async () => {
       if (!this.supported) {
         const secure = window.isSecureContext;
@@ -66,6 +77,7 @@ export class LocalMedia {
       const audio = audioConstraints(opts.mode, opts.micId || undefined);
       const video = opts.wantVideo ? videoConstraints(opts.quality, opts.camId || undefined, this.facing.value) : false;
       let stream: MediaStream | null = null;
+      this.asking.value = true;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio, video });
       } catch (e) {
@@ -80,13 +92,16 @@ export class LocalMedia {
         }
         if (opts.wantVideo) {
           try {
-            const v = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(opts.quality, undefined, this.facing.value) });
+            const v = await navigator.mediaDevices.getUserMedia({
+              video: videoConstraints(opts.quality, undefined, this.facing.value),
+            });
             v.getVideoTracks().forEach((t) => stream!.addTrack(t));
           } catch (ev) {
             this.videoProblem.value = problemOf(ev);
           }
         }
       }
+      this.asking.value = false;
       const a = stream.getAudioTracks()[0] ?? null;
       const v = stream.getVideoTracks()[0] ?? null;
       if (a) this.setAudioTrack(a, opts.mode);
@@ -120,6 +135,7 @@ export class LocalMedia {
       if (this.video.value === t && this.camOn.value) void this.restartVideo('');
     });
     this.video.value = t;
+    this.picture.watch(t);
     this.onTrack('video', t);
     if (old && old !== t) old.stop();
   }
@@ -167,6 +183,7 @@ export class LocalMedia {
       } catch (e) {
         this.videoProblem.value = problemOf(e);
         this.video.value = null;
+        this.picture.stop();
         this.onTrack('video', null);
       }
     });
@@ -185,6 +202,7 @@ export class LocalMedia {
       if (!on) {
         const t = this.video.value;
         this.video.value = null;
+        this.picture.stop();
         this.onTrack('video', null);
         t?.stop();
         return;
@@ -209,7 +227,11 @@ export class LocalMedia {
   }
 
   get canShareScreen(): boolean {
-    return !!navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices && !/Android|iPhone|iPad/i.test(navigator.userAgent);
+    return (
+      !!navigator.mediaDevices &&
+      'getDisplayMedia' in navigator.mediaDevices &&
+      !/Android|iPhone|iPad/i.test(navigator.userAgent)
+    );
   }
 
   /** Share a screen or window (sheet music, a score editor) on the extra video slot. */
@@ -273,6 +295,7 @@ export class LocalMedia {
     for (const t of [this.audio.value, this.video.value, this.extra.value]) t?.stop();
     this.audio.value = null;
     this.video.value = null;
+    this.picture.stop();
     this.extra.value = null;
     this.extraKind.value = null;
   }

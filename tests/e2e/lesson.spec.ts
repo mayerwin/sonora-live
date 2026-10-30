@@ -188,7 +188,7 @@ test('a locked room makes a third person knock; letting them in works', async ({
   for (const p of [a, b, c]) await p.context().close();
 });
 
-test('reloading the page rejoins the same lesson', async ({ browser }) => {
+test('reloading the page goes straight back into the same lesson', async ({ browser }) => {
   const a = await person(browser, 'Clara', 'teacher');
   await enter(a);
   const code = await codeOf(a);
@@ -197,11 +197,12 @@ test('reloading the page rejoins the same lesson', async ({ browser }) => {
   await connected(a, 1);
 
   await b.reload();
-  // name and role are remembered; the room code is in the address
-  await expect(b.locator('.join-card')).toContainText('Joining room');
-  await expect(b.getByPlaceholder('e.g. Clara')).toHaveValue('Leo');
-  await enter(b);
+  // straight back into the lesson (a reload, or a phone closing the tab in the background), as the same person
+  await expect(b.getByTestId('room')).toBeVisible();
   await connected(b, 1);
+  // for the teacher, nothing happened: no "left" then "joined" again
+  await a.waitForTimeout(3500);
+  await expect(a.locator('.toast.leave')).toHaveCount(0);
   await connected(a, 1);
   expect((await peers(a)).length).toBe(1);
 
@@ -544,4 +545,38 @@ test('the on-screen keys play the sampled grand piano', async ({ browser }) => {
   expect(voices.length).toBeGreaterThan(0);
   expect(voices.every((n) => n === 'AudioBufferSourceNode')).toBe(true);
   await page.context().close();
+});
+
+test('when the networks block a direct path, the tile explains it calmly and connects once a path exists', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const blocked = async (name: string, role: Role, hash = '') => {
+    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    await ctx.addInitScript(() => ((window as unknown as { sonoraNoDirect: boolean }).sonoraNoDirect = true));
+    const page = await ctx.newPage();
+    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+    await page.getByPlaceholder('e.g. Clara').fill(name);
+    await page.locator(`button.role[data-role=${role}]`).click();
+    await enter(page);
+    return page;
+  };
+  const a = await blocked('Clara', 'teacher');
+  const b = await blocked('Leo', 'student', await codeOf(a));
+  for (const p of [a, b]) await expect(p.getByTestId('no-direct-path')).toBeVisible({ timeout: 45_000 });
+  await expect(a.getByTestId('no-direct-path')).toContainText('Leo');
+  // it stays: no flashing back to a spinner, no "left" or "lost" messages, while it keeps trying
+  for (let i = 0; i < 15; i++) {
+    await a.waitForTimeout(2000);
+    await expect(a.getByTestId('no-direct-path')).toBeVisible();
+    await expect(a.locator('.toast')).toHaveCount(0);
+  }
+  // the network allows it now (both on the same Wi-Fi): the retries connect
+  for (const p of [a, b])
+    await p.evaluate(() => ((window as unknown as { sonoraNoDirect: boolean }).sonoraNoDirect = false));
+  await connected(a, 1);
+  await connected(b, 1);
+  await expect(a.getByTestId('no-direct-path')).toHaveCount(0);
+  await a.context().close();
+  await b.context().close();
 });

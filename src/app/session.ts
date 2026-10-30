@@ -29,6 +29,10 @@ import { settings, tabId, updateMidi } from './settings.ts';
 import { log } from './log.ts';
 import { t } from './i18n.ts';
 
+const LESSON_KEY = 'sonora.lesson';
+/** a departure is announced after this, unless the person is back (a page reload takes a second or two) */
+const LEAVE_NOTICE_MS = 3000;
+
 export const roleLabel = (r: Role): string =>
   ({ student: t('Student'), teacher: t('Teacher'), observer: t('Observer') })[r];
 
@@ -55,6 +59,8 @@ export interface PeerView {
   joinedAt: number;
   /** a background repair attempt: not shown until it connects */
   quiet?: boolean;
+  /** attempts that never connected (their networks block a direct path): the tile explains and keeps trying */
+  failures?: number;
 }
 
 export interface Reaction {
@@ -98,7 +104,7 @@ export class Session {
   readonly needsTap = signal(false);
   readonly self = computed<MemberInfo>(() => ({
     id: this.id.value,
-    name: settings.value.name.trim() || t('Guest'),
+    name: settings.value.name.trim() || (settings.value.role ? roleLabel(settings.value.role) : t('Guest')),
     role: settings.value.role ?? 'student',
     since: this.since,
   }));
@@ -122,6 +128,12 @@ export class Session {
   private creating = new Map<string, Promise<PeerLink>>();
   /** members others are connected to and we are not (id -> first noticed) */
   private missing = new Map<string, number>();
+  /** departures not announced yet (see dropLink) */
+  private leaving = new Map<string, ReturnType<typeof setTimeout>>();
+  /** who the room let in, so a connection they open shows their name */
+  private known = new Map<string, MemberInfo>();
+  /** connections that failed before ever opening, by person, and when to forget a silent one */
+  private failed = new Map<string, { n: number; forget: ReturnType<typeof setTimeout> }>();
   private since = Date.now();
   private statsTimer: ReturnType<typeof setInterval> | null = null;
   private audioEls = new Map<string, HTMLAudioElement>();
@@ -162,6 +174,7 @@ export class Session {
       },
       onAdmitted: (info, again) => {
         log('admitted', info.name, again ? '(again)' : '');
+        this.known.set(info.id, info);
         if (again) {
           // it reloaded its page: the old connection is dead
           const old = this.links.get(info.id);
@@ -206,6 +219,13 @@ export class Session {
         this.fresh.value = false;
         setTitleRoom(c);
       }
+    });
+    // the moment a page may be closed or frozen: remember the lesson is still going
+    document.addEventListener('visibilitychange', () => {
+      if (this.phase.peek() === 'room') this.markInLesson(true);
+    });
+    window.addEventListener('pagehide', () => {
+      if (this.phase.peek() === 'room') this.markInLesson(true);
     });
     window.addEventListener('online', () => {
       (this.relay as { kick?: () => void }).kick?.();
@@ -277,7 +297,27 @@ export class Session {
   }
 
   /** Enter the lesson (from the lobby's button: this click also unlocks sound). */
+  /** This tab was in this room's lesson a moment ago (a reload, or the phone closed the tab in the background). */
+  wasInLesson(): boolean {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(LESSON_KEY) ?? 'null') as { code?: string; at?: number } | null;
+      return !!v && v.code === this.code.peek() && Date.now() - (v.at ?? 0) < 20 * 60_000;
+    } catch {
+      return false;
+    }
+  }
+
+  private markInLesson(on: boolean): void {
+    try {
+      if (on) sessionStorage.setItem(LESSON_KEY, JSON.stringify({ code: this.code.peek(), at: Date.now() }));
+      else sessionStorage.removeItem(LESSON_KEY);
+    } catch {
+      // private mode: no automatic rejoin
+    }
+  }
+
   async enter(): Promise<void> {
+    this.markInLesson(true);
     unlockChimes();
     resumeMeters();
     this.midi.piano.context();
@@ -327,6 +367,7 @@ export class Session {
 
   /** Leave the lesson (camera and microphone are released). */
   leave(): void {
+    this.markInLesson(false);
     this.sayBye();
     for (const id of [...this.links.keys()]) this.dropLink(id, false, true);
     this.room.leave(false);
@@ -336,6 +377,11 @@ export class Session {
     this.meter.detach();
     this.chat.clear();
     this.knocks.value = [];
+    for (const l of this.leaving.values()) clearTimeout(l);
+    this.leaving.clear();
+    for (const f of this.failed.values()) clearTimeout(f.forget);
+    this.failed.clear();
+    this.peers.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
     this.statsTimer = null;
     void this.wakeLock?.release().catch(() => {});
@@ -367,6 +413,7 @@ export class Session {
     this.policy.value = policy;
     this.denied.value = null;
     this.roomPhase.value = 'in';
+    for (const m of members) this.known.set(m.id, m);
     for (const m of members) {
       if (m.id === this.selfId || this.links.has(m.id)) continue;
       void this.link(m, true);
@@ -440,7 +487,8 @@ export class Session {
       video: null,
       extra: null,
       stats: null,
-      joinedAt: Date.now(),
+      joinedAt: this.peers.peek().find((p) => p.id === info.id)?.joinedAt ?? Date.now(),
+      failures: this.failed.get(info.id)?.n,
     });
     link.onSignal = (data) => this.sendSignal(info.id, data);
     link.onState = (s) => this.onLinkState(link, s);
@@ -472,7 +520,7 @@ export class Session {
         log('new connection from', from.slice(0, 4), '(old one replaced)');
         const info = this.peers.peek().find((p) => p.id === from)?.info;
         this.dropLink(from, false, true);
-        link = await this.link(info ?? { id: from, name: '…', role: 'student', since: 0 }, false);
+        link = await this.link(info ?? this.stranger(from), false);
         await link.receiveSignal(d);
         return;
       }
@@ -486,9 +534,14 @@ export class Session {
         log('offer refused (room full)', from, p);
         return;
       }
-      link = await this.link({ id: from, name: '…', role: 'student', since: 0 }, false);
+      link = await this.link(this.stranger(from), false);
     }
     await link.receiveSignal(d);
+  }
+
+  /** Someone whose offer arrives first: the room told us who they are, or they say it once connected. */
+  private stranger(id: string): MemberInfo {
+    return this.known.get(id) ?? { id, name: '…', role: 'student', since: 0 };
   }
 
   /** The connection to `info`, created once even when signals arrive while it is being set up. */
@@ -508,8 +561,12 @@ export class Session {
     const p = this.peers.peek().find((x) => x.id === link.id);
     const firstConnect = s === 'connected' && p?.link === 'connecting';
     log('link', link.id.slice(0, 4), s);
-    this.patchPeer(link.id, s === 'connected' ? { link: s, quiet: false } : { link: s });
+    if (s === 'reconnecting' && !link.everConnected) return; // still the first attempt: keep saying "connecting"
+    this.patchPeer(link.id, s === 'connected' ? { link: s, quiet: false, failures: undefined } : { link: s });
     if (s === 'connected') {
+      const f = this.failed.get(link.id);
+      if (f) clearTimeout(f.forget);
+      this.failed.delete(link.id);
       this.room.connected(link.id);
       // introduce ourselves on the new channel
       link.sendControl(this.stateMessage());
@@ -524,11 +581,18 @@ export class Session {
 
   /** The other side announced itself: now we can say who joined. */
   private announceJoin(peer: PeerView): void {
+    const back = this.leaving.get(peer.id);
+    if (back) {
+      // the same person, back from a reload: as if nothing happened
+      clearTimeout(back);
+      this.leaving.delete(peer.id);
+      return;
+    }
     const name = peer.info.name;
     const role = roleLabel(peer.info.role);
     if (settings.peek().joinSound) chime('join');
     buzz(40);
-    toast({ kind: 'join', title: t('{name} joined', { name }), body: t('{role} · connected directly', { role }) });
+    toast({ kind: 'join', title: t('{name} joined', { name }), body: role });
     this.chat.system(t('{name} ({role}) joined the lesson', { name, role }));
     if (settings.peek().notifyJoin)
       systemNotify(t('{name} joined your lesson', { name }), `${role} · Sonora Live`, 'join');
@@ -550,21 +614,48 @@ export class Session {
       el.remove();
       this.audioEls.delete(id);
     }
+    if (peer && !bye && !silent && !peer.remote && !peer.quiet && this.phase.peek() === 'room') {
+      // never connected: their network and ours found no direct path. Keep the person on screen with an
+      // explanation; the room keeps trying (each side says hello again while alone) and the next attempt
+      // replaces this tile without flashing back to a plain spinner.
+      const f = this.failed.get(id);
+      if (f) clearTimeout(f.forget);
+      const n = (f?.n ?? 0) + 1;
+      const forget = setTimeout(() => {
+        this.failed.delete(id);
+        if (!this.links.has(id)) this.peers.value = this.peers.peek().filter((p) => p.id !== id);
+      }, 120_000);
+      this.failed.set(id, { n, forget });
+      log('no direct path to', id.slice(0, 4), `(attempt ${n})`);
+      this.patchPeer(id, { link: 'closed', failures: n });
+      return;
+    }
+    if (bye) {
+      const f = this.failed.get(id);
+      if (f) clearTimeout(f.forget);
+      this.failed.delete(id);
+    }
     if (peer) {
       this.peers.value = this.peers.peek().filter((p) => p.id !== id);
       if (!silent && peer.remote) {
-        if (settings.peek().joinSound) chime('leave');
-        toast({
-          kind: 'leave',
-          title: bye
-            ? t('{name} left', { name: peer.info.name })
-            : t('Lost connection to {name}', { name: peer.info.name }),
-          body: bye ? undefined : t('They can rejoin with the same link; it reconnects by itself.'),
-        });
-        this.chat.system(
-          bye
-            ? t('{name} left the lesson', { name: peer.info.name })
-            : t('Connection to {name} was lost', { name: peer.info.name }),
+        // said a moment later: someone who reloads the page is back before it, and nothing needs saying
+        const name = peer.info.name;
+        clearTimeout(this.leaving.get(id));
+        this.leaving.set(
+          id,
+          setTimeout(() => {
+            this.leaving.delete(id);
+            if (this.phase.peek() !== 'room') return;
+            if (settings.peek().joinSound) chime('leave');
+            toast({
+              kind: 'leave',
+              title: bye ? t('{name} left', { name }) : t('Lost connection to {name}', { name }),
+              body: bye ? undefined : t('They can rejoin with the same link; it reconnects by itself.'),
+            });
+            this.chat.system(
+              bye ? t('{name} left the lesson', { name }) : t('Connection to {name} was lost', { name }),
+            );
+          }, LEAVE_NOTICE_MS),
         );
       }
     }

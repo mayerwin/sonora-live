@@ -59,6 +59,13 @@ const RESTART_AFTER_MS = 2500;
 const GIVE_UP_MS = 45_000;
 /** a connection that never opens is given up after this */
 const CONNECT_TIMEOUT_MS = 25_000;
+
+/** Testing: relayed paths only, as on networks that block direct ones (?nodirect, or window.sonoraNoDirect). */
+function noDirect(): boolean {
+  if (typeof location === 'undefined') return false;
+  const flag = (globalThis as { sonoraNoDirect?: boolean }).sonoraNoDirect;
+  return flag ?? /[?&]nodirect\b/.test(location.search);
+}
 /** an offer not answered yet is sent again (the relay may lose a message, or be down for a moment) */
 const RESEND_OFFER_MS = 4000;
 
@@ -121,6 +128,7 @@ export class PeerLink {
     this.tuning = opts.tuning;
     const pc = new RTCPeerConnection({
       iceServers: opts.iceServers,
+      iceTransportPolicy: noDirect() ? 'relay' : 'all',
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
       iceCandidatePoolSize: 1,
@@ -129,9 +137,18 @@ export class PeerLink {
 
     if (this.initiator) {
       // the offer carries the three media sections in a fixed order
-      this.tx.audio = pc.addTransceiver(this.local.audio ?? 'audio', { direction: 'sendrecv', streams: [this.streams.audio] });
-      this.tx.video = pc.addTransceiver(this.local.video ?? 'video', { direction: 'sendrecv', streams: [this.streams.video] });
-      this.tx.extra = pc.addTransceiver(this.local.extra ?? 'video', { direction: 'sendrecv', streams: [this.streams.extra] });
+      this.tx.audio = pc.addTransceiver(this.local.audio ?? 'audio', {
+        direction: 'sendrecv',
+        streams: [this.streams.audio],
+      });
+      this.tx.video = pc.addTransceiver(this.local.video ?? 'video', {
+        direction: 'sendrecv',
+        streams: [this.streams.video],
+      });
+      this.tx.extra = pc.addTransceiver(this.local.extra ?? 'video', {
+        direction: 'sendrecv',
+        streams: [this.streams.extra],
+      });
     }
     this.ctl = pc.createDataChannel('ctl', { negotiated: true, id: 0, ordered: true });
     this.midi = pc.createDataChannel('midi', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
@@ -278,7 +295,11 @@ export class PeerLink {
   }
 
   private async applyParams(): Promise<void> {
-    const set = async (slot: Slot, f: (e: RTCRtpEncodingParameters) => void, degradation?: RTCDegradationPreference) => {
+    const set = async (
+      slot: Slot,
+      f: (e: RTCRtpEncodingParameters) => void,
+      degradation?: RTCDegradationPreference,
+    ) => {
       const s = this.tx[slot]?.sender;
       if (!s) return;
       for (const withDegradation of degradation ? [true, false] : [false]) {
@@ -286,7 +307,8 @@ export class PeerLink {
           const p = s.getParameters();
           if (!p.encodings?.length) return;
           for (const e of p.encodings) f(e);
-          if (withDegradation) (p as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = degradation;
+          if (withDegradation)
+            (p as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = degradation;
           await s.setParameters(p);
           return;
         } catch {

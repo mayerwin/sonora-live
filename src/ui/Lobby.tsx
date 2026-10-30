@@ -44,8 +44,10 @@ export function problemText(p: MediaProblem, what: 'camera' | 'microphone'): str
   switch (p) {
     case 'denied':
       return cam
-        ? t("Camera blocked. Allow it from the icon in {browser}'s address bar, then reload.", { browser: name })
-        : t("Microphone blocked. Allow it from the icon in {browser}'s address bar, then reload.", { browser: name });
+        ? t("Camera blocked. Allow it from the icon in {browser}'s address bar: it starts at once.", { browser: name })
+        : t("Microphone blocked. Allow it from the icon in {browser}'s address bar: it starts at once.", {
+            browser: name,
+          });
     case 'none':
       return cam ? t('No camera found. You can join with sound only.') : t('No microphone found.');
     case 'busy':
@@ -82,24 +84,46 @@ export function Lobby() {
   const clipping = session.meter.clipping.value;
   const typedCode = useComputed(() => normalizeRoomCode(typed.value));
 
+  // camera and microphone (again, after a problem: what works is kept, what failed is asked for again)
+  const startMedia = () => {
+    const cur = settings.peek();
+    return media.start({
+      mode: session.soundMode.peek(),
+      micId: cur.micId,
+      camId: cur.camId,
+      quality: cur.videoQuality,
+      wantVideo: !cur.camOff,
+    });
+  };
+
   useEffect(() => {
     let alive = true;
     const refresh = () =>
       void listDevices().then((d) => {
         if (alive) setDevices(d);
       });
-    if (!media.audio.peek() && !media.video.peek()) {
-      void media
-        .start({
-          mode: session.soundMode.peek(),
-          micId: s.micId,
-          camId: s.camId,
-          quality: s.videoQuality,
-          wantVideo: !s.camOff,
-        })
-        .then(refresh);
-    } else refresh();
+    // back from a reload in the middle of a lesson: straight back in
+    const resume = session.wasInLesson() && !!settings.peek().role;
+    if (!media.audio.peek() && !media.video.peek())
+      void startMedia().then(() => {
+        refresh();
+        if (resume && alive) void enter();
+      });
+    else refresh();
     navigator.mediaDevices?.addEventListener?.('devicechange', refresh);
+    // allowed afterwards from the address bar: start at once, no reload needed
+    const watched: PermissionStatus[] = [];
+    for (const name of ['camera', 'microphone'] as PermissionName[]) {
+      void navigator.permissions
+        ?.query({ name })
+        .then((st) => {
+          watched.push(st);
+          st.onchange = () => {
+            if (alive && st.state === 'granted') void startMedia().then(refresh);
+          };
+        })
+        .catch(() => {});
+    }
     // an instrument used here before reconnects without asking
     void (async () => {
       const key = settings.peek().midi.instrument;
@@ -111,6 +135,7 @@ export function Lobby() {
     })();
     return () => {
       alive = false;
+      for (const st of watched) st.onchange = null;
       navigator.mediaDevices?.removeEventListener?.('devicechange', refresh);
     };
   }, []);
@@ -139,6 +164,7 @@ export function Lobby() {
 
   const name = s.name.trim();
   const ap = media.audioProblem.value;
+  const picture = media.picture.state.value;
   const vp = media.videoProblem.value;
 
   return (
@@ -190,14 +216,53 @@ export function Lobby() {
           </p>
           <div class="preview">
             {stream && media.camOn.value ? (
-              <VideoView stream={stream} class={s.mirror ? 'mirror' : ''} />
+              <>
+                <VideoView stream={stream} class={s.mirror ? 'mirror' : ''} />
+                {(picture === 'dark' || picture === 'none') && (
+                  <div class="preview-note" data-testid="camera-dark">
+                    <VideoOff />
+                    <span>
+                      {picture === 'dark'
+                        ? t(
+                            'Your camera sends a black picture: is its cover closed, or is it switched off by a key on the keyboard?',
+                          )
+                        : t(
+                            'No picture from your camera: another app may be using it, or it is switched off by a key on the keyboard.',
+                          )}
+                    </span>
+                  </div>
+                )}
+              </>
             ) : (
               <div class="preview-empty">
                 <div>
                   <div class="avatar" data-role={s.role ?? 'student'}>
                     {initials(name || t('You'))}
                   </div>
-                  {vp ? problemText(vp, 'camera') : media.camOn.value ? t('Starting camera…') : t('Camera is off')}
+                  {vp ? (
+                    <>
+                      {problemText(vp, 'camera')}
+                      <button class="btn btn-sm" onClick={() => void startMedia()}>
+                        {t('Try again')}
+                      </button>
+                    </>
+                  ) : media.asking.value ? (
+                    <b data-testid="camera-asking">
+                      {t("Allow the camera and microphone in your browser's request, at the top of the window.")}
+                    </b>
+                  ) : media.camOn.value ? (
+                    t('Starting camera…')
+                  ) : (
+                    <>
+                      {t('Camera is off')}
+                      <button
+                        class="btn btn-sm"
+                        onClick={() => void media.setCamOn(true).then(() => update({ camOff: false }))}
+                      >
+                        <Video /> {t('Turn camera on')}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -334,6 +399,13 @@ export function Lobby() {
                 </small>
               </div>
             )}
+            {fresh && (
+              <ol class="steps" data-testid="steps">
+                <li>{t('Enter your name, choose your role and enter the room.')}</li>
+                <li>{t('Send the link (or the code) to the other person.')}</li>
+                <li>{t('They open it, choose their role, and you see and hear each other.')}</li>
+              </ol>
+            )}
           </div>
 
           <label class="field">
@@ -384,6 +456,9 @@ export function Lobby() {
             <div class="hint hint-bad">
               <TriangleAlert />
               <span>{problemText(ap, 'microphone')}</span>
+              <button class="btn btn-sm" onClick={() => void startMedia()}>
+                {t('Try again')}
+              </button>
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AudioWaveform, Copy, MicOff, MonitorUp, Piano, QrCode, Share2, SwitchCamera, Video } from 'lucide-preact';
 import { session, roleLabel, type PeerView } from '../app/session.ts';
 import { settings } from '../app/settings.ts';
@@ -23,6 +23,9 @@ export function PeerTile({
   const stream = extra ? peer.extra : peer.video;
   const showVideo = !!stream && (extra ? !!r?.extra : r?.cam !== false);
   const [portrait, setPortrait] = useState(false);
+  // until the first picture arrives, their initials rather than a black box
+  const [framed, setFramed] = useState(false);
+  useEffect(() => setFramed(false), [stream]);
   const st = peer.stats;
   return (
     <div
@@ -33,8 +36,22 @@ export function PeerTile({
     >
       {showVideo ? (
         <>
-          {(ambient || (!extra && portrait)) && <VideoView stream={stream} class="backdrop" />}
-          <VideoView stream={stream} onResize={(w, h) => setPortrait(h > w)} />
+          {!framed && (
+            <div class="tile-center">
+              <div class="avatar" data-role={role}>
+                {initials(peer.info.name)}
+              </div>
+            </div>
+          )}
+          {(ambient || (!extra && portrait)) && framed && <VideoView stream={stream} class="backdrop" />}
+          <VideoView
+            stream={stream}
+            class={framed ? '' : 'pending'}
+            onResize={(w, h) => {
+              setPortrait(h > w);
+              setFramed(w > 0);
+            }}
+          />
         </>
       ) : (
         <div class="tile-center">
@@ -84,21 +101,45 @@ export function PeerTile({
           <span class="spinner" /> {t('Reconnecting…')}
         </div>
       )}
-      {!extra && peer.link === 'connecting' && (
-        <div class="tile-overlay" style="padding:20px;text-align:center">
-          <span class="spinner" />{' '}
-          {peer.info.name === '…'
-            ? t('Connecting to a new participant…')
-            : t('Connecting to {name}…', { name: peer.info.name })}
-          {Date.now() - peer.joinedAt > 15_000 && (
-            <small style="max-width:420px;color:var(--text-2);font-weight:500">
-              {t(
-                "This is taking long: one of you may be on a network that blocks direct connections (some offices and schools). A phone's hotspot usually works, or add a TURN relay in Settings → Connection.",
-              )}
-            </small>
+      {!extra && (peer.link === 'connecting' || peer.link === 'closed') && <Connecting peer={peer} />}
+    </div>
+  );
+}
+
+/** Setting up the connection; when it does not work, why, and what helps, while it keeps trying. */
+function Connecting({ peer }: { peer: PeerView }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const name = peer.info.name === '…' ? '' : peer.info.name;
+  const stuck = (peer.failures ?? 0) > 0 || now - peer.joinedAt > 20_000;
+  if (!stuck) {
+    return (
+      <div class="tile-overlay" data-testid="connecting">
+        <span class="spinner" />
+        {name ? t('Connecting to {name}…', { name }) : t('Connecting to a new participant…')}
+      </div>
+    );
+  }
+  return (
+    <div class="tile-overlay no-path" data-testid="no-direct-path">
+      <div class="no-path-card">
+        <b>{name ? t('No direct connection to {name} yet', { name }) : t('No direct connection yet')}</b>
+        <p>
+          {t(
+            "Your two networks don't let the devices reach each other directly. This happens with some mobile networks, guest Wi-Fi, and company or school networks.",
           )}
-        </div>
-      )}
+        </p>
+        <ul>
+          <li>{t('Put both devices on the same Wi-Fi (not a guest network).')}</li>
+          <li>{t("Or share a phone's connection (hotspot) with the other device.")}</li>
+        </ul>
+        <small>
+          <span class="spinner" /> {t('Still trying, by itself.')}
+        </small>
+      </div>
     </div>
   );
 }

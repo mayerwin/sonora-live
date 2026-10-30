@@ -141,7 +141,6 @@ export const FR: Record<string, string> = spaced({
   'Someone is knocking': 'Quelqu’un frappe à la porte',
   '{name} ({role}) wants to join your lesson.': '{name} ({role}) souhaite rejoindre votre cours.',
   '{name} joined': '{name} vient d’arriver',
-  '{role} · connected directly': '{role} · connexion directe',
   '{name} ({role}) joined the lesson': '{name} ({role}) a rejoint le cours',
   '{name} joined your lesson': '{name} a rejoint votre cours',
   '{name} left': '{name} a quitté la salle',
@@ -172,10 +171,6 @@ export const FR: Record<string, string> = spaced({
   'Here to learn': 'Je viens apprendre',
   'Giving the lesson': 'Je donne le cours',
   'Parent, guest': 'Parent, invité',
-  "Camera blocked. Allow it from the icon in {browser}'s address bar, then reload.":
-    'Caméra bloquée. Autorisez-la avec l’icône de la barre d’adresse de {browser}, puis rechargez la page.',
-  "Microphone blocked. Allow it from the icon in {browser}'s address bar, then reload.":
-    'Micro bloqué. Autorisez-le avec l’icône de la barre d’adresse de {browser}, puis rechargez la page.',
   'No camera found. You can join with sound only.': 'Aucune caméra trouvée. Vous pouvez entrer avec le son seulement.',
   'No microphone found.': 'Aucun micro trouvé.',
   'The camera is used by another app. Close it (Zoom, Teams, another tab), then try again.':
@@ -246,8 +241,6 @@ export const FR: Record<string, string> = spaced({
   'Reconnecting…': 'Reconnexion…',
   'Connecting to a new participant…': 'Connexion à un nouveau participant…',
   'Connecting to {name}…': 'Connexion à {name}…',
-  "This is taking long: one of you may be on a network that blocks direct connections (some offices and schools). A phone's hotspot usually works, or add a TURN relay in Settings → Connection.":
-    'C’est long : l’un de vous est peut-être sur un réseau qui bloque les connexions directes (certains bureaux et écoles). Le partage de connexion d’un téléphone fonctionne en général ; sinon, ajoutez un relais TURN dans Réglages → Connexion.',
   "You're in. Waiting for others…": 'Vous êtes dans la salle. En attente des autres…',
   'Invite your student': 'Invitez votre élève',
   'Invite your teacher': 'Invitez votre professeur',
@@ -482,4 +475,29 @@ export const FR: Record<string, string> = spaced({
   'Computer keys on · {note}': 'Clavier de l’ordinateur activé · {note}',
   'Play with computer keys': 'Jouer avec le clavier de l’ordinateur',
   'Hide keyboard': 'Masquer le clavier',
+  'No direct connection to {name} yet': 'Pas encore de connexion directe avec {name}',
+  'No direct connection yet': 'Pas encore de connexion directe',
+  "Your two networks don't let the devices reach each other directly. This happens with some mobile networks, guest Wi-Fi, and company or school networks.":
+    'Vos deux réseaux ne laissent pas les appareils se joindre directement. Cela arrive avec certains réseaux mobiles, les Wi-Fi invités et les réseaux d’entreprise ou d’école.',
+  'Put both devices on the same Wi-Fi (not a guest network).':
+    'Mettez les deux appareils sur le même Wi-Fi (pas un réseau invité).',
+  "Or share a phone's connection (hotspot) with the other device.":
+    'Ou partagez la connexion d’un téléphone (point d’accès) avec l’autre appareil.',
+  'Still trying, by itself.': 'Nouvel essai automatique en cours.',
+  'Your camera sends a black picture: is its cover closed, or is it switched off by a key on the keyboard?':
+    'Votre caméra envoie une image noire : son cache est-il fermé, ou est-elle désactivée par une touche du clavier ?',
+  'No picture from your camera: another app may be using it, or it is switched off by a key on the keyboard.':
+    'Aucune image de votre caméra : une autre application l’utilise peut-être, ou elle est désactivée par une touche du clavier.',
+  "Allow the camera and microphone in your browser's request, at the top of the window.":
+    'Autorisez la caméra et le micro dans la demande de votre navigateur, en haut de la fenêtre.',
+  "Camera blocked. Allow it from the icon in {browser}'s address bar: it starts at once.":
+    'Caméra bloquée. Autorisez-la avec l’icône de la barre d’adresse de {browser} : elle démarre aussitôt.',
+  "Microphone blocked. Allow it from the icon in {browser}'s address bar: it starts at once.":
+    'Micro bloqué. Autorisez-le avec l’icône de la barre d’adresse de {browser} : il démarre aussitôt.',
+  'Try again': 'Réessayer',
+  'Enter your name, choose your role and enter the room.':
+    'Indiquez votre nom, choisissez votre rôle et entrez dans la salle.',
+  'Send the link (or the code) to the other person.': 'Envoyez le lien (ou le code) à l’autre personne.',
+  'They open it, choose their role, and you see and hear each other.':
+    'Elle l’ouvre, choisit son rôle, et vous vous voyez et vous entendez.',
 });

@@ -43,7 +43,11 @@ export const VIDEO_QUALITY: Record<VideoQuality, { width: number; height: number
   fhd: { width: 1920, height: 1080, bitrate: 4_000_000, label: 'Full HD · 1080p' },
 };
 
-export function videoConstraints(q: VideoQuality, deviceId?: string, facing?: 'user' | 'environment'): MediaTrackConstraints {
+export function videoConstraints(
+  q: VideoQuality,
+  deviceId?: string,
+  facing?: 'user' | 'environment',
+): MediaTrackConstraints {
   const v = VIDEO_QUALITY[q];
   return {
     ...(deviceId ? { deviceId: { exact: deviceId } } : facing ? { facingMode: { ideal: facing } } : {}),

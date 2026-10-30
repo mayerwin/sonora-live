@@ -8,7 +8,8 @@ let ctx: AudioContext | null = null;
 /** One shared context for analysis (never used for playback, so its latency does not matter). */
 export function meterContext(): AudioContext | null {
   if (ctx) return ctx;
-  const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  const AC =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return null;
   ctx = new AC();
   return ctx;
