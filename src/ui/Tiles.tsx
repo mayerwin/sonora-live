@@ -44,7 +44,7 @@ export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerV
             </span>
           )}
           {st?.latencyMs != null && (
-            <span class="chip" title={`Estimated delay of the sound from ${peer.info.name}`}>
+            <span class="chip" data-latency title={`Estimated delay of the sound from ${peer.info.name}`}>
               <SignalBars quality={st.quality} /> {st.latencyMs} ms
             </span>
           )}
@@ -65,8 +65,14 @@ export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerV
         </div>
       )}
       {!extra && peer.link === 'connecting' && (
-        <div class="tile-overlay">
+        <div class="tile-overlay" style="padding:20px;text-align:center">
           <span class="spinner" /> Connecting to {peer.info.name === '…' ? 'a new participant' : peer.info.name}…
+          {Date.now() - peer.joinedAt > 15_000 && (
+            <small style="max-width:420px;color:var(--text-2);font-weight:500">
+              This is taking long: one of you may be on a network that blocks direct connections (some offices and
+              schools). A phone's hotspot usually works, or add a TURN relay in Settings → Connection.
+            </small>
+          )}
         </div>
       )}
     </div>
@@ -189,7 +195,7 @@ export function Waiting() {
           )}
         </div>
       </div>
-      <div>
+      <div class="qr-wrap">
         <Qr text={roomLink(code)} />
         <div class="qr-cap">
           <QrCode size={13} style="vertical-align:-2px" /> Scan to join

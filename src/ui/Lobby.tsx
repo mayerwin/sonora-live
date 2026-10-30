@@ -5,6 +5,7 @@ import {
   AudioWaveform,
   Copy,
   Download,
+  FlipHorizontal2,
   Headphones,
   Mic,
   MicOff,
@@ -200,6 +201,17 @@ export function Lobby() {
               >
                 {media.camOn.value ? <Video /> : <VideoOff />}
               </button>
+              {media.camOn.value && (
+                <button
+                  class="round"
+                  onClick={() => update({ mirror: !s.mirror })}
+                  aria-label={s.mirror ? 'Show my preview unmirrored' : 'Mirror my preview'}
+                  aria-pressed={s.mirror}
+                  title="Mirror my preview (only for you). Turn it off for a camera pointed at the keys or a score."
+                >
+                  <FlipHorizontal2 />
+                </button>
+              )}
             </div>
           </div>
           {(devices.mics.length > 1 || devices.cams.length > 1) && (

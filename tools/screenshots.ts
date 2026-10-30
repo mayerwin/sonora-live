@@ -14,6 +14,10 @@ import { fakeMidiScript } from '../tests/e2e/fake-midi.ts';
 const URL = process.env.APP_URL ?? 'http://localhost:5180/';
 const TMP = resolve('tmp/screens');
 const DOCS = resolve('docs/screenshots');
+/** README pictures: captured as PNG, published as WebP (a tenth of the size) */
+const doc = (name: string) => `${TMP}/${name}.png`;
+const toWebp = (name: string) =>
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', doc(name), '-c:v', 'libwebp', '-quality', '88', '-compression_level', '6', `${DOCS}/${name}.webp`]);
 mkdirSync(TMP, { recursive: true });
 mkdirSync(DOCS, { recursive: true });
 mkdirSync('public/social', { recursive: true });
@@ -55,7 +59,10 @@ async function launch(scene: string): Promise<Browser> {
   });
 }
 
-async function person(b: Browser, opts: { name: string; role: string; piano: string; hash?: string; w: number; h: number; dpr?: number; mobile?: boolean }): Promise<Page> {
+async function person(
+  b: Browser,
+  opts: { name: string; role: string; piano: string; hash?: string; w: number; h: number; dpr?: number; mobile?: boolean; prefs?: object },
+): Promise<Page> {
   const ctx = await b.newContext({
     viewport: { width: opts.w, height: opts.h },
     deviceScaleFactor: opts.dpr ?? 1,
@@ -64,6 +71,8 @@ async function person(b: Browser, opts: { name: string; role: string; piano: str
     permissions: ['camera', 'microphone'],
   });
   await ctx.addInitScript(fakeMidiScript(opts.piano));
+  // the teacher's camera shows a score (not mirrored), at a lighter resolution to keep this machine's CPU free
+  if (opts.prefs) await ctx.addInitScript(`localStorage.setItem('sonora.settings.v1', ${JSON.stringify(JSON.stringify(opts.prefs))})`);
   const p = await ctx.newPage();
   await p.goto(`${URL}${opts.hash ? `#${opts.hash}` : ''}`);
   await p.getByPlaceholder('e.g. Clara').fill(opts.name);
@@ -73,18 +82,30 @@ async function person(b: Browser, opts: { name: string; role: string; piano: str
 }
 
 const settle = (p: Page, ms = 900) => p.waitForTimeout(ms);
-const hideToasts = (p: Page) => p.addStyleTag({ content: '.toasts{display:none!important}' });
+// toasts are transient; the delay badges measure this machine's fake camera and microphone (CPU-bound, bursty),
+// not a real connection, so they are left out of the pictures
+const hideToasts = (p: Page) =>
+  p.addStyleTag({ content: '.toasts,[data-latency],.net-chip{display:none!important}' });
 
 const teacherB = await launch('score');
 const studentB = await launch('keys');
 
 // lobby
-const teacher = await person(teacherB, { name: 'Clara', role: 'teacher', piano: 'Roland FP-30X', w: 1600, h: 900 });
+const teacher = await person(teacherB, {
+  name: 'Clara',
+  role: 'teacher',
+  piano: 'Roland FP-30X',
+  w: 1600,
+  h: 900,
+  prefs: { mirror: false, videoQuality: 'sd' },
+});
 await settle(teacher, 1500);
-await teacher.screenshot({ path: `${DOCS}/lobby.png` });
+// (the stand-in camera's device name is a file path)
+const noDevices = await teacher.addStyleTag({ content: '.preview-devices{display:none!important}' });
+await teacher.screenshot({ path: doc('lobby') });
+await noDevices.evaluate((el) => (el as Element).remove());
 await teacher.locator('.join-card .btn-primary').click();
 await settle(teacher, 1200);
-await teacher.screenshot({ path: `${DOCS}/waiting.png` });
 const code = await teacher.evaluate(() => location.hash.slice(1));
 
 // the student joins from a phone
@@ -127,24 +148,21 @@ await teacher.evaluate(() => {
 });
 await settle(teacher, 1500);
 await hideToasts(teacher);
-await teacher.screenshot({ path: `${DOCS}/lesson.png` });
-await teacher.screenshot({ path: 'public/social/screenshot-wide.png' });
+await teacher.screenshot({ path: doc('lesson') });
+await teacher.screenshot({ path: `${TMP}/screenshot-wide.png` });
 await hideToasts(student);
 await settle(student, 600);
-await student.screenshot({ path: `${DOCS}/mobile.png` });
-await student.screenshot({ path: 'public/social/screenshot-narrow.png' });
+await student.screenshot({ path: doc('mobile') });
+await student.screenshot({ path: `${TMP}/screenshot-narrow.png` });
 
 // the MIDI sheet and the settings
 await teacher.getByTestId('btn-midi').click();
 await settle(teacher, 1200);
-await teacher.screenshot({ path: `${DOCS}/midi.png` });
+await teacher.screenshot({ path: doc('midi') });
 await teacher.keyboard.press('Escape');
 await teacher.getByTestId('btn-settings').click();
 await settle(teacher, 600);
-await teacher.screenshot({ path: `${DOCS}/settings.png` });
-await teacher.getByRole('tab', { name: 'Connection' }).click();
-await settle(teacher, 2500);
-await teacher.screenshot({ path: `${DOCS}/connection.png` });
+await teacher.screenshot({ path: doc('settings') });
 await teacher.keyboard.press('Escape');
 
 // social preview (1200 x 630): the brand next to the lesson
@@ -181,4 +199,9 @@ await teacher.keyboard.press('Escape');
 
 await teacherB.close();
 await studentB.close();
+for (const n of ['lobby', 'lesson', 'mobile', 'midi', 'settings']) toWebp(n);
+// the install dialog's pictures (web app manifest)
+for (const n of ['screenshot-wide', 'screenshot-narrow']) {
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', `${TMP}/${n}.png`, '-c:v', 'libwebp', '-quality', '86', `public/social/${n}.webp`]);
+}
 console.log('screenshots written to docs/screenshots and public/social');

@@ -1,5 +1,5 @@
-// MIDI instruments on this device: USB and system MIDI ports (Web MIDI: Chrome, Edge, Firefox, Opera, Samsung
-// Internet; not Safari) and Bluetooth LE MIDI instruments connected straight from the browser (src/midi/ble.ts).
+// MIDI instruments on this device: USB and system MIDI ports (Web MIDI: Chrome, Edge, Firefox, Opera; not Safari)
+// and Bluetooth LE MIDI instruments connected straight from the browser (src/midi/ble.ts).
 //
 // An instrument usually appears as an input and an output port with the same (or a similar) name; they are shown
 // as one instrument, so picking it is one tap.

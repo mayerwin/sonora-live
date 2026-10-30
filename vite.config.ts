@@ -64,8 +64,8 @@ export default defineConfig({
           { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         screenshots: [
-          { src: 'social/screenshot-wide.png', sizes: '1600x900', type: 'image/png', form_factor: 'wide' },
-          { src: 'social/screenshot-narrow.png', sizes: '780x1688', type: 'image/png', form_factor: 'narrow' },
+          { src: 'social/screenshot-wide.webp', sizes: '1600x900', type: 'image/webp', form_factor: 'wide', label: 'A piano lesson' },
+          { src: 'social/screenshot-narrow.webp', sizes: '780x1688', type: 'image/webp', form_factor: 'narrow', label: 'The lesson on a phone' },
         ],
       },
       workbox: {

@@ -395,6 +395,7 @@ a:hover {
 }
 
 .seg button {
+  white-space: nowrap;
   height: 36px;
   border-radius: 10px;
   font-weight: 600;
@@ -2752,6 +2753,7 @@ emoji-picker {
     z-index: 50;
     width: auto;
     border-left: 0;
+    background: var(--bg);
     animation: sheetup 0.3s var(--ease);
   }
 
@@ -2854,10 +2856,6 @@ emoji-picker {
     font-size: 26px;
   }
 
-  .preview {
-    aspect-ratio: 4 / 3;
-  }
-
   .preview-devices {
     grid-template-columns: 1fr;
   }
@@ -2880,6 +2878,25 @@ emoji-picker {
   .qr {
     width: 150px;
     height: 150px;
+  }
+
+  /* the phone is the device that joins: it shares the link, nobody scans it */
+  .waiting .qr-wrap {
+    display: none;
+  }
+
+  .seg button {
+    font-size: 13px;
+    padding: 0 4px;
+  }
+
+  .lobby-hero p.lede {
+    display: none;
+  }
+
+  .preview {
+    aspect-ratio: auto;
+    height: min(36vh, 300px);
   }
 }
 

@@ -380,7 +380,7 @@ function ConnectionTab() {
           <p>
             Most connections are direct. A few networks (some offices, schools, mobile carriers) block that; a TURN relay
             gets through.
-            {hasBuiltInTurn() ? ' This site already has one configured; you can add your own.' : ' You can use your own, for example a free Metered or Cloudflare account.'}
+            {hasBuiltInTurn() ? ' This site already has one configured; you can add your own.' : ' You can use your own, for example a free Metered account or your own coturn server.'}
           </p>
           <input class="input" placeholder="turn:relay.example.com:3478, turns:relay.example.com:443" value={turn.urls} onInput={(e) => setTurn({ ...turn, urls: (e.currentTarget as HTMLInputElement).value })} aria-label="TURN URLs" />
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
