@@ -41,6 +41,14 @@ export class MidiHub {
   constructor() {
     this.sender = new MidiSender((p) => this.broadcast(p));
     this.devices.onMessage = (m) => this.fromInstrument(m);
+    this.devices.onGone = () => this.releaseLocal();
+  }
+
+  /** The instrument went away mid-phrase: its key and pedal releases will never come, so send them now. */
+  releaseLocal(): void {
+    const release = this.local.releaseAll();
+    if (!release.length) return;
+    for (const m of release) this.played(m);
   }
 
   /** Where the others' notes sound right now. */

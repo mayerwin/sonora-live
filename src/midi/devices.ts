@@ -51,6 +51,8 @@ export class MidiDevices {
   onMessage: (m: number[]) => void = () => {};
   /** the selected instrument appeared or went away */
   onPresence: (present: boolean, name: string) => void = () => {};
+  /** notes from the instrument can no longer arrive (unplugged, switched off, another one picked) */
+  onGone: () => void = () => {};
 
   private access: MIDIAccess | null = null;
   private input: MIDIInput | null = null;
@@ -127,12 +129,16 @@ export class MidiDevices {
     if (cur?.startsWith('port:')) {
       const was = this.connected.peek();
       this.wirePorts(cur);
-      if (was !== this.connected.peek()) this.onPresence(this.connected.peek(), this.currentName.peek());
+      if (was !== this.connected.peek()) {
+        if (!this.connected.peek()) this.onGone();
+        this.onPresence(this.connected.peek(), this.currentName.peek());
+      }
     }
   }
 
   /** Use instrument `key` (both directions). */
   select(key: string | null): void {
+    if (this.current.peek() !== key) this.onGone();
     this.unwire();
     if (this.ble && key !== `ble:${this.ble.name}`) {
       this.ble.close();
@@ -199,6 +205,7 @@ export class MidiDevices {
       dev.onMessage = (m) => this.onMessage(m);
       dev.onStatus = (on) => {
         if (this.current.peek() !== `ble:${dev.name}`) return;
+        if (!on) this.onGone();
         this.connected.value = on;
         this.hasOutput.value = on;
         this.onPresence(on, dev.name);

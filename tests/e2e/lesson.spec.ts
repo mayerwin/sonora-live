@@ -294,3 +294,37 @@ test('a duplicated tab (same session storage) gets its own identity and connects
   expect(await b.evaluate(() => sessionStorage.getItem('sonora.tab'))).not.toBe(id);
   await ctx.close();
 });
+
+test('unplugging the instrument mid-note releases it on the other side', async ({ browser }) => {
+  const { fakeMidiScript } = await import('./fake-midi.ts');
+  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  await ctx.addInitScript(fakeMidiScript('Kawai ES920'));
+  const a = await ctx.newPage();
+  await a.goto(`/${Q}`);
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await a.locator('button.role[data-role=teacher]').click();
+  await enter(a);
+  const code = await codeOf(a);
+  const b = await person(browser, 'Leo', 'student', code);
+  await enter(b);
+  await connected(a, 1);
+  await a.getByTestId('btn-midi').click();
+  await a.getByTestId('midi-instrument').first().click();
+  await a.keyboard.press('Escape');
+  await a.evaluate(() => {
+    const play = (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay;
+    play([0xb0, 64, 127]);
+    play([0x90, 62, 90]);
+  });
+  const held = () =>
+    b.evaluate(() => (window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }).sonora.midi.holder(62).remote);
+  await expect.poll(held).not.toBeNull();
+  // the instrument disappears (cable pulled) while the key and pedal are down
+  await a.evaluate(() => (window as unknown as { sonora: { midi: { devices: { select(k: string | null): void } } } }).sonora.midi.devices.select(null));
+  await expect.poll(held).toBeNull();
+  await expect
+    .poll(() => b.evaluate(() => (window as unknown as { sonora: { midi: { sustainHeld(): { remote: boolean } } } }).sonora.midi.sustainHeld().remote))
+    .toBe(false);
+  await ctx.close();
+  await b.context().close();
+});

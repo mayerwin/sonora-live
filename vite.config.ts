@@ -53,7 +53,6 @@ export default defineConfig({
         start_url: './',
         scope: './',
         display: 'standalone',
-        display_override: ['window-controls-overlay', 'standalone'],
         orientation: 'any',
         background_color: BRAND,
         theme_color: BRAND,
