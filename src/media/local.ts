@@ -70,12 +70,7 @@ export class LocalMedia {
         stream = await navigator.mediaDevices.getUserMedia({ audio, video });
       } catch (e) {
         // a saved device that is gone, or one kind missing: try each kind on its own, with defaults
-        const p = problemOf(e);
-        if (p === 'denied') {
-          this.audioProblem.value = 'denied';
-          if (opts.wantVideo) this.videoProblem.value = 'denied';
-          return;
-        }
+        // one of them refused (a blocked camera, a missing microphone) must not cost the other: ask separately
         stream = new MediaStream();
         try {
           const a = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(opts.mode) });

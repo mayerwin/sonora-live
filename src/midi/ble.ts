@@ -36,19 +36,24 @@ export class BleMidiParser {
     while (i < p.length) {
       let b = p[i];
       if (this.inSysex) {
-        // skip SysEx data until a (timestamp,) F7
+        // skip SysEx data until a (timestamp,) F7; any other status byte also ends it (a lost F7 must not
+        // swallow everything after it)
         if (b === 0xf7) {
           this.inSysex = false;
           i++;
           continue;
         }
-        if (b & 0x80 && i + 1 < p.length && p[i + 1] === 0xf7) {
+        if (b & 0x80 && i + 1 < p.length && p[i + 1] & 0x80 && p[i + 1] < 0xf8) {
           this.inSysex = false;
-          i += 2;
+          if (p[i + 1] === 0xf7) {
+            i += 2;
+            continue;
+          }
+          // a timestamp and a new status: parse it below
+        } else {
+          i++;
           continue;
         }
-        i++;
-        continue;
       }
       if (b & 0x80) {
         // timestamp byte; a status byte or running-status data follows
@@ -147,6 +152,11 @@ export class BleMidiDevice {
   onStatus: (connected: boolean) => void = () => {};
   private ch: BtCharacteristic | null = null;
   private parser = new BleMidiParser();
+  private onValue = (e: Event): void => {
+    const v = (e.target as BtCharacteristic).value;
+    if (!v) return;
+    for (const m of this.parser.parse(new Uint8Array(v.buffer, v.byteOffset, v.byteLength))) this.onMessage(m);
+  };
   private queue: number[][] = [];
   private writing = false;
   private closed = false;
@@ -194,11 +204,10 @@ export class BleMidiDevice {
     const server = await this.device.gatt!.connect();
     const service = await server.getPrimaryService(BLE_MIDI_SERVICE);
     const ch = await service.getCharacteristic(BLE_MIDI_CHARACTERISTIC);
-    ch.addEventListener('characteristicvaluechanged', () => {
-      const v = ch.value;
-      if (!v) return;
-      for (const m of this.parser.parse(new Uint8Array(v.buffer, v.byteOffset, v.byteLength))) this.onMessage(m);
-    });
+    // a fresh parser (a dropped connection may have cut a message), one listener even if the object is reused
+    this.parser = new BleMidiParser();
+    ch.removeEventListener('characteristicvaluechanged', this.onValue);
+    ch.addEventListener('characteristicvaluechanged', this.onValue);
     await ch.startNotifications();
     this.ch = ch;
     this.retry = 0;
@@ -233,11 +242,15 @@ export class BleMidiDevice {
       }
       if (!batch.length) batch.push(this.queue.shift()!);
       const pkt = encodeBleMidi(batch);
-      try {
-        if (this.ch.writeValueWithoutResponse) await this.ch.writeValueWithoutResponse(pkt);
-        else await this.ch.writeValue(pkt);
-      } catch {
-        // a busy GATT queue: drop this batch rather than block (the snapshot logic cleans up stuck notes)
+      // a busy GATT queue rejects the write: try again shortly (a lost release would leave a note sounding)
+      for (let attempt = 0; attempt < 6 && this.ch; attempt++) {
+        try {
+          if (this.ch.writeValueWithoutResponse) await this.ch.writeValueWithoutResponse(pkt);
+          else await this.ch.writeValue(pkt);
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 8 * (attempt + 1)));
+        }
       }
     }
     this.writing = false;

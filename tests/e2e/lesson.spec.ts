@@ -328,3 +328,66 @@ test('unplugging the instrument mid-note releases it on the other side', async (
   await ctx.close();
   await b.context().close();
 });
+
+test("the room keeps its rules when someone with other defaults joins", async ({ browser }) => {
+  // the teacher saved "4 people"; the student has the defaults (2)
+  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  await ctx.addInitScript(() => localStorage.setItem('sonora.settings.v1', JSON.stringify({ roomLimit: 4, lockRooms: true })));
+  const a = await ctx.newPage();
+  await a.goto(`/${Q}`);
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await a.locator('button.role[data-role=teacher]').click();
+  await enter(a);
+  const code = await codeOf(a);
+  for (let i = 0; i < 3; i++) {
+    // ids are random: whichever is larger, the room's rules must win
+    const b = await person(browser, `Leo${i}`, 'student', code);
+    await enter(b);
+    await connected(a, 1);
+    await expect(b.getByTestId('lock-chip')).toContainText('2/4');
+    await a.waitForTimeout(500);
+    await expect(a.getByTestId('lock-chip')).toContainText('2/4');
+    await b.context().close();
+    await expect.poll(async () => (await peers(a)).length).toBe(0);
+  }
+  await ctx.close();
+});
+
+test('playing in unison: a release on the student’s piano is not mistaken for an echo', async ({ browser }) => {
+  const { fakeMidiScript } = await import('./fake-midi.ts');
+  const mk = async (name: string, role: Role, piano: string, hash = '') => {
+    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    await ctx.addInitScript(fakeMidiScript(piano));
+    const page = await ctx.newPage();
+    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+    await page.getByPlaceholder('e.g. Clara').fill(name);
+    await page.locator(`button.role[data-role=${role}]`).click();
+    return page;
+  };
+  const a = await mk('Clara', 'teacher', 'Roland FP-30X');
+  await enter(a);
+  const b = await mk('Leo', 'student', 'Yamaha P-125', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  for (const p of [a, b]) {
+    await p.getByTestId('btn-midi').click();
+    await p.getByTestId('midi-instrument').first().click();
+    await p.keyboard.press('Escape');
+  }
+  type W = { __midiPlay(m: number[]): void; __midiOut: number[][] };
+  // both hold middle C
+  await a.evaluate(() => (window as unknown as W).__midiPlay([0x90, 60, 90]));
+  await b.evaluate(() => (window as unknown as W).__midiPlay([0x90, 60, 70]));
+  await expect.poll(() => b.evaluate(() => (window as unknown as W).__midiOut)).toContainEqual([0x90, 60, 90]);
+  // the teacher releases; the student releases a moment later (inside the echo window)
+  await a.evaluate(() => (window as unknown as W).__midiPlay([0x80, 60, 64]));
+  await expect.poll(() => b.evaluate(() => (window as unknown as W).__midiOut)).toContainEqual([0x80, 60, 64]);
+  await b.evaluate(() => (window as unknown as W).__midiPlay([0x80, 60, 64]));
+  // the student's release reaches the teacher's piano: nothing stays held
+  await expect.poll(() => a.evaluate(() => (window as unknown as W).__midiOut)).toContainEqual([0x80, 60, 64]);
+  await expect
+    .poll(() => a.evaluate(() => (window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }).sonora.midi.holder(60).remote))
+    .toBeNull();
+  await a.context().close();
+  await b.context().close();
+});

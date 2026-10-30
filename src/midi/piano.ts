@@ -349,9 +349,18 @@ export class Piano {
       }
     };
     if (this.voices.length > MAX_VOICES) {
-      // steal the oldest, preferring voices already released
+      // steal the oldest voice, preferring released ones, and stop it now (a release may still have seconds to go)
       const victim = this.voices.find((x) => x.releasing) ?? this.voices[0];
-      this.release(victim, this.ctx!.currentTime, 0.02);
+      const now = this.ctx!.currentTime;
+      try {
+        victim.releasing = true;
+        victim.out.gain.cancelScheduledValues(now);
+        victim.out.gain.setValueAtTime(victim.out.gain.value, now);
+        victim.out.gain.linearRampToValueAtTime(0, now + 0.012);
+        victim.src.stop(now + 0.015);
+      } catch {
+        // already stopped
+      }
     }
   }
 

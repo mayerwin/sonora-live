@@ -41,7 +41,10 @@ export class MidiHub {
   constructor() {
     this.sender = new MidiSender((p) => this.broadcast(p));
     this.devices.onMessage = (m) => this.fromInstrument(m);
-    this.devices.onGone = () => this.releaseLocal();
+    this.devices.onGone = () => {
+      this.releaseLocal();
+      this.echo.reset();
+    };
   }
 
   /** The instrument went away mid-phrase: its key and pedal releases will never come, so send them now. */
@@ -70,7 +73,11 @@ export class MidiHub {
 
   private fromInstrument(m: number[]): void {
     if (!forwardable(m)) return;
-    if (this.echo.isEcho(m)) return;
+    const type = m[0] & 0xf0;
+    const release = type === 0x80 || (type === 0x90 && m[2] === 0);
+    // the player's own release of a key they hold always goes through
+    const heldHere = release && this.local.notes[(m[0] & 15) * 128 + m[1]] > 0;
+    if (!heldHere && this.echo.isEcho(m)) return;
     this.played(m);
   }
 

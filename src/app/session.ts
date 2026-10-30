@@ -8,7 +8,7 @@ import { Meter, resumeMeters } from '../media/meter.ts';
 import { MidiHub } from '../midi/hub.ts';
 import { newRoomCode, normalizeRoomCode } from '../net/code.ts';
 import { iceServers } from '../net/ice.ts';
-import { PeerLink, type LinkState, type LinkStats, type SignalData, type Slot } from '../net/peer.ts';
+import { fingerprintOf, PeerLink, type LinkState, type LinkStats, type SignalData, type Slot } from '../net/peer.ts';
 import { createRelay, type Relay } from '../net/relay.ts';
 import {
   newerPolicy,
@@ -106,7 +106,7 @@ export class Session {
     () =>
       this.midi.devices.connected.value &&
       this.midi.sending.value &&
-      this.peers.value.some((p) => p.link === 'connected' && p.remote?.midi.receiving),
+      this.peers.value.some((p) => (p.link === 'connected' || p.link === 'reconnecting') && p.remote?.midi.receiving),
   );
   readonly soundMode = computed<SoundMode>(() => {
     const s = settings.value.sound;
@@ -339,15 +339,19 @@ export class Session {
     if (this.phase.peek() === 'room') this.room.leave(true);
   }
 
+  /** Who is in the room as far as this browser knows: itself and the peers that introduced themselves. */
   private memberList(): MemberInfo[] {
     const list: MemberInfo[] = [{ ...this.self.peek(), since: this.since }];
-    for (const p of this.peers.peek()) if (p.link === 'connected' || p.link === 'reconnecting') list.push(p.info);
+    for (const p of this.peers.peek()) {
+      if (p.remote && (p.link === 'connected' || p.link === 'reconnecting')) list.push(p.info);
+    }
     return list;
   }
 
   private onWelcome(members: MemberInfo[], policy: Policy): void {
     log('welcome', members.map((m) => `${m.name}#${m.id.slice(0, 4)}`), policy);
-    this.policy.value = newerPolicy(this.policy.peek(), policy);
+    // the room's rules, not our own defaults
+    this.policy.value = policy;
     this.denied.value = null;
     this.roomPhase.value = 'in';
     for (const m of members) {
@@ -423,6 +427,7 @@ export class Session {
     link.onMidi = (data) => this.midi.fromPeer(info.id, data);
     link.onFile = (data) => this.onFileData(info.id, data);
     link.onLost = () => this.dropLink(info.id, false);
+    link.onMidiOpen = () => link.sendMidi(this.midi.helloPacket());
     return link;
   }
 
@@ -438,6 +443,18 @@ export class Session {
     const d = data as SignalData;
     if (!d || typeof d !== 'object') return;
     let link = this.links.get(from) ?? (await this.creating.get(from));
+    // an offer from a new connection of theirs (they reloaded, or gave up on the old one): the old link is dead
+    if (link && d.description?.type === 'offer' && link.remoteFingerprint) {
+      const fp = fingerprintOf(d.description.sdp);
+      if (fp && fp !== link.remoteFingerprint) {
+        log('new connection from', from.slice(0, 4), '(old one replaced)');
+        const info = this.peers.peek().find((p) => p.id === from)?.info;
+        this.dropLink(from, false, true);
+        link = await this.link(info ?? { id: from, name: '…', role: 'student', since: 0 }, false);
+        await link.receiveSignal(d);
+        return;
+      }
+    }
     if (!link) {
       // an offer from someone the room let in
       if (!d.description || d.description.type !== 'offer' || viaLink) return;
@@ -447,7 +464,7 @@ export class Session {
         log('offer refused (room full)', from, p);
         return;
       }
-      link = await this.link({ id: from, name: '…', role: 'student', since: Date.now() }, false);
+      link = await this.link({ id: from, name: '…', role: 'student', since: 0 }, false);
     }
     await link.receiveSignal(d);
   }
@@ -477,7 +494,6 @@ export class Session {
       link.sendControl({ t: 'policy', policy: this.policy.peek() });
       const hist = this.chat.history();
       if (hist.length) link.sendControl({ t: 'history', messages: hist });
-      link.sendMidi(this.midi.helloPacket());
       link.setParams(this.sendParams());
       this.sendRoster();
       if (firstConnect) this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
@@ -680,6 +696,8 @@ export class Session {
         if (mode === lastMode) return;
         lastMode = mode;
         if (modeTimer) clearTimeout(modeTimer);
+        // back to pure only once MIDI has really stopped (not on a short dropout of the instrument or the link)
+        const wait = mode === 'pure' && settings.peek().sound === 'auto' ? 5000 : 400;
         modeTimer = setTimeout(() => {
           if (!this.media.audio.peek()) return;
           void this.media.setSoundMode(mode);
@@ -693,7 +711,7 @@ export class Session {
                   : 'MIDI is off, so your microphone sends your instrument untouched again.',
             });
           }
-        }, 400);
+        }, wait);
       }),
     );
     // quality changes apply at once

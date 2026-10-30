@@ -289,6 +289,8 @@ export class Room {
 
   private onHello(m: Msg): void {
     if (this.phase !== 'in') return;
+    // just let in, still connecting to the others: we do not know the room yet, they answer
+    if (this.alone() && this.hooks.busy()) return;
     const info = m.info as MemberInfo;
     if (!validInfo(info) || info.id !== m.from) return;
     const members = this.hooks.members();
@@ -296,7 +298,9 @@ export class Room {
     const reloaded = this.reloaded(info);
     const policy = this.hooks.policy();
     const full = policy.locked && this.headcount() >= policy.limit && !isMember && !this.pending.has(info.id);
-    if (!this.isLeader) {
+    // a member that reloaded is not the leader any more (its old connection may still look alive here)
+    const leader = leaderOf(reloaded ? members.filter((x) => x.id !== info.id) : members);
+    if (leader?.id !== this.self.id) {
       if (full) this.knock(info);
       return;
     }

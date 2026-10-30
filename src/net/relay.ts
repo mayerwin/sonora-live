@@ -35,6 +35,8 @@ export class MqttRelay implements Relay {
   private clients: MqttClient[];
   private subs = new Map<string, Set<Listener>>();
   private closed = false;
+  /** messages published while no broker was reachable (sent as soon as one is) */
+  private backlog: { topic: string; data: Uint8Array; at: number }[] = [];
 
   constructor(urls: string[] = PUBLIC_BROKERS) {
     this.clients = urls.map((u) => {
@@ -61,6 +63,8 @@ export class MqttRelay implements Relay {
   private async open(c: MqttClient): Promise<void> {
     await c.connect(`sl${Math.random().toString(36).slice(2, 12)}`);
     for (const t of this.subs.keys()) c.subscribe(t);
+    const now = Date.now();
+    for (const m of this.backlog.splice(0)) if (now - m.at < 20_000) c.publish(m.topic, m.data);
     this.onChange();
   }
 
@@ -105,11 +109,22 @@ export class MqttRelay implements Relay {
   }
 
   publish(topic: string, data: Uint8Array): void {
-    for (const c of this.clients) if (c.connected) c.publish(topic, data);
+    let sent = false;
+    for (const c of this.clients) {
+      if (c.connected) {
+        c.publish(topic, data);
+        sent = true;
+      }
+    }
+    if (!sent) {
+      this.backlog.push({ topic, data, at: Date.now() });
+      if (this.backlog.length > 64) this.backlog.shift();
+    }
   }
 
   close(): void {
     this.closed = true;
+    this.backlog = [];
     for (const c of this.clients) c.close();
   }
 }

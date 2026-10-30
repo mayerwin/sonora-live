@@ -19,6 +19,12 @@ function key(m: ArrayLike<number>): number {
 
 export class EchoFilter {
   private recent: { k: number; t: number }[] = [];
+  /**
+   * This instrument does echo (a note we sent came back identical, velocity included, which a person playing
+   * cannot do). Until then only such exact note-ons are dropped: most instruments never echo, and a real release
+   * played at the same moment as one we sent must not be mistaken for an echo.
+   */
+  echoes = false;
 
   /** `m` was just sent to the instrument. */
   sent(m: ArrayLike<number>, now = performance.now()): void {
@@ -30,11 +36,20 @@ export class EchoFilter {
   /** `m` came from the instrument: is it the echo of something we sent it? */
   isEcho(m: ArrayLike<number>, now = performance.now()): boolean {
     this.prune(now);
+    const noteOn = (m[0] & 0xf0) === 0x90 && (m[2] ?? 0) > 0;
+    if (!noteOn && !this.echoes) return false;
     const k = key(m);
     const i = this.recent.findIndex((r) => r.k === k);
     if (i < 0) return false;
     this.recent.splice(i, 1);
+    if (noteOn) this.echoes = true;
     return true;
+  }
+
+  /** Another instrument: it has to show again that it echoes. */
+  reset(): void {
+    this.recent = [];
+    this.echoes = false;
   }
 
   private prune(now: number): void {

@@ -32,6 +32,13 @@ describe('BLE-MIDI', () => {
     expect(p.parse(new Uint8Array([0x80, 0x01, 0x02, 0x81, 0xf7, 0x82, 0x90, 60, 70]))).toEqual([[0x90, 60, 70]]);
   });
 
+  it('a lost SysEx end does not swallow the messages after it', () => {
+    const p = new BleMidiParser();
+    expect(p.parse(new Uint8Array([0x80, 0x80, 0xf0, 0x41, 0x10]))).toEqual([]);
+    // the F7 never came; the next packet starts with a timestamped note
+    expect(p.parse(new Uint8Array([0x80, 0x81, 0x90, 64, 80]))).toEqual([[0x90, 64, 80]]);
+  });
+
   it('round-trips what it encodes', () => {
     const msgs = [
       [0x90, 60, 100],
@@ -53,10 +60,18 @@ describe('echo filter', () => {
     expect(f.isEcho([0x90, 60, 80], 25)).toBe(false);
   });
 
-  it('matches a note-off echoed as note-on velocity 0', () => {
+  it('only filters releases and pedals once the instrument has shown that it echoes', () => {
     const f = new EchoFilter();
+    // most instruments never echo: a release played at the same moment as one we sent is real
     f.sent([0x80, 60, 64], 0);
-    expect(f.isEcho([0x90, 60, 0], 10)).toBe(true);
+    expect(f.isEcho([0x80, 60, 40], 10)).toBe(false);
+    f.sent([0xb0, 64, 0], 0);
+    expect(f.isEcho([0xb0, 64, 0], 10)).toBe(false);
+    // this one echoes: a note came back identical
+    f.sent([0x90, 62, 77], 100);
+    expect(f.isEcho([0x90, 62, 77], 105)).toBe(true);
+    f.sent([0x80, 62, 64], 200);
+    expect(f.isEcho([0x90, 62, 0], 210)).toBe(true); // note-off echoed as note-on velocity 0
   });
 
   it('lets the player through: other notes, or the same note later', () => {
@@ -64,6 +79,15 @@ describe('echo filter', () => {
     f.sent([0x90, 60, 80], 0);
     expect(f.isEcho([0x90, 62, 80], 10)).toBe(false);
     expect(f.isEcho([0x90, 60, 80], 500)).toBe(false);
+  });
+
+  it('forgets on reset (another instrument)', () => {
+    const f = new EchoFilter();
+    f.sent([0x90, 62, 77], 0);
+    f.isEcho([0x90, 62, 77], 5);
+    expect(f.echoes).toBe(true);
+    f.reset();
+    expect(f.echoes).toBe(false);
   });
 });
 

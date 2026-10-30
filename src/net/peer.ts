@@ -57,6 +57,10 @@ export interface LinkStats {
 
 const RESTART_AFTER_MS = 2500;
 const GIVE_UP_MS = 45_000;
+/** a connection that never opens is given up after this */
+const CONNECT_TIMEOUT_MS = 25_000;
+/** an offer not answered yet is sent again (the relay may lose a message, or be down for a moment) */
+const RESEND_OFFER_MS = 4000;
 
 export class PeerLink {
   readonly id: string;
@@ -78,6 +82,8 @@ export class PeerLink {
   onSignal: (data: SignalData) => void = () => {};
   /** the connection could not be restored */
   onLost: () => void = () => {};
+  /** the MIDI channel opened (the moment to tell the peer which keys and pedals are held) */
+  onMidiOpen: () => void = () => {};
 
   private tx: Partial<Record<Slot, RTCRtpTransceiver>> = {};
   private local: Record<Slot, MediaStreamTrack | null>;
@@ -91,6 +97,8 @@ export class PeerLink {
   private queue: string[] = [];
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private lostTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
+  private resendTimer: ReturnType<typeof setInterval> | null = null;
   private prev: Map<string, { t: number; v: Record<string, number> }> = new Map();
   private closed = false;
 
@@ -147,9 +155,21 @@ export class PeerLink {
 
     this.ctl.onopen = () => {
       this.everConnected = true;
+      if (this.connectTimer) clearTimeout(this.connectTimer);
+      this.connectTimer = null;
       for (const m of this.queue.splice(0)) this.ctl.send(m);
       this.setState('connected');
     };
+    this.midi.onopen = () => this.onMidiOpen();
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (!this.everConnected) this.lost();
+    }, CONNECT_TIMEOUT_MS);
+    this.resendTimer = setInterval(() => {
+      if (this.state !== 'connected' && this.pc.signalingState === 'have-local-offer' && !this.makingOffer) {
+        this.sendDescription();
+      }
+    }, RESEND_OFFER_MS);
     this.ctl.onmessage = (e) => {
       try {
         const msg = JSON.parse(String(e.data));
@@ -327,6 +347,11 @@ export class PeerLink {
     return this.ctl.readyState === 'open';
   }
 
+  /** The DTLS fingerprint of the other side's connection (a new one means it made a new connection). */
+  get remoteFingerprint(): string | null {
+    return fingerprintOf(this.pc.remoteDescription?.sdp);
+  }
+
   // ------------------------------------------------------------------------------------------- recovery
 
   private onConnectionState(): void {
@@ -376,6 +401,14 @@ export class PeerLink {
     if (this.lostTimer) clearTimeout(this.lostTimer);
     this.restartTimer = null;
     this.lostTimer = null;
+  }
+
+  private clearTimers(): void {
+    this.clearRecovery();
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    if (this.resendTimer) clearInterval(this.resendTimer);
+    this.connectTimer = null;
+    this.resendTimer = null;
   }
 
   private lost(): void {
@@ -510,7 +543,7 @@ export class PeerLink {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.clearRecovery();
+    this.clearTimers();
     this.setState('closed');
     try {
       this.pc.close();
@@ -518,4 +551,10 @@ export class PeerLink {
       // ignore
     }
   }
+}
+
+/** `a=fingerprint:` of a session description (one per connection: a new value is a new connection). */
+export function fingerprintOf(sdp: string | undefined): string | null {
+  if (!sdp) return null;
+  return /a=fingerprint:([^\r\n]+)/.exec(sdp)?.[1]?.trim() ?? null;
 }
