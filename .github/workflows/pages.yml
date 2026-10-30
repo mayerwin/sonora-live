@@ -1,5 +1,7 @@
-# Builds Sonora Live and publishes it on GitHub Pages at every push to main
-# (one-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions).
+# Builds Sonora Live and publishes it on GitHub Pages at every push to main.
+# Settings -> Pages -> Build and deployment -> Source should be "GitHub Actions". While it is still "Deploy from a
+# branch", GitHub also publishes the raw source tree on each push; the deploy job then waits for that and publishes
+# the built app last, so the site stays right either way (and says so in the run summary).
 #
 # Optional TURN relay for the few networks that block direct connections (see README, "Strict networks"):
 # repository variables TURN_URLS (comma separated), TURN_USERNAME, TURN_API, and the secret TURN_CREDENTIAL.
@@ -8,13 +10,13 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: pages
@@ -48,5 +50,24 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Publish after GitHub's branch build, if the Pages source is still a branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          type=$(gh api "repos/$REPO/pages" --jq .build_type 2>/dev/null || echo unknown)
+          echo "Pages build type: $type"
+          if [ "$type" = "legacy" ]; then
+            echo "::warning title=GitHub Pages source::Settings -> Pages -> Source is 'Deploy from a branch'. Switch it to 'GitHub Actions' so only the built app is published."
+            echo "### GitHub Pages: switch the source to **GitHub Actions** (Settings -> Pages) so the raw source is not published too." >> "$GITHUB_STEP_SUMMARY"
+            for i in $(seq 1 60); do
+              left=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&per_page=50" \
+                --jq '[.workflow_runs[] | select(.name == "pages build and deployment" and .status != "completed")] | length')
+              [ "$left" = "0" ] && break
+              echo "waiting for GitHub's branch build to finish..."
+              sleep 5
+            done
+          fi
       - id: deployment
         uses: actions/deploy-pages@v5
