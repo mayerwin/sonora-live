@@ -347,8 +347,11 @@ test("the room keeps its rules when someone with other defaults joins", async ({
     await expect(b.getByTestId('lock-chip')).toContainText('2/4');
     await a.waitForTimeout(500);
     await expect(a.getByTestId('lock-chip')).toContainText('2/4');
-    await b.context().close();
+    // leave the way a person does (a closed laptop would be waited for, in case it comes back)
+    await b.getByTestId('btn-leave').click();
+    await b.getByTestId('confirm-leave').click();
     await expect.poll(async () => (await peers(a)).length).toBe(0);
+    await b.context().close();
   }
   await ctx.close();
 });
