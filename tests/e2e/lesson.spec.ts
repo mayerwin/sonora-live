@@ -269,3 +269,25 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
   await a.context().close();
   await b.context().close();
 });
+
+test('a duplicated tab (same session storage) gets its own identity and connects', async ({ browser }) => {
+  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const a = await ctx.newPage();
+  await a.goto('/');
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await a.locator('button.role[data-role=teacher]').click();
+  await enter(a);
+  const code = await codeOf(a);
+  const id = await a.evaluate(() => sessionStorage.getItem('sonora.tab'));
+  // "Duplicate tab" copies sessionStorage, so the copy starts with the same id
+  const b = await ctx.newPage();
+  await b.addInitScript((tab) => sessionStorage.setItem('sonora.tab', tab), id!);
+  await b.goto(`/#${code}`);
+  await b.getByPlaceholder('e.g. Clara').fill('Leo');
+  await b.locator('button.role[data-role=student]').click();
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  expect(await b.evaluate(() => sessionStorage.getItem('sonora.tab'))).not.toBe(id);
+  await ctx.close();
+});

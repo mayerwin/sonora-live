@@ -70,13 +70,13 @@ export function LockSheet() {
             {count} {count === 1 ? 'person' : 'people'} here now, everyone included
           </div>
         </div>
-        <button class="icon-btn" aria-label="Fewer" onClick={() => set(true, Math.max(2, policy.limit - 1))} disabled={policy.limit <= 2}>
+        <button class="icon-btn" aria-label="Allow one person fewer" onClick={() => set(true, Math.max(2, policy.limit - 1))} disabled={policy.limit <= 2}>
           <Minus />
         </button>
         <b style="min-width:26px;text-align:center;font-size:20px" aria-live="polite">
           {policy.limit}
         </b>
-        <button class="icon-btn" aria-label="More" onClick={() => set(true, Math.min(12, policy.limit + 1))} disabled={policy.limit >= 12}>
+        <button class="icon-btn" aria-label="Allow one more person" onClick={() => set(true, Math.min(12, policy.limit + 1))} disabled={policy.limit >= 12}>
           <Plus />
         </button>
       </div>

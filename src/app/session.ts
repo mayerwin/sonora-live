@@ -70,7 +70,9 @@ function initialPolicy(selfId: string): Policy {
 }
 
 export class Session {
-  readonly selfId = tabId(newPeerId);
+  /** this tab's id (kept across reloads; a duplicated tab gets its own, see uniqueTab) */
+  private readonly id = signal(tabId(newPeerId));
+  private tabs: BroadcastChannel | null = null;
   readonly media = new LocalMedia();
   readonly meter = new Meter();
   readonly midi = new MidiHub();
@@ -93,7 +95,7 @@ export class Session {
   /** sound could not start without a tap (autoplay rules) */
   readonly needsTap = signal(false);
   readonly self = computed<MemberInfo>(() => ({
-    id: this.selfId,
+    id: this.id.value,
     name: settings.value.name.trim() || 'Guest',
     role: settings.value.role ?? 'student',
     since: this.since,
@@ -171,6 +173,10 @@ export class Session {
     this.media.onTrack = (slot, track) => this.sendTrack(slot, track);
   }
 
+  get selfId(): string {
+    return this.id.peek();
+  }
+
   // =========================================================================================== start / room
 
   /** Connect to the rendezvous now (it takes a second) and pick the room from the address. */
@@ -207,6 +213,41 @@ export class Session {
     });
     void this.warmIce();
     this.startEffects();
+    // a duplicated tab inherits this tab's id: tell it so it takes its own
+    if (typeof BroadcastChannel !== 'undefined') {
+      this.tabs = new BroadcastChannel('sonora-live-tabs');
+      this.tabs.onmessage = (e) => {
+        if (e.data?.who === this.selfId && this.phase.peek() === 'room') this.tabs?.postMessage({ mine: this.selfId });
+      };
+    }
+  }
+
+  /** Another tab of this browser already uses our id (the tab was duplicated): take a new one. */
+  private async uniqueTab(): Promise<void> {
+    const bc = this.tabs;
+    if (!bc) return;
+    const taken = await new Promise<boolean>((resolve) => {
+      const done = (v: boolean) => {
+        clearTimeout(timer);
+        bc.removeEventListener('message', on);
+        resolve(v);
+      };
+      const on = (e: MessageEvent) => {
+        if (e.data?.mine === this.selfId) done(true);
+      };
+      const timer = setTimeout(() => done(false), 150);
+      bc.addEventListener('message', on);
+      bc.postMessage({ who: this.selfId });
+    });
+    if (!taken) return;
+    const id = newPeerId();
+    this.id.value = id;
+    try {
+      sessionStorage.setItem('sonora.tab', id);
+    } catch {
+      // private mode: this visit only
+    }
+    log('duplicated tab: new id', id);
   }
 
   private async warmIce(): Promise<RTCIceServer[]> {
@@ -236,6 +277,7 @@ export class Session {
     resumeMeters();
     this.midi.piano.context();
     this.setAudioSession('play-and-record');
+    await this.uniqueTab();
     this.since = Date.now();
     this.room.setSelf(this.self.peek());
     this.policy.value = initialPolicy(this.selfId);
@@ -261,7 +303,7 @@ export class Session {
       }
     }
     this.roomPhase.value = fresh ? 'in' : 'joining';
-    await this.room.enter(this.code.peek(), fresh);
+    await this.room.enter(this.code.peek(), fresh, this.since);
     this.roomPhase.value = this.room.phase;
     this.fresh.value = false;
     if (!this.statsTimer) {

@@ -140,14 +140,16 @@ export class Room {
 
   /**
    * Enter room `code`. `fresh`: the code was just generated here, nobody can be inside, so this browser founds it
-   * at once (it still announces itself, in case).
+   * at once (it still announces itself, in case). `since`: when we arrived (the session's clock).
    */
-  async enter(code: string, fresh: boolean): Promise<void> {
+  async enter(code: string, fresh: boolean, since = Date.now()): Promise<void> {
     this.leave(false);
     this.code = code;
     this.topic = roomTopic(code);
     this.key = await roomKey(code);
-    this.self = { ...this.self, since: Date.now() };
+    // the one arrival time everyone sees for us (hello, welcome, state messages): it decides who leads, and a
+    // different one means a reload
+    this.self = { ...this.self, since };
     this.unsub = this.relay.subscribe(this.topic, (d) => void this.receive(d));
     if (fresh) {
       this.found();

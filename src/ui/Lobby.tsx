@@ -405,7 +405,7 @@ export function Lobby() {
 
       <footer class="lobby-foot">
         <span>No account. No server sees your lesson.</span>
-        <a href={`${REPO_URL}#readme`} target="_blank" rel="noopener">
+        <a href={`${REPO_URL}#how-it-works`} target="_blank" rel="noopener">
           How it works
         </a>
         <a href={`${REPO_URL}#privacy`} target="_blank" rel="noopener">
