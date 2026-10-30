@@ -5,6 +5,7 @@ import { signal } from '@preact/signals';
 import { registerSW } from 'virtual:pwa-register';
 import { toast } from './notify.ts';
 import { isStandalone, os } from './platform.ts';
+import { t } from './i18n.ts';
 
 interface InstallEvent extends Event {
   prompt(): Promise<void>;
@@ -27,7 +28,7 @@ export function setupPwa(inLesson: () => boolean): void {
   window.addEventListener('appinstalled', () => {
     installable.value = false;
     deferred = null;
-    toast({ kind: 'success', title: 'Sonora Live installed', body: 'Open it from your home screen or apps.' });
+    toast({ kind: 'success', title: t('Sonora Live installed'), body: t('Open it from your home screen or apps.') });
   });
   if (os === 'ios') installable.value = true;
   if (import.meta.env.DEV) return;
@@ -37,9 +38,9 @@ export function setupPwa(inLesson: () => boolean): void {
       if (inLesson()) return; // next start
       toast({
         kind: 'info',
-        title: 'A new version is ready',
+        title: t('A new version is ready'),
         timeout: 0,
-        action: { label: 'Update', run: () => void updateSW(true) },
+        action: { label: t('Update'), run: () => void updateSW(true) },
       });
     },
   });
@@ -56,8 +57,8 @@ export async function promptInstall(): Promise<void> {
   if (os === 'ios') {
     toast({
       kind: 'info',
-      title: 'Add to Home Screen',
-      body: 'Tap the Share button in Safari, then “Add to Home Screen”.',
+      title: t('Add to Home Screen'),
+      body: t('Tap the Share button in Safari, then “Add to Home Screen”.'),
       timeout: 9000,
     });
   }

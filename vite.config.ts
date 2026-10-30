@@ -63,18 +63,36 @@ export default defineConfig({
           { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         screenshots: [
-          { src: 'social/screenshot-wide.webp', sizes: '1600x900', type: 'image/webp', form_factor: 'wide', label: 'A piano lesson' },
-          { src: 'social/screenshot-narrow.webp', sizes: '780x1688', type: 'image/webp', form_factor: 'narrow', label: 'The lesson on a phone' },
+          {
+            src: 'social/screenshot-wide.webp',
+            sizes: '1600x900',
+            type: 'image/webp',
+            form_factor: 'wide',
+            label: 'A piano lesson',
+          },
+          {
+            src: 'social/screenshot-narrow.webp',
+            sizes: '780x1688',
+            type: 'image/webp',
+            form_factor: 'narrow',
+            label: 'The lesson on a phone',
+          },
         ],
       },
       workbox: {
         // the app shell is precached; the piano samples (tens of MB) are cached the first time they are used
-        globPatterns: ['**/*.{js,css,html,svg,woff2,webmanifest}', 'icons/*.png', 'emoji/*.json'],
-        globIgnores: ['piano/**', 'social/**'],
+        globPatterns: ['**/*.{js,css,html,svg,woff2,webmanifest}', 'icons/*.png'],
+        globIgnores: ['piano/**', 'social/**', 'emoji/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            // emoji names in the language in use (the picker then keeps them in IndexedDB)
+            urlPattern: ({ url }) => url.pathname.includes('/emoji/'),
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'sonora-emoji-v1', expiration: { maxEntries: 4 } },
+          },
           {
             urlPattern: ({ url }) => url.pathname.includes('/piano/'),
             handler: 'CacheFirst',

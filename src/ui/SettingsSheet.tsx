@@ -1,5 +1,21 @@
 import { useEffect, useState } from 'preact/hooks';
-import { AudioWaveform, Bell, Download, ExternalLink, Headphones, Mic, Settings, ShieldCheck, Speech, Sparkles, TriangleAlert, Video, Volume2 } from 'lucide-preact';
+import {
+  AudioWaveform,
+  Bell,
+  Download,
+  ExternalLink,
+  Headphones,
+  Languages,
+  Mic,
+  Settings,
+  ShieldCheck,
+  Speech,
+  Sparkles,
+  TriangleAlert,
+  Video,
+  Volume2,
+} from 'lucide-preact';
+import { browserLang, LANGUAGES, t, type LanguageSetting } from '../app/i18n.ts';
 import { session } from '../app/session.ts';
 import { settings, update, type SoundSetting } from '../app/settings.ts';
 import { askNotifications, chime, notifyPermission, unlockChimes } from '../app/notify.ts';
@@ -8,17 +24,34 @@ import { REPO_URL, isMobile } from '../app/platform.ts';
 import { AUDIO_QUALITY, VIDEO_QUALITY, type AudioQuality, type VideoQuality } from '../media/constraints.ts';
 import { canPickSpeaker, listDevices, looksLikeHeadphones, type DeviceLists } from '../media/local.ts';
 import { hasBuiltInTurn } from '../net/ice.ts';
-import { LevelBars, Seg, Sheet, ToggleRow } from './common.tsx';
+import { LevelBars, Rich, Seg, Sheet, ToggleRow } from './common.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
 
-const TABS: { id: SettingsTab; label: string }[] = [
-  { id: 'audio', label: 'Sound' },
-  { id: 'video', label: 'Video' },
-  { id: 'room', label: 'Room' },
-  { id: 'connection', label: 'Connection' },
-  { id: 'about', label: 'About' },
+const tabs = (): { id: SettingsTab; label: string }[] => [
+  { id: 'audio', label: t('Sound') },
+  { id: 'video', label: t('Video') },
+  { id: 'room', label: t('Room') },
+  { id: 'connection', label: t('Connection') },
+  { id: 'about', label: t('General') },
 ];
+
+const audioLabel = (q: AudioQuality) => ({ standard: t('Standard'), high: t('High'), studio: t('Studio') })[q];
+const audioHint = (q: AudioQuality) =>
+  ({
+    standard: t('96 kbps · slow or mobile connections'),
+    high: t('192 kbps stereo · recommended'),
+    studio: t('320 kbps stereo · broadcast quality'),
+  })[q];
+/** why the browser sends less video than asked (WebRTC's qualityLimitationReason) */
+const limitLabel = (r: string) =>
+  r === 'cpu'
+    ? t('limited by the processor')
+    : r === 'bandwidth'
+      ? t('limited by the network')
+      : t('limited ({reason})', { reason: r });
+const videoLabel = (q: VideoQuality) =>
+  ({ sd: t('Data saver · 360p'), hd: t('HD · 720p'), fhd: t('Full HD · 1080p') })[q];
 
 export function SettingsSheet() {
   const tab = settingsTab.value;
@@ -28,15 +61,15 @@ export function SettingsSheet() {
   }, []);
   return (
     <Sheet
-      title="Settings"
+      title={t('Settings')}
       icon={<Settings />}
       wide
       onClose={() => (sheet.value = null)}
       tabs={
         <div class="sheet-tabs" role="tablist">
-          {TABS.map((t) => (
-            <button role="tab" aria-selected={tab === t.id} onClick={() => (settingsTab.value = t.id)}>
-              {t.label}
+          {tabs().map((x) => (
+            <button role="tab" aria-selected={tab === x.id} onClick={() => (settingsTab.value = x.id)}>
+              {x.label}
             </button>
           ))}
         </div>
@@ -57,57 +90,94 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
   const mode = session.soundMode.value;
   const level = session.meter.level.value;
   const clipping = session.meter.clipping.value;
-  const speakerLabel = devices.speakers.find((d) => d.deviceId === s.speakerId)?.label ?? devices.speakers[0]?.label ?? '';
+  const speakerLabel =
+    devices.speakers.find((d) => d.deviceId === s.speakerId)?.label ?? devices.speakers[0]?.label ?? '';
   return (
     <>
       <div class="section">
-        <h3>Sound mode</h3>
+        <h3>{t('Sound mode')}</h3>
         <Seg<SoundSetting>
-          label="Sound mode"
+          label={t('Sound mode')}
           value={s.sound}
           onChange={(v) => update({ sound: v })}
           options={[
-            { value: 'auto', label: <><Sparkles /> Auto</> },
-            { value: 'pure', label: <><AudioWaveform /> Pure</> },
-            { value: 'voice', label: <><Speech /> Voice</> },
+            {
+              value: 'auto',
+              label: (
+                <>
+                  <Sparkles /> {t('Auto')}
+                </>
+              ),
+            },
+            {
+              value: 'pure',
+              label: (
+                <>
+                  <AudioWaveform /> {t('Pure')}
+                </>
+              ),
+            },
+            {
+              value: 'voice',
+              label: (
+                <>
+                  <Speech /> {t('Voice')}
+                </>
+              ),
+            },
           ]}
         />
         <p class="lead">
           {s.sound === 'auto' && (
-            <>
-              Now: <b>{mode === 'pure' ? 'pure' : 'voice'}</b>. Your microphone sends your instrument untouched; while
-              your piano travels as MIDI, it switches to voice processing so speech stays clear.
-            </>
+            <Rich
+              text={
+                mode === 'pure'
+                  ? t(
+                      'Now: <b>pure</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.',
+                    )
+                  : t(
+                      'Now: <b>voice</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.',
+                    )
+              }
+            />
           )}
           {s.sound === 'pure' && (
             <>
-              No noise suppression, no echo cancellation, no automatic volume, stereo when your microphone has it: every
-              sustain, pedal and pianissimo arrives as played.
+              {t(
+                'No noise suppression, no echo cancellation, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.',
+              )}
             </>
           )}
-          {s.sound === 'voice' && <>The browser's speech processing: removes background noise and echo, and part of the music with it.</>}
+          {s.sound === 'voice' &&
+            t("The browser's speech processing: removes background noise and echo, and part of the music with it.")}
         </p>
         {mode === 'pure' && !looksLikeHeadphones(speakerLabel) && (
           <div class="hint hint-warn">
             <Headphones />
-            <span>Pure sound has no echo cancelling: use headphones (wired ones add no delay), or the others will hear themselves.</span>
+            <span>
+              {t(
+                'Pure sound has no echo cancelling: use headphones (wired ones add no delay), or the others will hear themselves.',
+              )}
+            </span>
           </div>
         )}
       </div>
 
       <div class="section">
-        <h3>Quality</h3>
+        <h3>{t('Quality')}</h3>
         <Seg<AudioQuality>
-          label="Audio quality"
+          label={t('Audio quality')}
           value={s.audioQuality}
           onChange={(v) => update({ audioQuality: v })}
-          options={(Object.keys(AUDIO_QUALITY) as AudioQuality[]).map((k) => ({ value: k, label: AUDIO_QUALITY[k].label }))}
+          options={(Object.keys(AUDIO_QUALITY) as AudioQuality[]).map((k) => ({ value: k, label: audioLabel(k) }))}
         />
-        <p class="lead">{AUDIO_QUALITY[s.audioQuality].hint}. Opus codec, 10 ms frames, no silence suppression.</p>
+        <p class="lead">
+          {t('{quality}. Opus codec, 10 ms frames, no silence suppression.', { quality: audioHint(s.audioQuality) })}
+        </p>
       </div>
 
       <div class="section">
-        <h3>Microphone</h3>
+        <h3>{t('Microphone')}</h3>
         <select
           class="select"
           value={media.microphoneId}
@@ -116,23 +186,24 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
             update({ micId: id });
             void media.restartAudio(session.soundMode.peek(), id);
           }}
-          aria-label="Microphone"
+          aria-label={t('Microphone')}
         >
           {devices.mics.map((d, i) => (
-            <option value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+            <option value={d.deviceId}>{d.label || t('Microphone {n}', { n: i + 1 })}</option>
           ))}
         </select>
         <div style="display:flex;align-items:center;gap:10px;color:var(--text-2);font-size:13.5px">
           <Mic size={16} />
           <LevelBars level={media.micOn.value ? level : 0} clipping={clipping} n={12} />
-          <span>{media.stereo.value ? 'Stereo input' : 'Mono input'}</span>
+          <span>{media.stereo.value ? t('Stereo input') : t('Mono input')}</span>
         </div>
         {clipping && (
           <div class="hint hint-bad">
             <TriangleAlert />
             <span>
-              Your microphone is overloaded (it clips on loud passages). Lower its input level in your system's sound
-              settings, or move it a little further from the instrument.
+              {t(
+                "Your microphone is overloaded (it clips on loud passages). Lower its input level in your system's sound settings, or move it a little further from the instrument.",
+              )}
             </span>
           </div>
         )}
@@ -140,7 +211,7 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
 
       {canPickSpeaker && devices.speakers.length > 0 && (
         <div class="section">
-          <h3>Speakers or headphones</h3>
+          <h3>{t('Speakers or headphones')}</h3>
           <div style="display:flex;gap:8px">
             <select
               class="select"
@@ -150,10 +221,10 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
                 update({ speakerId: id });
                 void session.setSpeaker(id);
               }}
-              aria-label="Speakers"
+              aria-label={t('Speakers')}
             >
               {devices.speakers.map((d, i) => (
-                <option value={d.deviceId}>{d.label || `Output ${i + 1}`}</option>
+                <option value={d.deviceId}>{d.label || t('Output {n}', { n: i + 1 })}</option>
               ))}
             </select>
             <button
@@ -163,14 +234,19 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
                 chime('join');
               }}
             >
-              <Volume2 /> Test
+              <Volume2 /> {t('Test')}
             </button>
           </div>
         </div>
       )}
 
       <div class="section">
-        <ToggleRow title="Join and message sounds" sub="A soft chime when someone joins, leaves or writes." checked={s.joinSound} onChange={(v) => update({ joinSound: v })} />
+        <ToggleRow
+          title={t('Join and message sounds')}
+          sub={t('A soft chime when someone joins, leaves or writes.')}
+          checked={s.joinSound}
+          onChange={(v) => update({ joinSound: v })}
+        />
       </div>
     </>
   );
@@ -184,7 +260,7 @@ function VideoTab({ devices }: { devices: DeviceLists }) {
   return (
     <>
       <div class="section">
-        <h3>Camera</h3>
+        <h3>{t('Camera')}</h3>
         <select
           class="select"
           value={media.cameraId}
@@ -193,57 +269,72 @@ function VideoTab({ devices }: { devices: DeviceLists }) {
             update({ camId: id });
             void media.restartVideo(id);
           }}
-          aria-label="Camera"
+          aria-label={t('Camera')}
         >
           {devices.cams.map((d, i) => (
-            <option value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+            <option value={d.deviceId}>{d.label || t('Camera {n}', { n: i + 1 })}</option>
           ))}
         </select>
       </div>
       <div class="section">
-        <h3>Quality</h3>
+        <h3>{t('Quality')}</h3>
         <Seg<VideoQuality>
-          label="Video quality"
+          label={t('Video quality')}
           value={s.videoQuality}
           onChange={(v) => {
             update({ videoQuality: v });
             void media.restartVideo(undefined, v);
           }}
-          options={(Object.keys(VIDEO_QUALITY) as VideoQuality[]).map((k) => ({ value: k, label: VIDEO_QUALITY[k].label.split(' · ')[1] }))}
+          options={(Object.keys(VIDEO_QUALITY) as VideoQuality[]).map((k) => ({
+            value: k,
+            label: videoLabel(k).split(' · ')[1],
+          }))}
         />
-        <p class="lead">{VIDEO_QUALITY[s.videoQuality].label}. Smooth motion is kept first, so hands stay fluid.</p>
+        <p class="lead">
+          {t('{quality}. Smooth motion is kept first, so hands stay fluid.', { quality: videoLabel(s.videoQuality) })}
+        </p>
       </div>
       {!isMobile && devices.cams.length > 1 && (
         <div class="section">
-          <h3>Second camera</h3>
-          <p class="lead">Show the keys from above (or your hands) next to your face. The others see both.</p>
+          <h3>{t('Second camera')}</h3>
+          <p class="lead">{t('Show the keys from above (or your hands) next to your face. The others see both.')}</p>
           {extra === 'camera' ? (
             <button class="btn" onClick={() => media.stopExtra()}>
-              Stop second camera
+              {t('Stop second camera')}
             </button>
           ) : (
             <div style="display:flex;gap:8px">
-              <select class="select" value={second} onChange={(e) => setSecond((e.currentTarget as HTMLSelectElement).value)} aria-label="Second camera">
-                <option value="">Choose a camera…</option>
+              <select
+                class="select"
+                value={second}
+                onChange={(e) => setSecond((e.currentTarget as HTMLSelectElement).value)}
+                aria-label={t('Second camera')}
+              >
+                <option value="">{t('Choose a camera…')}</option>
                 {devices.cams
                   .filter((d) => d.deviceId !== media.cameraId)
                   .map((d, i) => (
-                    <option value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                    <option value={d.deviceId}>{d.label || t('Camera {n}', { n: i + 1 })}</option>
                   ))}
               </select>
               <button class="btn" disabled={!second} onClick={() => void media.addCamera(second)}>
-                <Video /> Add
+                <Video /> {t('Add')}
               </button>
             </div>
           )}
           <p class="lead" style="font-size:13px">
-            Or join from a phone with the room's QR code, as an Observer, and point it at the keyboard.
+            {t("Or join from a phone with the room's QR code, as an Observer, and point it at the keyboard.")}
           </p>
         </div>
       )}
       <div class="section">
-        <ToggleRow title="Mirror my preview" sub="Only for you: the others always see the real image." checked={s.mirror} onChange={(v) => update({ mirror: v })} />
-        <ToggleRow title="Start with the camera off" checked={s.camOff} onChange={(v) => update({ camOff: v })} />
+        <ToggleRow
+          title={t('Mirror my preview')}
+          sub={t('Only for you: the others always see the real image.')}
+          checked={s.mirror}
+          onChange={(v) => update({ mirror: v })}
+        />
+        <ToggleRow title={t('Start with the camera off')} checked={s.camOff} onChange={(v) => update({ camOff: v })} />
       </div>
     </>
   );
@@ -256,10 +347,10 @@ function RoomTab() {
   return (
     <>
       <div class="section">
-        <h3>This room</h3>
+        <h3>{t('This room')}</h3>
         <ToggleRow
-          title={`Limit to ${policy.limit} people`}
-          sub="Others have to knock; someone inside can let them in. Change the size from the lock in the top bar."
+          title={t('Limit to {n} people', { n: policy.limit })}
+          sub={t('Others have to knock; someone inside can let them in. Change the size from the lock in the top bar.')}
           checked={policy.locked}
           onChange={(v) => {
             session.setPolicy({ locked: v, limit: policy.limit });
@@ -268,28 +359,30 @@ function RoomTab() {
         />
       </div>
       <div class="section">
-        <h3>Notifications</h3>
+        <h3>{t('Notifications')}</h3>
         <ToggleRow
-          title="Notify me when someone joins"
+          title={t('Notify me when someone joins')}
           sub={
-            perm === 'denied'
-              ? 'Notifications are blocked for this site in your browser settings.'
-              : perm === 'unsupported'
-                ? 'Not available in this browser (on iPhone and iPad: install the app first).'
-                : 'A system notification when this tab is in the background, plus a chime.'
+            perm === 'granted'
+              ? t('A system notification when this tab is in the background, plus a chime.')
+              : perm === 'denied'
+                ? t(
+                    'Blocked in this browser: allow notifications for this site from the icon at the left of the address bar. A chime still plays.',
+                  )
+                : perm === 'unsupported'
+                  ? t('Not available in this browser (on iPhone and iPad: install the app first). A chime still plays.')
+                  : t('Your browser asks for permission first. Without it, a chime still plays.')
           }
-          checked={s.notifyJoin && perm === 'granted'}
-          disabled={perm === 'denied' || perm === 'unsupported'}
-          onChange={async (v) => {
-            if (v && perm !== 'granted') {
-              const ok = await askNotifications();
-              update({ notifyJoin: ok });
-            } else update({ notifyJoin: v });
+          checked={s.notifyJoin}
+          disabled={perm === 'unsupported'}
+          onChange={(v) => {
+            update({ notifyJoin: v });
+            if (v) void askNotifications(true);
           }}
         />
-        {perm === 'default' && (
-          <button class="btn btn-sm" style="justify-self:start" onClick={() => void askNotifications()}>
-            <Bell /> Allow notifications
+        {s.notifyJoin && perm === 'default' && (
+          <button class="btn btn-sm" style="justify-self:start" onClick={() => void askNotifications(true)}>
+            <Bell /> {t('Allow notifications')}
           </button>
         )}
       </div>
@@ -304,65 +397,75 @@ function ConnectionTab() {
   return (
     <>
       <div class="section">
-        <h3>Meeting point</h3>
+        <h3>{t('Meeting point')}</h3>
         <p class="lead">
-          {session.relayUp.value}/{session.relayTotal.value} rendezvous servers reachable. They only pass the encrypted
-          handshake; the lesson itself flows directly between you.
+          {t(
+            '{up}/{total} rendezvous servers reachable. They only pass the encrypted handshake; the lesson itself flows directly between you.',
+            {
+              up: session.relayUp.value,
+              total: session.relayTotal.value,
+            },
+          )}
         </p>
       </div>
-      {peers.length === 0 && <p class="lead">Connection details appear here once someone joins.</p>}
+      {peers.length === 0 && <p class="lead">{t('Connection details appear here once someone joins.')}</p>}
       {peers.map((p) => {
         const st = p.stats;
         return (
           <div class="section" data-role={p.info.role}>
             <h3 style="color:var(--rc)">{p.info.name}</h3>
             {!st ? (
-              <p class="lead">Measuring…</p>
+              <p class="lead">{t('Measuring…')}</p>
             ) : (
               <table class="stats">
                 <tbody>
                   <tr>
-                    <td>Path</td>
+                    <td>{t('Path')}</td>
                     <td>{st.path || '—'}</td>
                   </tr>
                   <tr>
-                    <td>Network round trip</td>
+                    <td>{t('Network round trip')}</td>
                     <td>{st.rtt ?? '—'} ms</td>
                   </tr>
                   <tr>
-                    <td>Their sound reaches you in (est.)</td>
+                    <td>{t('Their sound reaches you in (est.)')}</td>
                     <td>{st.latencyMs ?? '—'} ms</td>
                   </tr>
                   <tr>
-                    <td>Jitter buffer</td>
+                    <td>{t('Jitter buffer')}</td>
                     <td>{st.bufferMs} ms</td>
                   </tr>
                   <tr>
-                    <td>Audio in / out</td>
+                    <td>{t('Audio in / out')}</td>
                     <td>
                       {st.audioInKbps} / {st.audioOutKbps} kbps
                     </td>
                   </tr>
                   <tr>
-                    <td>Audio codec</td>
+                    <td>{t('Audio codec')}</td>
                     <td>
-                      {st.audioCodec || 'opus'} {st.audioChannels === 2 ? 'stereo' : st.audioChannels === 1 ? 'mono' : ''}
-                      {st.audioOutPps ? ` · ${Math.round(1000 / st.audioOutPps)} ms frames` : ''}
+                      {st.audioCodec || 'opus'}{' '}
+                      {st.audioChannels === 2 ? t('stereo') : st.audioChannels === 1 ? t('mono') : ''}
+                      {st.audioOutPps ? ` · ${t('{n} ms frames', { n: Math.round(1000 / st.audioOutPps) })}` : ''}
                     </td>
                   </tr>
                   <tr>
-                    <td>Audio packet loss</td>
+                    <td>{t('Audio packet loss')}</td>
                     <td>{st.audioLossPct.toFixed(1)} %</td>
                   </tr>
                   <tr>
-                    <td>Video in</td>
-                    <td>{st.videoIn && st.videoIn.w ? `${st.videoIn.w}×${st.videoIn.h} · ${st.videoIn.fps} fps · ${st.videoIn.kbps} kbps` : '—'}</td>
+                    <td>{t('Video in')}</td>
+                    <td>
+                      {st.videoIn && st.videoIn.w
+                        ? `${st.videoIn.w}×${st.videoIn.h} · ${st.videoIn.fps} fps · ${st.videoIn.kbps} kbps`
+                        : '—'}
+                    </td>
                   </tr>
                   <tr>
-                    <td>Video out</td>
+                    <td>{t('Video out')}</td>
                     <td>
                       {st.videoOut && st.videoOut.w
-                        ? `${st.videoOut.w}×${st.videoOut.h} · ${st.videoOut.fps} fps${st.videoOut.limit !== 'none' ? ` · limited by ${st.videoOut.limit}` : ''}`
+                        ? `${st.videoOut.w}×${st.videoOut.h} · ${st.videoOut.fps} fps${st.videoOut.limit !== 'none' ? ` · ${limitLabel(st.videoOut.limit)}` : ''}`
                         : '—'}
                     </td>
                   </tr>
@@ -374,18 +477,41 @@ function ConnectionTab() {
       })}
       <details class="details">
         <summary>
-          <ShieldCheck /> Strict network? Add a TURN relay
+          <ShieldCheck /> {t('Strict network? Add a TURN relay')}
         </summary>
         <div class="details-body">
           <p>
-            Most connections are direct. A few networks (some offices, schools, mobile carriers) block that; a TURN relay
-            gets through.
-            {hasBuiltInTurn() ? ' This site already has one configured; you can add your own.' : ' You can use your own, for example a free Metered account or your own coturn server.'}
+            {hasBuiltInTurn()
+              ? t(
+                  'Most connections are direct. A few networks (some offices, schools, mobile carriers) block that; a TURN relay gets through. This site already has one configured; you can add your own.',
+                )
+              : t(
+                  'Most connections are direct. A few networks (some offices, schools, mobile carriers) block that; a TURN relay gets through. You can use your own, for example a free Metered account or your own coturn server.',
+                )}
           </p>
-          <input class="input" placeholder="turn:relay.example.com:3478, turns:relay.example.com:443" value={turn.urls} onInput={(e) => setTurn({ ...turn, urls: (e.currentTarget as HTMLInputElement).value })} aria-label="TURN URLs" />
+          <input
+            class="input"
+            placeholder="turn:relay.example.com:3478, turns:relay.example.com:443"
+            value={turn.urls}
+            onInput={(e) => setTurn({ ...turn, urls: (e.currentTarget as HTMLInputElement).value })}
+            aria-label="TURN URLs"
+          />
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input class="input" placeholder="Username" value={turn.username} onInput={(e) => setTurn({ ...turn, username: (e.currentTarget as HTMLInputElement).value })} aria-label="TURN username" />
-            <input class="input" type="password" placeholder="Credential" value={turn.credential} onInput={(e) => setTurn({ ...turn, credential: (e.currentTarget as HTMLInputElement).value })} aria-label="TURN credential" />
+            <input
+              class="input"
+              placeholder={t('Username')}
+              value={turn.username}
+              onInput={(e) => setTurn({ ...turn, username: (e.currentTarget as HTMLInputElement).value })}
+              aria-label={t('TURN username')}
+            />
+            <input
+              class="input"
+              type="password"
+              placeholder={t('Credential')}
+              value={turn.credential}
+              onInput={(e) => setTurn({ ...turn, credential: (e.currentTarget as HTMLInputElement).value })}
+              aria-label={t('TURN credential')}
+            />
           </div>
           <button
             class="btn btn-sm"
@@ -395,7 +521,7 @@ function ConnectionTab() {
               session.refreshIce();
             }}
           >
-            Save (used for new connections)
+            {t('Save (used for new connections)')}
           </button>
         </div>
       </details>
@@ -404,44 +530,68 @@ function ConnectionTab() {
 }
 
 function AboutTab() {
+  const pref = settings.value.language;
   return (
     <>
       <div class="section">
+        <h3>
+          <Languages size={16} style="vertical-align:-3px" /> {t('Language')}
+        </h3>
+        <Seg<LanguageSetting>
+          label={t('Language')}
+          value={pref}
+          onChange={(v) => update({ language: v })}
+          options={[
+            { value: 'auto', label: t('Automatic'), title: t('The language of this browser') },
+            ...LANGUAGES.map((l) => ({ value: l.value, label: l.name })),
+          ]}
+        />
+        {pref === 'auto' && (
+          <p class="lead" style="font-size:13px">
+            {t('Following this browser: {language}.', {
+              language: LANGUAGES.find((l) => l.value === browserLang())!.name,
+            })}
+          </p>
+        )}
+      </div>
+      <div class="section">
         <h3>Sonora Live</h3>
         <p class="lead">
-          Remote music lessons that sound like the room. Peer-to-peer video, pure instrument sound and two-way MIDI, in the
-          browser. Free and open source (MIT).
+          {t(
+            'Remote music lessons that sound like the room. Peer-to-peer video, pure instrument sound and two-way MIDI, in the browser. Free and open source (MIT).',
+          )}
         </p>
         <p class="lead" style="font-size:13px;color:var(--muted)">
-          Version {__APP_VERSION__} · {__APP_COMMIT__}
+          {t('Version {version}', { version: __APP_VERSION__ })} · {__APP_COMMIT__}
         </p>
         <div class="code-actions">
           <a class="btn btn-sm" href={REPO_URL} target="_blank" rel="noopener">
-            <GitHubIcon size={16} /> Source on GitHub
+            <GitHubIcon size={16} /> {t('Source on GitHub')}
           </a>
           {installable.value && (
             <button class="btn btn-sm" onClick={() => void promptInstall()}>
-              <Download /> Install app
+              <Download /> {t('Install app')}
             </button>
           )}
         </div>
       </div>
       <div class="section">
-        <h3>Privacy</h3>
+        <h3>{t('Privacy')}</h3>
         <p class="lead">
-          No account, no server in the middle, no recording. Audio, video, chat, files and MIDI travel directly between the
-          browsers, encrypted (DTLS-SRTP). The short handshake that lets you find each other passes through public
-          rendezvous servers, encrypted with a key made from the room code. Your preferences stay in this browser.
+          {t(
+            'No account, no server in the middle, no recording. Audio, video, chat, files and MIDI travel directly between the browsers, encrypted (DTLS-SRTP). The short handshake that lets you find each other passes through public rendezvous servers, encrypted with a key made from the room code. Your preferences stay in this browser.',
+          )}
         </p>
       </div>
       <div class="section">
-        <h3>Credits</h3>
+        <h3>{t('Credits')}</h3>
         <p class="lead" style="font-size:13.5px">
-          Built-in piano: the Splendid Grand Piano (Steinway, public domain samples by Akai, remastered by the SFZ
-          Instruments project) · Fonts: Instrument Serif and Instrument Sans (SIL Open Font License) · Emoji picker:
-          emoji-picker-element · Icons: Lucide ·{' '}
+          {t(
+            'Built-in piano: the Splendid Grand Piano (Steinway, public domain samples by Akai, remastered by the SFZ Instruments project) · Fonts: Instrument Serif and Instrument Sans (SIL Open Font License) · Emoji picker: emoji-picker-element · Icons: Lucide',
+          )}{' '}
+          ·{' '}
           <a href={`${REPO_URL}#credits`} target="_blank" rel="noopener">
-            all credits <ExternalLink size={12} />
+            {t('all credits')} <ExternalLink size={12} />
           </a>
         </p>
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layersFor, nearestSample, sampleName, velocityGain } from '../../src/midi/piano.ts';
+import { layersFor, nearestSample, sampleName, spreadOrder, velocityGain } from '../../src/midi/piano.ts';
 import { existsSync } from 'node:fs';
 
 describe('built-in piano', () => {
@@ -15,7 +15,9 @@ describe('built-in piano', () => {
         const { sample, dist } = nearestSample(layer, n);
         if (dist > 3) continue;
         for (const fmt of ['ogg', 'm4a']) {
-          expect(existsSync(`public/piano/${fmt}/${sampleName(layer, sample)}.${fmt}`), `${layer} ${n} ${fmt}`).toBe(true);
+          expect(existsSync(`public/piano/${fmt}/${sampleName(layer, sample)}.${fmt}`), `${layer} ${n} ${fmt}`).toBe(
+            true,
+          );
         }
       }
     }
@@ -23,6 +25,17 @@ describe('built-in piano', () => {
 
   it('never pitches a sample by more than 2 semitones in the main layer', () => {
     for (let n = 21; n <= 108; n++) expect(nearestSample('mf', n).dist).toBeLessThanOrEqual(2);
+  });
+
+  it('loads samples spread over the keyboard first, so every key soon has one close by', () => {
+    const mf = Array.from({ length: 88 }, (_, i) => 21 + i).filter((n) => nearestSample('mf', n).sample === n);
+    const order = spreadOrder(mf);
+    expect([...order].sort((a, b) => a - b)).toEqual(mf);
+    expect(order[0]).toBe(60);
+    // after a quarter of the layer, no key is more than 3 semitones from a loaded sample
+    const first = order.slice(0, Math.ceil(mf.length / 2.5));
+    for (let n = 21; n <= 108; n++)
+      expect(Math.min(...first.map((s) => Math.abs(s - n))), `key ${n}`).toBeLessThanOrEqual(3);
   });
 
   it('crossfades layers with constant power', () => {

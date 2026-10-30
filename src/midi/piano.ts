@@ -20,10 +20,25 @@ import { signal } from '@preact/signals';
 
 /** Sampled notes per layer (MIDI numbers), from public/piano. */
 const SAMPLES: Record<LayerName, number[]> = {
-  pp: [23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108],
-  mp: [23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 106],
-  mf: [23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108],
-  ff: [23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 88, 89, 91, 93],
+  pp: [
+    23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71,
+    72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
+    105, 106, 107, 108,
+  ],
+  mp: [
+    23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71,
+    72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104,
+    105, 106,
+  ],
+  mf: [
+    23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71,
+    72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103,
+    104, 105, 106, 107, 108,
+  ],
+  ff: [
+    23, 27, 29, 31, 33, 35, 37, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 56, 57, 58, 59, 60, 62, 64, 65, 67, 69, 71,
+    72, 74, 76, 77, 79, 80, 81, 82, 83, 85, 86, 88, 89, 91, 93,
+  ],
 };
 
 type LayerName = 'pp' | 'mp' | 'mf' | 'ff';
@@ -86,6 +101,37 @@ export function layersFor(vel: number): { layer: LayerName; gain: number }[] {
   return [{ layer: 'pp', gain: 1 }];
 }
 
+/**
+ * The order to load a layer's samples in: each next one is the farthest from those already loaded (starting from
+ * middle C), so the whole keyboard is soon covered by samples a few semitones away, then filled in.
+ */
+export function spreadOrder(samples: number[]): number[] {
+  const left = [...samples];
+  const out: number[] = [];
+  const start = nearestIn(left, 60);
+  out.push(start);
+  left.splice(left.indexOf(start), 1);
+  while (left.length) {
+    let best = left[0];
+    let bestGap = -1;
+    for (const s of left) {
+      const gap = Math.min(...out.map((o) => Math.abs(o - s)), s - 18, 111 - s);
+      // ties: nearer the middle of the keyboard first
+      if (gap > bestGap || (gap === bestGap && Math.abs(s - 64) < Math.abs(best - 64))) {
+        best = s;
+        bestGap = gap;
+      }
+    }
+    out.push(best);
+    left.splice(left.indexOf(best), 1);
+  }
+  return out;
+}
+
+function nearestIn(list: number[], note: number): number {
+  return list.reduce((a, b) => (Math.abs(b - note) < Math.abs(a - note) ? b : a));
+}
+
 /** Loudness of a velocity (30 dB range, slightly expanded at the top). */
 export function velocityGain(vel: number): number {
   const v = Math.max(1, Math.min(127, vel)) / 127;
@@ -133,6 +179,10 @@ export class Piano {
   private pedals = new Map<string, PlayerPedals>();
   private format: 'ogg' | 'm4a' = 'ogg';
   private loading: Promise<void> | null = null;
+  private loaded$: (() => void) | null = null;
+  private queue: [LayerName, number][] = [];
+  private active = 0;
+  private workers = 2;
   private volume = 0.8;
   private reverbOn = true;
   private wave: PeriodicWave | null = null;
@@ -145,7 +195,8 @@ export class Piano {
   /** Create (or resume) the audio context. Call from a click or key press the first time (autoplay rules). */
   context(): AudioContext | null {
     if (!this.ctx) {
-      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AC =
+        window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AC) return null;
       this.ctx = new AC({ latencyHint: 'interactive' });
       this.build(this.ctx);
@@ -183,33 +234,63 @@ export class Piano {
     this.wave = ctx.createPeriodicWave(re, im);
   }
 
-  /** Start loading the samples (most used layer first). Light connections only get one layer. */
-  load(): Promise<void> {
-    if (this.loading) return this.loading;
-    const ctx = this.context();
-    if (!ctx) return Promise.resolve();
-    this.format = isAppleWebKit() ? 'm4a' : 'ogg';
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-    const light = !!conn?.saveData || /(^|-)2g|3g/.test(conn?.effectiveType ?? '');
-    const layers = light ? LOAD_ORDER.slice(0, 1) : LOAD_ORDER;
-    const jobs: [LayerName, number][] = [];
-    for (const l of layers) for (const n of SAMPLES[l]) jobs.push([l, n]);
-    this.total.value = jobs.length;
-    this.loading = (async () => {
-      let i = 0;
-      const worker = async () => {
-        while (i < jobs.length) {
-          const [layer, note] = jobs[i++];
-          await this.fetchSample(ctx, layer, note);
-          this.loaded.value++;
-          if (!this.ready.peek() && this.layerComplete('mf')) this.ready.value = true;
-        }
-      };
-      await Promise.all(Array.from({ length: 6 }, worker));
-      if (!this.buffers.size) this.failed.value = true;
-      else this.ready.value = true;
-    })();
+  /**
+   * Start loading the samples. `urgent` when notes are about to be played here: more downloads at once; otherwise
+   * (entering a lesson) two at a time, so the call keeps its bandwidth. The most used layer comes first, spread
+   * over the keyboard so that every key soon has a real sample close by. Light connections only get one layer.
+   */
+  load(urgent = true): Promise<void> {
+    if (urgent) this.workers = 6;
+    if (!this.loading) {
+      const ctx = this.context();
+      if (!ctx) return Promise.resolve();
+      this.format = isAppleWebKit() ? 'm4a' : 'ogg';
+      const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+        .connection;
+      const light = !!conn?.saveData || /(^|-)2g|3g/.test(conn?.effectiveType ?? '');
+      const layers = light ? LOAD_ORDER.slice(0, 1) : LOAD_ORDER;
+      for (const l of layers) for (const n of spreadOrder(SAMPLES[l])) this.queue.push([l, n]);
+      this.total.value = this.queue.length;
+      this.loading = new Promise((resolve) => (this.loaded$ = resolve));
+    }
+    this.pump();
     return this.loading;
+  }
+
+  /** Entering a lesson: load in the background, unless the connection is metered or slow. */
+  preload(): void {
+    const conn = (
+      navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string; type?: string } }
+    ).connection;
+    if (conn?.saveData || conn?.type === 'cellular' || /(^|-)2g|3g/.test(conn?.effectiveType ?? '')) return;
+    void this.load(false);
+  }
+
+  private pump(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    while (this.active < this.workers && this.queue.length) {
+      const [layer, note] = this.queue.shift()!;
+      this.active++;
+      void this.fetchSample(ctx, layer, note).then(() => {
+        this.active--;
+        this.loaded.value++;
+        if (!this.ready.peek() && this.layerComplete('mf')) this.ready.value = true;
+        if (!this.queue.length && !this.active) {
+          if (!this.buffers.size) this.failed.value = true;
+          else this.ready.value = true;
+          this.loaded$?.();
+        }
+        this.pump();
+      });
+    }
+  }
+
+  /** A key is played whose own sample is still missing: fetch it next. */
+  private want(layer: LayerName, note: number): void {
+    const { sample } = nearestSample(layer, note);
+    const i = this.queue.findIndex(([l, n]) => l === layer && n === sample);
+    if (i > 0) this.queue.unshift(...this.queue.splice(i, 1));
   }
 
   private layerComplete(layer: LayerName): boolean {
@@ -313,7 +394,18 @@ export class Piano {
       const b = this.buffers.get(sampleName(l, sample));
       if (b && dist <= 3) return { ...b, sample };
     }
-    return null;
+    // still loading: the nearest real piano note there is, retuned, sounds far more like a piano than a synthesiser
+    this.want(layer, note);
+    if (layer !== 'mf') this.want('mf', note);
+    let best: { buf: AudioBuffer; offset: number; sample: number } | null = null;
+    for (const l of order) {
+      for (const n of SAMPLES[l]) {
+        const b = this.buffers.get(sampleName(l, n));
+        if (b && Math.abs(n - note) <= 12 && (!best || Math.abs(n - note) < Math.abs(best.sample - note)))
+          best = { ...b, sample: n };
+      }
+    }
+    return best;
   }
 
   private fallbackNote(ctx: AudioContext, note: number, gain: number, player: string): void {

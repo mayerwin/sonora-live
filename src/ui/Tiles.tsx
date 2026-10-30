@@ -1,15 +1,23 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
-import { AudioWaveform, Bell, Copy, MicOff, MonitorUp, Piano, QrCode, Share2, SwitchCamera, Video } from 'lucide-preact';
-import { session, ROLE_LABEL, type PeerView } from '../app/session.ts';
+import { AudioWaveform, Copy, MicOff, MonitorUp, Piano, QrCode, Share2, SwitchCamera, Video } from 'lucide-preact';
+import { session, roleLabel, type PeerView } from '../app/session.ts';
 import { settings } from '../app/settings.ts';
-import { askNotifications, notifyPermission } from '../app/notify.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { LevelBars, Qr, SignalBars, VideoView } from './common.tsx';
 import { initials, RoleIcon } from './icons.tsx';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
+import { t } from '../app/i18n.ts';
 
-export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerView; extra?: boolean; ambient?: boolean }) {
+export function PeerTile({
+  peer,
+  extra = false,
+  ambient = false,
+}: {
+  peer: PeerView;
+  extra?: boolean;
+  ambient?: boolean;
+}) {
   const r = peer.remote;
   const role = peer.info.role;
   const stream = extra ? peer.extra : peer.video;
@@ -17,7 +25,12 @@ export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerV
   const [portrait, setPortrait] = useState(false);
   const st = peer.stats;
   return (
-    <div class={`tile ${extra ? 'extra' : ''}`} data-role={role} data-testid={extra ? 'tile-extra' : 'tile'} data-peer={peer.id}>
+    <div
+      class={`tile ${extra ? 'extra' : ''}`}
+      data-role={role}
+      data-testid={extra ? 'tile-extra' : 'tile'}
+      data-peer={peer.id}
+    >
       {showVideo ? (
         <>
           {(ambient || (!extra && portrait)) && <VideoView stream={stream} class="backdrop" />}
@@ -28,49 +41,60 @@ export function PeerTile({ peer, extra = false, ambient = false }: { peer: PeerV
           <div class="avatar" data-role={role}>
             {initials(peer.info.name)}
           </div>
-          <span>{peer.link === 'connected' ? (r ? 'Camera off' : 'Connecting…') : ''}</span>
+          <span>{peer.link === 'connected' ? (r ? t('Camera off') : t('Connecting…')) : ''}</span>
         </div>
       )}
       {!extra && (
         <div class="tile-badges">
           {r?.midi.sending && (
-            <span class="chip chip-ok" title={`${peer.info.name} plays over MIDI`}>
+            <span class="chip chip-ok" title={t('{name} plays over MIDI', { name: peer.info.name })}>
               <Piano /> {r.midi.device || 'MIDI'}
             </span>
           )}
           {r && (
-            <span class="chip" title={r.sound === 'pure' ? 'Unprocessed sound (no noise suppression)' : 'Speech processing on'}>
-              <AudioWaveform /> {r.sound === 'pure' ? (r.stereo ? 'Pure · stereo' : 'Pure') : 'Voice'}
+            <span
+              class="chip"
+              title={r.sound === 'pure' ? t('Unprocessed sound (no noise suppression)') : t('Speech processing on')}
+            >
+              <AudioWaveform /> {r.sound === 'pure' ? (r.stereo ? t('Pure · stereo') : t('Pure')) : t('Voice')}
             </span>
           )}
           {st?.latencyMs != null && (
-            <span class="chip" data-latency title={`Estimated delay of the sound from ${peer.info.name}`}>
+            <span
+              class="chip"
+              data-latency
+              title={t('Estimated delay of the sound from {name}', { name: peer.info.name })}
+            >
               <SignalBars quality={st.quality} /> {st.latencyMs} ms
             </span>
           )}
         </div>
       )}
       <div class="tile-label">
-        <span class="role-dot" title={ROLE_LABEL[role]}>
+        <span class="role-dot" title={roleLabel(role)}>
           {extra ? <MonitorUp size={13} /> : <RoleIcon role={role} size={13} />}
         </span>
         <span class="name">
-          {extra ? `${peer.info.name} · ${r?.extra === 'camera' ? 'second camera' : 'screen'}` : peer.info.name}
+          {extra ? `${peer.info.name} · ${r?.extra === 'camera' ? t('second camera') : t('screen')}` : peer.info.name}
         </span>
-        {!extra && r && !r.mic && <MicOff class="muted-ico" aria-label="Microphone off" />}
+        {!extra && r && !r.mic && <MicOff class="muted-ico" aria-label={t('Microphone off')} />}
       </div>
       {!extra && peer.link === 'reconnecting' && (
         <div class="tile-overlay">
-          <span class="spinner" /> Reconnecting…
+          <span class="spinner" /> {t('Reconnecting…')}
         </div>
       )}
       {!extra && peer.link === 'connecting' && (
         <div class="tile-overlay" style="padding:20px;text-align:center">
-          <span class="spinner" /> Connecting to {peer.info.name === '…' ? 'a new participant' : peer.info.name}…
+          <span class="spinner" />{' '}
+          {peer.info.name === '…'
+            ? t('Connecting to a new participant…')
+            : t('Connecting to {name}…', { name: peer.info.name })}
           {Date.now() - peer.joinedAt > 15_000 && (
             <small style="max-width:420px;color:var(--text-2);font-weight:500">
-              This is taking long: one of you may be on a network that blocks direct connections (some offices and
-              schools). A phone's hotspot usually works, or add a TURN relay in Settings → Connection.
+              {t(
+                "This is taking long: one of you may be on a network that blocks direct connections (some offices and schools). A phone's hotspot usually works, or add a TURN relay in Settings → Connection.",
+              )}
             </small>
           )}
         </div>
@@ -145,12 +169,12 @@ export function SelfPip() {
       )}
       <div class="pip-label">
         {media.micOn.value ? <LevelBars level={level} n={4} /> : <MicOff size={13} color="var(--red)" />}
-        You
+        {t('You')}
       </div>
       {isMobile && media.camOn.value && (
         <button
           class="pip-flip"
-          aria-label="Switch camera"
+          aria-label={t('Switch camera')}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => void media.flipCamera()}
         >
@@ -163,16 +187,22 @@ export function SelfPip() {
 
 export function Waiting() {
   const code = session.code.value;
-  const perm = notifyPermission.value;
+  const role = settings.value.role;
   return (
     <div class="card waiting" data-testid="waiting">
       <div>
         <div class="status-line">
-          <span class="pulse-ring" /> You're in. Waiting for others…
+          <span class="pulse-ring" /> {t("You're in. Waiting for others…")}
         </div>
-        <h2>Invite your {settings.value.role === 'teacher' ? 'student' : settings.value.role === 'student' ? 'teacher' : 'class'}</h2>
-        <p>Send the link or the code. They open it, pick their role, and appear here. You'll hear a chime.</p>
-        <div class="code" aria-label={`Room code ${code.split('').join(' ')}`}>
+        <h2>
+          {role === 'teacher'
+            ? t('Invite your student')
+            : role === 'student'
+              ? t('Invite your teacher')
+              : t('Invite the others')}
+        </h2>
+        <p>{t("Send the link or the code. They open it, pick their role, and appear here. You'll hear a chime.")}</p>
+        <div class="code" aria-label={t('Room code {code}', { code: code.split('').join(' ') })}>
           {prettyCode(code)
             .split(' ')
             .map((p) => (
@@ -181,16 +211,11 @@ export function Waiting() {
         </div>
         <div class="code-actions">
           <button class="btn btn-primary" onClick={() => void copyLink(code)}>
-            <Copy /> Copy link
+            <Copy /> {t('Copy link')}
           </button>
           {canShare && (
             <button class="btn" onClick={() => void shareLink(code)}>
-              <Share2 /> Share
-            </button>
-          )}
-          {perm === 'default' && (
-            <button class="btn btn-ghost" onClick={() => void askNotifications()}>
-              <Bell /> Notify me when they join
+              <Share2 /> {t('Share')}
             </button>
           )}
         </div>
@@ -198,7 +223,7 @@ export function Waiting() {
       <div class="qr-wrap">
         <Qr text={roomLink(code)} />
         <div class="qr-cap">
-          <QrCode size={13} style="vertical-align:-2px" /> Scan to join
+          <QrCode size={13} style="vertical-align:-2px" /> {t('Scan to join')}
         </div>
       </div>
     </div>
@@ -209,7 +234,7 @@ export function NoCamera() {
   const media = session.media;
   return (
     <button class="btn btn-sm" onClick={() => void media.setCamOn(true)}>
-      <Video /> Turn camera on
+      <Video /> {t('Turn camera on')}
     </button>
   );
 }

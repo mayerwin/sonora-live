@@ -6,11 +6,19 @@ import { Keyboard as KeyboardIcon, X } from 'lucide-preact';
 import { session } from '../app/session.ts';
 import { settings, updateMidi } from '../app/settings.ts';
 import { isTouch } from '../app/platform.ts';
+import { lang, t } from '../app/i18n.ts';
 
 const LOW = 21;
 const HIGH = 108;
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+const NAMES_FR = ['do', 'do♯', 'ré', 'ré♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'];
+
+/** A note's name: C4 for middle C in English, do3 in French (the octaves are counted from one lower). */
+export function noteName(note: number): string {
+  const octave = Math.floor(note / 12) - 1;
+  return lang.value === 'fr' ? `${NAMES_FR[note % 12]}${octave - 1}` : `${NAMES[note % 12]}${octave}`;
+}
 
 /** Computer keys -> semitones from the octave's C (by physical position: works on AZERTY and QWERTZ too). */
 const QWERTY: Record<string, number> = {
@@ -63,7 +71,9 @@ function layout(): KeyGeom[] {
 
 function typingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
-  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  return (
+    !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+  );
 }
 
 export function PianoKeys({ onClose }: { onClose: () => void }) {
@@ -79,6 +89,14 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const pedals = hub.sustainHeld();
   const roleOf = (id: string | null) => peers.find((p) => p.id === id)?.info.role ?? 'teacher';
+
+  // the keys are out: get the piano's sound ready
+  useEffect(() => {
+    void hub.piano.load();
+  }, []);
+  const loaded = hub.piano.loaded.value;
+  const total = hub.piano.total.value;
+  const loading = !hub.piano.ready.value && !hub.piano.failed.value && total > 0;
 
   const play = (note: number, vel: number) => {
     hub.piano.context();
@@ -142,35 +160,49 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <section class="keys" aria-label="Piano keyboard" data-testid="keyboard">
+    <section class="keys" aria-label={t('Piano keyboard')} data-testid="keyboard">
       <div class="keys-head">
         <span class="legend" data-role={me.role}>
-          <i /> You
+          <i /> {t('You')}
         </span>
         {peers.map((p) => (
           <span class="legend" data-role={p.info.role}>
             <i /> {p.info.name}
           </span>
         ))}
-        <span class={`pedal ${pedals.local ? 'on' : ''}`} data-role={me.role} title="Your sustain pedal">
-          Pedal
+        <span class={`pedal ${pedals.local ? 'on' : ''}`} data-role={me.role} title={t('Your sustain pedal')}>
+          {t('Pedal')}
         </span>
         {peers.length > 0 && (
-          <span class={`pedal remote ${pedals.remote ? 'on' : ''}`} data-role={roleOf([...hub.remote.keys()][0] ?? null)} title="Their sustain pedal">
-            Their pedal
+          <span
+            class={`pedal remote ${pedals.remote ? 'on' : ''}`}
+            data-role={roleOf([...hub.remote.keys()][0] ?? null)}
+            title={t('Their sustain pedal')}
+          >
+            {t('Their pedal')}
           </span>
         )}
         <span style="flex:1" />
+        {loading && (
+          <span class="keys-loading" role="status">
+            {t('Loading the grand piano · {pct}%', { pct: Math.round((loaded / total) * 100) })}
+          </span>
+        )}
         {!isTouch && (
           <button
             class={`btn btn-sm ${qwerty ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => updateMidi({ qwerty: !qwerty })}
-            title="Play with the computer keyboard: A W S E D F T G Y H U J K, Z / X change octave, Space is the pedal"
+            title={t(
+              'Play with the computer keyboard: A W S E D F T G Y H U J K, Z / X change octave, Space is the pedal',
+            )}
           >
-            <KeyboardIcon /> {qwerty ? `Computer keys on · C${octave}` : 'Play with computer keys'}
+            <KeyboardIcon />{' '}
+            {qwerty
+              ? t('Computer keys on · {note}', { note: noteName(12 * (octave + 1)) })
+              : t('Play with computer keys')}
           </button>
         )}
-        <button class="icon-btn" style="width:30px;height:30px" onClick={onClose} aria-label="Hide keyboard">
+        <button class="icon-btn" style="width:30px;height:30px" onClick={onClose} aria-label={t('Hide keyboard')}>
           <X size={16} />
         </button>
       </div>
@@ -208,7 +240,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
           const h = hub.holder(k.note);
           const on = h.local || !!h.remote;
           const role = h.local ? me.role : roleOf(h.remote);
-          const name = `${NAMES[k.note % 12]}${Math.floor(k.note / 12) - 1}`;
+          const name = noteName(k.note);
           return (
             <div
               key={k.note}
@@ -218,7 +250,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
               aria-label={name}
               data-on={on || undefined}
             >
-              {!k.black && k.note % 12 === 0 && <span class="lbl">{`C${k.note / 12 - 1}`}</span>}
+              {!k.black && k.note % 12 === 0 && <span class="lbl">{name}</span>}
             </div>
           );
         })}

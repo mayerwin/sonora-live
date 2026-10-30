@@ -2,6 +2,7 @@
 // background, and a counter in the tab title.
 
 import { signal } from '@preact/signals';
+import { t } from './i18n.ts';
 
 export type ToastKind = 'info' | 'join' | 'leave' | 'warn' | 'error' | 'success' | 'knock' | 'chat';
 
@@ -37,7 +38,8 @@ let ctx: AudioContext | null = null;
 
 function audio(): AudioContext | null {
   if (!ctx) {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return null;
     ctx = new AC({ latencyHint: 'playback' });
   }
@@ -113,15 +115,69 @@ export const notifyPermission = signal<NotificationPermission | 'unsupported'>(
   typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
 );
 
-export async function askNotifications(): Promise<boolean> {
+// the permission can also change from the browser's own controls (the icon in the address bar)
+if (typeof navigator !== 'undefined' && notificationsSupported()) {
+  void navigator.permissions
+    ?.query({ name: 'notifications' })
+    .then((st) => {
+      st.onchange = () => (notifyPermission.value = Notification.permission);
+    })
+    .catch(() => {});
+}
+
+/**
+ * Ask for system notifications; call it from a click (some browsers only ask then). `explain`: the person asked
+ * for them, so say what to do when the browser shows its request discreetly, or not at all.
+ */
+let offered = false;
+
+export async function askNotifications(explain = false): Promise<boolean> {
   if (!notificationsSupported()) return false;
+  notifyPermission.value = Notification.permission;
+  if (Notification.permission === 'granted') return true;
+  // offered on our own initiative: once per visit, not at every link copied
+  if (!explain && offered) return false;
+  offered = true;
+  if (Notification.permission === 'denied') {
+    if (explain) blockedToast();
+    return false;
+  }
+  const started = Date.now();
+  // the request may be a small bell in the address bar (Edge, and Chrome's quieter requests)
+  const hint = explain
+    ? setTimeout(
+        () =>
+          toast({
+            kind: 'info',
+            title: t('Your browser is asking'),
+            body: t(
+              'Allow notifications in its request, at the top of the window or behind the bell in the address bar.',
+            ),
+          }),
+        1500,
+      )
+    : 0;
   try {
     const p = await Notification.requestPermission();
     notifyPermission.value = p;
+    if (explain && p === 'denied') blockedToast();
+    // answered at once without asking: the browser holds back requests from this site for now
+    if (explain && p === 'default' && Date.now() - started < 500) blockedToast();
     return p === 'granted';
   } catch {
     return false;
+  } finally {
+    clearTimeout(hint);
   }
+}
+
+function blockedToast(): void {
+  toast({
+    kind: 'warn',
+    title: t('Notifications are blocked'),
+    body: t('Allow them for this site from the icon at the left of the address bar, then come back.'),
+    timeout: 9000,
+  });
 }
 
 /** A system notification, only while the page is hidden (otherwise the toast says it). */

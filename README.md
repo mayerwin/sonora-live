@@ -85,8 +85,9 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   QR code and the phone's share sheet.
 - **Locked to 2 people by default** (adjustable from 2 to 12). Anyone else **knocks**; everyone inside sees who it is
   and can let them in with one click.
-- **Join notifications**: a soft chime, a toast, a system notification when the tab is in the background, a counter in
-  the tab title, and a vibration on phones.
+- **Join notifications**, on by default: a soft chime, a toast, a system notification when the tab is in the
+  background (the browser asks for it when you open a room or copy its link), a counter in the tab title, and a
+  vibration on phones.
 - **Roles**: Student, Teacher, Observer (a parent, a guest). Each has its colour on the keys and in the chat.
 - **No host**: anyone can leave or reload without ending the lesson. A reload rejoins as the same person, even in a full
   room, and two people opening the same link at the same moment always find each other.
@@ -102,6 +103,10 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   buffer, bitrate, codec, packet loss, resolution.
 - **Installable** as an app on every platform (it then opens in its own window and starts offline), screen kept awake
   during the lesson, preferences remembered.
+- **In English and French** (*en français*), following the browser's language, with a switch in the lobby and in
+  Settings → General. Emoji search and note names follow too (do3 for middle C in French).
+- **Calm with reduced motion**: when the system asks for fewer animations, nothing moves or blinks, and reactions
+  appear in place.
 
 <table>
   <tr>
@@ -280,7 +285,7 @@ instead, and `?debug` to see the connection log in the console.
 |---|---|
 | `npm run dev` | Development server with live reload and the local relay |
 | `npm run typecheck` | TypeScript, strict |
-| `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping |
+| `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping and loading order, translations complete |
 | `npm run e2e` | Browser tests: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
 | `npm run build` | Production build in `dist/` (installable web app with offline support) |
 | `npm run preview` then `E2E_URL=http://localhost:4173/ npm run e2e` | The browser tests against the production build |
@@ -311,7 +316,7 @@ account, or your own [coturn](https://github.com/coturn/coturn) server) and eith
 | [`src/net`](src/net) | MQTT client and relays, room rendezvous, WebRTC links, Opus tuning, ICE servers, room codes |
 | [`src/media`](src/media) | Camera, microphone and screen; sound modes; level meter |
 | [`src/midi`](src/midi) | MIDI wire protocol, Web MIDI and Bluetooth LE MIDI devices, echo filter, routing, built-in piano |
-| [`src/app`](src/app) | The session (everything above, wired together), chat, settings, notifications, installation |
+| [`src/app`](src/app) | The session (everything above, wired together), chat, settings, notifications, installation, languages (`i18n.ts`, `fr.ts`) |
 | [`src/ui`](src/ui) | The interface (Preact + signals): lobby, room, chat, keys, MIDI and settings sheets |
 | [`server/relay.ts`](server/relay.ts) | The local relay of the development server |
 | [`public/piano`](public/piano) | The built-in piano's samples |

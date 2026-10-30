@@ -6,6 +6,7 @@ import { Toasts } from './common.tsx';
 import { Logo } from './icons.tsx';
 import { Lobby } from './Lobby.tsx';
 import { Room } from './Room.tsx';
+import { t } from '../app/i18n.ts';
 
 export function App() {
   const phase = session.phase.value;
@@ -37,8 +38,8 @@ function Left() {
       <div class="atmos" />
       <div class="card center-card" style="position:relative">
         <Logo size={56} />
-        <h2>You left the lesson</h2>
-        <p>Camera and microphone are off. The room stays open for the others.</p>
+        <h2>{t('You left the lesson')}</h2>
+        <p>{t('Camera and microphone are off. The room stays open for the others.')}</p>
         <div class="code-actions" style="justify-content:center">
           <button
             class="btn btn-primary"
@@ -47,7 +48,7 @@ function Left() {
               session.phase.value = 'lobby';
             }}
           >
-            <RotateCcw /> Rejoin {prettyCode(code)}
+            <RotateCcw /> {t('Rejoin {code}', { code: prettyCode(code) })}
           </button>
           <button
             class="btn"
@@ -56,11 +57,11 @@ function Left() {
               session.phase.value = 'lobby';
             }}
           >
-            <Plus /> New room
+            <Plus /> {t('New room')}
           </button>
         </div>
         <a class="link-btn" href="https://github.com/mayerwin/sonora-live/issues" target="_blank" rel="noopener">
-          Something not right? Tell us <ArrowRight size={14} style="vertical-align:-2px" />
+          {t('Something not right? Tell us')} <ArrowRight size={14} style="vertical-align:-2px" />
         </a>
       </div>
     </div>

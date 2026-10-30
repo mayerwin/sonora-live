@@ -40,7 +40,8 @@
   --r-xl: 28px;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 40px -12px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 80px -20px rgba(0, 0, 0, 0.75);
-  --font: 'Instrument Sans Variable', 'Instrument Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
+  --font:
+    'Instrument Sans Variable', 'Instrument Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --display: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -2600,6 +2601,12 @@ emoji-picker {
   color: var(--muted);
 }
 
+.keys-loading {
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
 .keys-head .legend {
   display: inline-flex;
   align-items: center;
@@ -2906,11 +2913,44 @@ emoji-picker {
   }
 }
 
+/* Reduced motion (also Windows' "Animation effects" off): no movement, but every animation still plays once and
+   ends in its final state; a looping one at a near-zero duration would flicker. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* what must keep moving to mean anything: a spinner turns (slowly), a reaction appears in place and fades */
+  .spinner {
+    animation: spin 1.6s linear infinite !important;
+  }
+
+  .reaction {
+    animation: reaction-still 3.1s linear forwards !important;
+  }
+
+  .pulse-ring::after {
+    opacity: 0.35;
+  }
+}
+
+@keyframes reaction-still {
+  0% {
+    opacity: 0;
+    transform: translateY(-14vh);
+  }
+  8%,
+  75% {
+    opacity: 1;
+    transform: translateY(-14vh);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14vh);
   }
 }

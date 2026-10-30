@@ -9,6 +9,8 @@ import type { Role } from '../net/room.ts';
 export type SoundSetting = 'auto' | 'pure' | 'voice';
 
 export interface Settings {
+  /** 'auto': the browser's language */
+  language: 'auto' | 'en' | 'fr';
   name: string;
   role: Role | null;
   sound: SoundSetting;
@@ -40,6 +42,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
+  language: 'auto',
   name: '',
   role: null,
   sound: 'auto',

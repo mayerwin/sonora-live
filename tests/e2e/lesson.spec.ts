@@ -28,14 +28,26 @@ const codeOf = (page: Page) => page.evaluate(() => location.hash.slice(1));
 /** Peer views of the session (exposed on window.sonora in development). */
 function peers(page: Page) {
   return page.evaluate(() =>
-    (window as unknown as { sonora: { peers: { value: { info: { name: string; role: string }; link: string; stats: unknown; remote: unknown }[] } } }).sonora.peers.value.map(
-      (p) => ({ name: p.info.name, role: p.info.role, link: p.link, stats: p.stats as Record<string, unknown> | null, remote: p.remote }),
-    ),
+    (
+      window as unknown as {
+        sonora: {
+          peers: { value: { info: { name: string; role: string }; link: string; stats: unknown; remote: unknown }[] };
+        };
+      }
+    ).sonora.peers.value.map((p) => ({
+      name: p.info.name,
+      role: p.info.role,
+      link: p.link,
+      stats: p.stats as Record<string, unknown> | null,
+      remote: p.remote,
+    })),
   );
 }
 
 async function connected(page: Page, n: number): Promise<void> {
-  await expect.poll(async () => (await peers(page)).filter((p) => p.link === 'connected' && p.remote).length, { timeout: 20_000 }).toBe(n);
+  await expect
+    .poll(async () => (await peers(page)).filter((p) => p.link === 'connected' && p.remote).length, { timeout: 20_000 })
+    .toBe(n);
 }
 
 test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({ browser }) => {
@@ -56,22 +68,38 @@ test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({
 
   // the remote video plays
   await expect
-    .poll(() => teacher.evaluate(() => (document.querySelector('[data-testid=tile] video') as HTMLVideoElement | null)?.videoWidth ?? 0))
+    .poll(() =>
+      teacher.evaluate(
+        () => (document.querySelector('[data-testid=tile] video') as HTMLVideoElement | null)?.videoWidth ?? 0,
+      ),
+    )
     .toBeGreaterThan(0);
 
   // pure sound: no processing on the microphone
   const settings = await teacher.evaluate(() => {
-    const s = (window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }).sonora.media.audio.value.getSettings();
+    const s = (
+      window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }
+    ).sonora.media.audio.value.getSettings();
     return { ec: s.echoCancellation, ns: s.noiseSuppression, agc: s.autoGainControl };
   });
   expect(settings).toEqual({ ec: false, ns: false, agc: false });
 
   // stereo Opus, ~192 kbps, 100 packets per second (10 ms frames), direct path
   await expect
-    .poll(async () => {
-      const s = (await peers(teacher))[0].stats;
-      return s ? { ch: s.audioChannels, pps: Number(s.audioOutPps) >= 90, kbps: Number(s.audioOutKbps) > 120, direct: !s.relayed } : null;
-    }, { timeout: 20_000 })
+    .poll(
+      async () => {
+        const s = (await peers(teacher))[0].stats;
+        return s
+          ? {
+              ch: s.audioChannels,
+              pps: Number(s.audioOutPps) >= 90,
+              kbps: Number(s.audioOutKbps) > 120,
+              direct: !s.relayed,
+            }
+          : null;
+      },
+      { timeout: 20_000 },
+    )
     .toEqual({ ch: 2, pps: true, kbps: true, direct: true });
 
   await teacher.context().close();
@@ -120,7 +148,16 @@ test('MIDI played on the on-screen keys lights up and sounds on the other side',
   await a.mouse.down();
   // the student's keyboard shows the teacher's note, in the teacher's colour
   await expect(b.locator('[data-note="60"]')).toHaveAttribute('data-on', 'true');
-  await expect.poll(() => b.evaluate(() => (window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }).sonora.midi.holder(60).remote)).not.toBeNull();
+  await expect
+    .poll(() =>
+      b.evaluate(
+        () =>
+          (
+            window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }
+          ).sonora.midi.holder(60).remote,
+      ),
+    )
+    .not.toBeNull();
   await a.mouse.up();
   await expect(b.locator('[data-note="60"]')).not.toHaveAttribute('data-on', 'true');
 
@@ -192,12 +229,23 @@ test('auto sound switches the microphone to voice while MIDI carries the instrum
   await connected(a, 1);
 
   const ec = () =>
-    a.evaluate(() => (window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }).sonora.media.audio.value.getSettings().echoCancellation);
+    a.evaluate(
+      () =>
+        (
+          window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }
+        ).sonora.media.audio.value.getSettings().echoCancellation,
+    );
   expect(await ec()).toBe(false);
   // pretend an instrument is plugged in (no MIDI hardware in CI)
   await a.evaluate(() => {
-    (window as unknown as { sonora: { midi: { devices: { connected: { value: boolean }; currentName: { value: string } } } } }).sonora.midi.devices.currentName.value = 'Test Piano';
-    (window as unknown as { sonora: { midi: { devices: { connected: { value: boolean } } } } }).sonora.midi.devices.connected.value = true;
+    (
+      window as unknown as {
+        sonora: { midi: { devices: { connected: { value: boolean }; currentName: { value: string } } } };
+      }
+    ).sonora.midi.devices.currentName.value = 'Test Piano';
+    (
+      window as unknown as { sonora: { midi: { devices: { connected: { value: boolean } } } } }
+    ).sonora.midi.devices.connected.value = true;
   });
   await expect.poll(ec, { timeout: 10_000 }).toBe(true);
   await expect(a.getByTestId('btn-sound')).toContainText('Voice');
@@ -244,7 +292,10 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
   await connected(a, 1);
 
   // tap MIDI, pick the instrument: done
-  for (const [p, name] of [[a, 'Roland FP-30X'], [b, 'Yamaha P-125']] as const) {
+  for (const [p, name] of [
+    [a, 'Roland FP-30X'],
+    [b, 'Yamaha P-125'],
+  ] as const) {
     await p.getByTestId('btn-midi').click();
     await p.getByTestId('midi-instrument').filter({ hasText: name }).click();
     await expect(p.getByTestId('midi-instrument').filter({ hasText: name })).toHaveAttribute('aria-checked', 'true');
@@ -254,16 +305,22 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
 
   // the teacher plays: the student's piano plays it
   await a.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x90, 64, 100]));
-  await expect.poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x90, 64, 100]);
+  await expect
+    .poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut))
+    .toContainEqual([0x90, 64, 100]);
   await a.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x80, 64, 0]));
-  await expect.poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x80, 64, 0]);
+  await expect
+    .poll(() => b.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut))
+    .toContainEqual([0x80, 64, 0]);
   // ...and the echo from the student's piano never comes back to the teacher
   await a.waitForTimeout(800);
   expect(await a.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toEqual([]);
 
   // the student plays: the teacher hears it on their instrument
   await b.evaluate(() => (window as unknown as { __midiPlay(m: number[]): void }).__midiPlay([0x90, 48, 70]));
-  await expect.poll(() => a.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut)).toContainEqual([0x90, 48, 70]);
+  await expect
+    .poll(() => a.evaluate(() => (window as unknown as { __midiOut: number[][] }).__midiOut))
+    .toContainEqual([0x90, 48, 70]);
 
   // both pianos travel as MIDI now: microphones switch to voice mode (Auto)
   await expect(a.getByTestId('btn-sound')).toContainText('Voice');
@@ -317,22 +374,39 @@ test('unplugging the instrument mid-note releases it on the other side', async (
     play([0x90, 62, 90]);
   });
   const held = () =>
-    b.evaluate(() => (window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }).sonora.midi.holder(62).remote);
+    b.evaluate(
+      () =>
+        (
+          window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }
+        ).sonora.midi.holder(62).remote,
+    );
   await expect.poll(held).not.toBeNull();
   // the instrument disappears (cable pulled) while the key and pedal are down
-  await a.evaluate(() => (window as unknown as { sonora: { midi: { devices: { select(k: string | null): void } } } }).sonora.midi.devices.select(null));
+  await a.evaluate(() =>
+    (
+      window as unknown as { sonora: { midi: { devices: { select(k: string | null): void } } } }
+    ).sonora.midi.devices.select(null),
+  );
   await expect.poll(held).toBeNull();
   await expect
-    .poll(() => b.evaluate(() => (window as unknown as { sonora: { midi: { sustainHeld(): { remote: boolean } } } }).sonora.midi.sustainHeld().remote))
+    .poll(() =>
+      b.evaluate(
+        () =>
+          (window as unknown as { sonora: { midi: { sustainHeld(): { remote: boolean } } } }).sonora.midi.sustainHeld()
+            .remote,
+      ),
+    )
     .toBe(false);
   await ctx.close();
   await b.context().close();
 });
 
-test("the room keeps its rules when someone with other defaults joins", async ({ browser }) => {
+test('the room keeps its rules when someone with other defaults joins', async ({ browser }) => {
   // the teacher saved "4 people"; the student has the defaults (2)
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
-  await ctx.addInitScript(() => localStorage.setItem('sonora.settings.v1', JSON.stringify({ roomLimit: 4, lockRooms: true })));
+  await ctx.addInitScript(() =>
+    localStorage.setItem('sonora.settings.v1', JSON.stringify({ roomLimit: 4, lockRooms: true })),
+  );
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
@@ -389,8 +463,85 @@ test('playing in unison: a release on the student’s piano is not mistaken for 
   // the student's release reaches the teacher's piano: nothing stays held
   await expect.poll(() => a.evaluate(() => (window as unknown as W).__midiOut)).toContainEqual([0x80, 60, 64]);
   await expect
-    .poll(() => a.evaluate(() => (window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }).sonora.midi.holder(60).remote))
+    .poll(() =>
+      a.evaluate(
+        () =>
+          (
+            window as unknown as { sonora: { midi: { holder(n: number): { remote: string | null } } } }
+          ).sonora.midi.holder(60).remote,
+      ),
+    )
     .toBeNull();
   await a.context().close();
   await b.context().close();
+});
+
+test('speaks French when the browser does, shows reactions with animations reduced, and switches language', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({
+    locale: 'fr-FR',
+    permissions: ['camera', 'microphone'],
+    reducedMotion: 'reduce',
+  });
+  const page = await ctx.newPage();
+  await page.goto(`/${Q}`);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(page.locator('.join-card')).toContainText('Votre salle est prête');
+  await page.getByPlaceholder('ex. Clara').fill('Clara');
+  await page.locator('button.role[data-role=teacher]').click();
+  await page.locator('.join-card .btn-primary').click();
+  await expect(page.getByTestId('waiting')).toContainText('En attente des autres');
+  await expect(page.getByTestId('waiting')).toContainText('Invitez votre élève');
+
+  // alone in the room, a reaction still shows (it used to jump straight to its faded-out end)
+  await page.getByRole('button', { name: 'Réagir', exact: true }).click();
+  await page.getByRole('button', { name: 'Réagir 👏' }).click();
+  await expect
+    .poll(() => page.locator('.reaction').evaluate((el) => Number(getComputedStyle(el).opacity)))
+    .toBeGreaterThan(0.9);
+  // and nothing loops at a flickering speed
+  const loops = await page.evaluate(() =>
+    document
+      .getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().iterations === Infinity)
+      .map((a) => (a as CSSAnimation).animationName),
+  );
+  expect(loops.every((n) => n === 'spin')).toBe(true);
+
+  // Settings → General → English
+  await page.getByTestId('btn-settings').click();
+  await page.getByRole('tab', { name: 'Général' }).click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'General' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('btn-leave')).toContainText('Leave');
+  await expect(page.getByTestId('waiting')).toContainText('Waiting for others');
+  await ctx.close();
+});
+
+test('the on-screen keys play the sampled grand piano', async ({ browser }) => {
+  const page = await person(browser, 'Clara', 'teacher');
+  await enter(page);
+  await page.getByTestId('btn-keys').click();
+  await expect(page.getByTestId('keyboard')).toBeVisible();
+  type P = {
+    sonora: {
+      midi: {
+        piano: { ready: { value: boolean }; failed: { value: boolean }; voices: { note: number; src: AudioNode }[] };
+      };
+    };
+  };
+  // opening the keys loads the piano
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as P).sonora.midi.piano.ready.value), { timeout: 20_000 })
+    .toBe(true);
+  await page.locator('[data-note="64"]').click();
+  const voices = await page.evaluate(() =>
+    (window as unknown as P).sonora.midi.piano.voices.filter((v) => v.note === 64).map((v) => v.src.constructor.name),
+  );
+  expect(voices.length).toBeGreaterThan(0);
+  expect(voices.every((n) => n === 'AudioBufferSourceNode')).toBe(true);
+  await page.context().close();
 });

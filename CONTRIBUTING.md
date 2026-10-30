@@ -45,6 +45,10 @@ production build.
 - **Sound is sacred.** No processing on the instrument path in pure mode, no buffering that is not needed, nothing
   between the network and the speakers.
 - **Plain words in the interface.** Teachers and students are musicians, not network engineers.
+- **Every word on screen goes through `t()`** (or `tn()` for plurals) from [`src/app/i18n.ts`](src/app/i18n.ts), written
+  in English as a whole sentence, with `{placeholders}` and, where needed, `<b>`, `<code>` or `<a>` (rendered by
+  `<Rich>`). Add its French in [`src/app/fr.ts`](src/app/fr.ts): `npm test` fails on a missing or left-over
+  translation. A new language is a new dictionary next to it.
 - Keep the code in the style of the files around it: TypeScript strict, small modules, comments that explain *why*.
 - Where it fits, write tests in `tests/unit` (Vitest) or `tests/e2e` (Playwright; `tests/e2e/fake-midi.ts` provides a
   pretend MIDI instrument).

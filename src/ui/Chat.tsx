@@ -2,10 +2,12 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { find as findLinks } from 'linkifyjs';
 import { Download, FileMusic, FileText, Lock, Paperclip, SendHorizontal, Smile, X } from 'lucide-preact';
-import { session, ROLE_LABEL } from '../app/session.ts';
+import { session, roleLabel } from '../app/session.ts';
 import { update } from '../app/settings.ts';
 import { emojiOnly, formatBytes, type ChatMessage } from '../app/chat.ts';
 import { chatOpen } from './state.ts';
+import frPicker from 'emoji-picker-element/i18n/fr';
+import { clock, lang, t, tn } from '../app/i18n.ts';
 
 function Linkified({ text }: { text: string }) {
   const links = findLinks(text, 'url');
@@ -23,10 +25,6 @@ function Linkified({ text }: { text: string }) {
   }
   if (at < text.length) out.push(text.slice(at));
   return <>{out}</>;
-}
-
-function time(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function FileBubble({ m }: { m: ChatMessage }) {
@@ -50,7 +48,11 @@ function FileBubble({ m }: { m: ChatMessage }) {
         <div class="fname">{f.name}</div>
         <div class="fsub">
           {formatBytes(f.size)}
-          {done ? (m.mine ? ' · sent' : ' · tap to open') : f.failed ? ' · incomplete' : ` · ${Math.round(f.progress * 100)}%`}
+          {done
+            ? ` · ${m.mine ? t('sent') : t('tap to open')}`
+            : f.failed
+              ? ` · ${t('incomplete')}`
+              : ` · ${Math.round(f.progress * 100)}%`}
         </div>
         {!done && (
           <div class="progress">
@@ -62,7 +64,13 @@ function FileBubble({ m }: { m: ChatMessage }) {
     </>
   );
   return done ? (
-    <a class="file-card" href={f.url!} target="_blank" rel="noopener" download={f.mime === 'application/pdf' ? undefined : f.name}>
+    <a
+      class="file-card"
+      href={f.url!}
+      target="_blank"
+      rel="noopener"
+      download={f.mime === 'application/pdf' ? undefined : f.name}
+    >
       {body}
     </a>
   ) : (
@@ -77,7 +85,14 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
     let alive = true;
     void import('emoji-picker-element').then(({ Picker }) => {
       if (!alive || !host.current) return;
-      const p = new Picker({ dataSource: `${import.meta.env.BASE_URL}emoji/en.json`, skinToneEmoji: '👍' });
+      const l = lang.peek();
+      // the picker's own words and the emoji names (for search) in the language in use; English is its default
+      const p = new Picker({
+        locale: l,
+        dataSource: `${import.meta.env.BASE_URL}emoji/${l}.json`,
+        skinToneEmoji: '👍',
+        ...(l === 'fr' ? { i18n: frPicker } : {}),
+      });
       p.addEventListener('emoji-click', (e) => onPick(e.detail.unicode ?? ''));
       host.current.appendChild(p);
       picker = p;
@@ -127,10 +142,10 @@ export function ChatPanel() {
   }, [messages.length, typing.length]);
 
   const autosize = () => {
-    const t = ta.current;
-    if (!t) return;
-    t.style.height = 'auto';
-    t.style.height = `${Math.min(140, t.scrollHeight)}px`;
+    const el = ta.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(140, el.scrollHeight)}px`;
   };
 
   const send = () => {
@@ -142,18 +157,18 @@ export function ChatPanel() {
   };
 
   const insert = (s: string) => {
-    const t = ta.current;
-    if (!t) {
+    const el = ta.current;
+    if (!el) {
       setText(text + s);
       return;
     }
-    const a = t.selectionStart ?? text.length;
-    const b = t.selectionEnd ?? text.length;
+    const a = el.selectionStart ?? text.length;
+    const b = el.selectionEnd ?? text.length;
     const next = text.slice(0, a) + s + text.slice(b);
     setText(next);
     requestAnimationFrame(() => {
-      t.focus();
-      t.selectionStart = t.selectionEnd = a + s.length;
+      el.focus();
+      el.selectionStart = el.selectionEnd = a + s.length;
       autosize();
     });
   };
@@ -164,13 +179,13 @@ export function ChatPanel() {
     stick.current = true;
   };
 
-  const typingNames = typing.filter((t) => t.until > Date.now()).map((t) => t.name);
+  const typingNames = typing.filter((x) => x.until > Date.now()).map((x) => x.name);
   const people = peers.length + 1;
 
   return (
     <aside
       class="chat"
-      aria-label="Chat"
+      aria-label={t('Chat')}
       data-testid="chat"
       onDragOver={(e) => {
         if (e.dataTransfer?.types.includes('Files')) {
@@ -188,13 +203,11 @@ export function ChatPanel() {
       }}
     >
       <header class="chat-head">
-        <h2>Chat</h2>
-        <span class="chip">
-          {people} {people === 1 ? 'person' : 'people'}
-        </span>
+        <h2>{t('Chat')}</h2>
+        <span class="chip">{tn(people, '{n} person', '{n} people')}</span>
         <button
           class="icon-btn"
-          aria-label="Close chat"
+          aria-label={t('Close chat')}
           onClick={() => {
             chatOpen.value = false;
             update({ chatOpen: false });
@@ -216,8 +229,8 @@ export function ChatPanel() {
         {messages.length === 0 && (
           <div class="chat-empty">
             <Lock />
-            <span>Messages and files go straight to the others and disappear when the lesson ends.</span>
-            <span style="font-size:12.5px">Drop sheet music (PDF, images, MusicXML) here to share it.</span>
+            <span>{t('Messages and files go straight to the others and disappear when the lesson ends.')}</span>
+            <span style="font-size:12.5px">{t('Drop sheet music (PDF, images, MusicXML) here to share it.')}</span>
           </div>
         )}
         {messages.map((m, i) => {
@@ -232,12 +245,16 @@ export function ChatPanel() {
           const first = !prev || prev.from !== m.from || prev.kind === 'system' || m.ts - prev.ts > 5 * 60_000;
           const big = m.kind === 'text' && emojiOnly(m.text ?? '');
           return (
-            <div class={`msg ${m.mine ? 'mine' : ''} ${first ? 'first' : ''}`} key={m.id} data-role={m.role ?? undefined}>
+            <div
+              class={`msg ${m.mine ? 'mine' : ''} ${first ? 'first' : ''}`}
+              key={m.id}
+              data-role={m.role ?? undefined}
+            >
               {first && (
                 <div class="who">
-                  {m.mine ? 'You' : m.name}
-                  {!m.mine && m.role && <span style="color:var(--faint);font-weight:500">{ROLE_LABEL[m.role]}</span>}
-                  <time>{time(m.ts)}</time>
+                  {m.mine ? t('You') : m.name}
+                  {!m.mine && m.role && <span style="color:var(--faint);font-weight:500">{roleLabel(m.role)}</span>}
+                  <time>{clock(m.ts)}</time>
                 </div>
               )}
               {m.kind === 'file' ? (
@@ -259,14 +276,14 @@ export function ChatPanel() {
               <i />
               <i />
             </span>
-            {typingNames.join(', ')} {typingNames.length > 1 ? 'are' : 'is'} typing
+            {tn(typingNames.length, '{names} is typing', '{names} are typing', { names: typingNames.join(', ') })}
           </>
         )}
       </div>
       <div class="composer">
         {emoji && <EmojiPicker onPick={(e) => insert(e)} onClose={() => setEmoji(false)} />}
         <div class="composer-box">
-          <button class="icon-btn" aria-label="Attach a file" onClick={() => file.current?.click()}>
+          <button class="icon-btn" aria-label={t('Attach a file')} onClick={() => file.current?.click()}>
             <Paperclip />
           </button>
           <input
@@ -284,8 +301,8 @@ export function ChatPanel() {
             ref={ta}
             rows={1}
             value={text}
-            placeholder="Message"
-            aria-label="Message"
+            placeholder={t('Message')}
+            aria-label={t('Message')}
             enterkeyhint="send"
             onInput={(e) => {
               setText((e.currentTarget as HTMLTextAreaElement).value);
@@ -306,15 +323,26 @@ export function ChatPanel() {
               }
             }}
           />
-          <button class="icon-btn emoji-toggle" aria-label="Emoji" aria-expanded={emoji} onClick={() => setEmoji(!emoji)}>
+          <button
+            class="icon-btn emoji-toggle"
+            aria-label={t('Emoji')}
+            aria-expanded={emoji}
+            onClick={() => setEmoji(!emoji)}
+          >
             <Smile />
           </button>
-          <button class="send-btn" aria-label="Send" disabled={!text.trim()} onClick={send} data-testid="chat-send">
+          <button
+            class="send-btn"
+            aria-label={t('Send')}
+            disabled={!text.trim()}
+            onClick={send}
+            data-testid="chat-send"
+          >
             <SendHorizontal />
           </button>
         </div>
       </div>
-      {drag && <div class="drop-hint">Drop to share with everyone</div>}
+      {drag && <div class="drop-hint">{t('Drop to share with everyone')}</div>}
     </aside>
   );
 }

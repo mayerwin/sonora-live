@@ -27,8 +27,10 @@ import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, updateMidi } from './settings.ts';
 import { log } from './log.ts';
+import { t } from './i18n.ts';
 
-export const ROLE_LABEL: Record<Role, string> = { student: 'Student', teacher: 'Teacher', observer: 'Observer' };
+export const roleLabel = (r: Role): string =>
+  ({ student: t('Student'), teacher: t('Teacher'), observer: t('Observer') })[r];
 
 /** What a peer tells us about itself. */
 export interface RemoteState {
@@ -96,7 +98,7 @@ export class Session {
   readonly needsTap = signal(false);
   readonly self = computed<MemberInfo>(() => ({
     id: this.id.value,
-    name: settings.value.name.trim() || 'Guest',
+    name: settings.value.name.trim() || t('Guest'),
     role: settings.value.role ?? 'student',
     since: this.since,
   }));
@@ -126,7 +128,10 @@ export class Session {
   private audioHost: HTMLElement | null = null;
   private wakeLock: { release(): Promise<void> } | null = null;
   private reactionId = 1;
-  private fileIn = new Map<string, { id: string; chunks: BlobPart[]; got: number; size: number; mime: string; name: string }>();
+  private fileIn = new Map<
+    string,
+    { id: string; chunks: BlobPart[]; got: number; size: number; mime: string; name: string }
+  >();
   private fileOutQueue = Promise.resolve();
   private iceCache: RTCIceServer[] | null = null;
   private disposers: (() => void)[] = [];
@@ -283,6 +288,10 @@ export class Session {
     this.policy.value = initialPolicy(this.selfId);
     this.denied.value = null;
     this.phase.value = 'room';
+    // the built-in piano, ready before anyone plays (after the call has had a few seconds to connect)
+    setTimeout(() => {
+      if (this.phase.peek() === 'room') this.midi.piano.preload();
+    }, 3000);
     // a code made here is new, unless it was shared already: then someone may be waiting inside
     const fresh = this.fresh.peek();
     if (!this.relay.up) {
@@ -349,7 +358,11 @@ export class Session {
   }
 
   private onWelcome(members: MemberInfo[], policy: Policy): void {
-    log('welcome', members.map((m) => `${m.name}#${m.id.slice(0, 4)}`), policy);
+    log(
+      'welcome',
+      members.map((m) => `${m.name}#${m.id.slice(0, 4)}`),
+      policy,
+    );
     // the room's rules, not our own defaults
     this.policy.value = policy;
     this.denied.value = null;
@@ -365,7 +378,11 @@ export class Session {
     this.knocks.value = [...this.knocks.peek(), info];
     chime('knock');
     buzz([60, 80, 60]);
-    systemNotify('Someone is knocking', `${info.name} (${ROLE_LABEL[info.role]}) wants to join your lesson.`, 'knock');
+    systemNotify(
+      t('Someone is knocking'),
+      t('{name} ({role}) wants to join your lesson.', { name: info.name, role: roleLabel(info.role) }),
+      'knock',
+    );
     bumpTitle();
     setTimeout(() => {
       this.knocks.value = this.knocks.peek().filter((k) => k.id !== info.id);
@@ -386,7 +403,12 @@ export class Session {
 
   setPolicy(p: { locked: boolean; limit: number }): void {
     const cur = this.policy.peek();
-    const next: Policy = { locked: p.locked, limit: Math.max(2, Math.min(12, p.limit)), ver: cur.ver + 1, by: this.selfId };
+    const next: Policy = {
+      locked: p.locked,
+      limit: Math.max(2, Math.min(12, p.limit)),
+      ver: cur.ver + 1,
+      by: this.selfId,
+    };
     this.policy.value = next;
     for (const l of this.links.values()) l.sendControl({ t: 'policy', policy: next });
   }
@@ -502,12 +524,14 @@ export class Session {
 
   /** The other side announced itself: now we can say who joined. */
   private announceJoin(peer: PeerView): void {
-    const label = `${peer.info.name} (${ROLE_LABEL[peer.info.role]})`;
+    const name = peer.info.name;
+    const role = roleLabel(peer.info.role);
     if (settings.peek().joinSound) chime('join');
     buzz(40);
-    toast({ kind: 'join', title: `${peer.info.name} joined`, body: `${ROLE_LABEL[peer.info.role]} · connected directly` });
-    this.chat.system(`${label} joined the lesson`);
-    if (settings.peek().notifyJoin) systemNotify(`${peer.info.name} joined your lesson`, `${ROLE_LABEL[peer.info.role]} · Sonora Live`, 'join');
+    toast({ kind: 'join', title: t('{name} joined', { name }), body: t('{role} · connected directly', { role }) });
+    this.chat.system(t('{name} ({role}) joined the lesson', { name, role }));
+    if (settings.peek().notifyJoin)
+      systemNotify(t('{name} joined your lesson', { name }), `${role} · Sonora Live`, 'join');
     bumpTitle();
   }
 
@@ -532,10 +556,16 @@ export class Session {
         if (settings.peek().joinSound) chime('leave');
         toast({
           kind: 'leave',
-          title: bye ? `${peer.info.name} left` : `Lost connection to ${peer.info.name}`,
-          body: bye ? undefined : 'They can rejoin with the same link; it reconnects by itself.',
+          title: bye
+            ? t('{name} left', { name: peer.info.name })
+            : t('Lost connection to {name}', { name: peer.info.name }),
+          body: bye ? undefined : t('They can rejoin with the same link; it reconnects by itself.'),
         });
-        this.chat.system(bye ? `${peer.info.name} left the lesson` : `Connection to ${peer.info.name} was lost`);
+        this.chat.system(
+          bye
+            ? t('{name} left the lesson', { name: peer.info.name })
+            : t('Connection to {name} was lost', { name: peer.info.name }),
+        );
       }
     }
   }
@@ -589,7 +619,8 @@ export class Session {
     }
     el.srcObject = stream;
     const sink = settings.peek().speakerId;
-    if (sink && 'setSinkId' in el) void (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(sink).catch(() => {});
+    if (sink && 'setSinkId' in el)
+      void (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(sink).catch(() => {});
     el.play().then(
       () => (this.needsTap.value = false),
       () => (this.needsTap.value = true),
@@ -607,7 +638,8 @@ export class Session {
 
   async setSpeaker(id: string): Promise<void> {
     for (const el of this.audioEls.values()) {
-      if ('setSinkId' in el) await (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(id).catch(() => {});
+      if ('setSinkId' in el)
+        await (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(id).catch(() => {});
     }
     await this.midi.piano.setSink(id);
   }
@@ -627,7 +659,15 @@ export class Session {
   private async lockScreen(): Promise<void> {
     if (this.wakeLock || document.hidden) return;
     try {
-      const wl = (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void>; addEventListener(t: string, f: () => void): void }> } }).wakeLock;
+      const wl = (
+        navigator as Navigator & {
+          wakeLock?: {
+            request(
+              t: 'screen',
+            ): Promise<{ release(): Promise<void>; addEventListener(t: string, f: () => void): void }>;
+          };
+        }
+      ).wakeLock;
       if (!wl) return;
       const lock = await wl.request('screen');
       this.wakeLock = lock;
@@ -704,11 +744,11 @@ export class Session {
           if (settings.peek().sound === 'auto') {
             toast({
               kind: 'info',
-              title: mode === 'voice' ? 'Microphone: voice mode' : 'Microphone: pure sound',
+              title: mode === 'voice' ? t('Microphone: voice mode') : t('Microphone: pure sound'),
               body:
                 mode === 'voice'
-                  ? 'Your piano now travels as MIDI, so your microphone is tuned for speech.'
-                  : 'MIDI is off, so your microphone sends your instrument untouched again.',
+                  ? t('Your piano now travels as MIDI, so your microphone is tuned for speech.')
+                  : t('MIDI is off, so your microphone sends your instrument untouched again.'),
             });
           }
         }, wait);
@@ -756,8 +796,8 @@ export class Session {
     this.midi.devices.onPresence = (present, name) => {
       toast({
         kind: present ? 'success' : 'warn',
-        title: present ? `${name} connected` : `${name} disconnected`,
-        body: present ? undefined : 'It reconnects by itself when it comes back.',
+        title: present ? t('{name} connected', { name }) : t('{name} disconnected', { name }),
+        body: present ? undefined : t('It reconnects by itself when it comes back.'),
       });
     };
   }
@@ -773,14 +813,20 @@ export class Session {
         if (!validInfo(info) || info.id !== id || !st) return;
         const before = this.peers.peek().find((p) => p.id === id);
         const wasKnown = !!before?.remote;
-        const name = info.name.slice(0, 40) || 'Guest';
+        const name = info.name.slice(0, 40) || t('Guest');
         const prevMidi = before?.remote?.midi;
         this.patchPeer(id, { info: { ...info, name }, remote: st });
         if (!wasKnown) {
           const now = this.peers.peek().find((p) => p.id === id);
           if (now) this.announceJoin(now);
         } else if (prevMidi && !prevMidi.sending && st.midi?.sending) {
-          toast({ kind: 'info', title: `${name} connected ${st.midi.device || 'an instrument'}`, body: 'Their playing now reaches you as MIDI.' });
+          toast({
+            kind: 'info',
+            title: st.midi.device
+              ? t('{name} connected {device}', { name, device: st.midi.device })
+              : t('{name} connected an instrument', { name }),
+            body: t('Their playing now reaches you as MIDI.'),
+          });
         }
         if (prevMidi?.sending && !st.midi?.sending) this.midi.peerGone(id);
         break;
@@ -791,11 +837,11 @@ export class Session {
         const cur = this.policy.peek();
         const next = newerPolicy(cur, p);
         if (next !== cur && (next.locked !== cur.locked || next.limit !== cur.limit)) {
-          const who = this.peers.peek().find((x) => x.id === next.by)?.info.name ?? 'Someone';
+          const who = this.peers.peek().find((x) => x.id === next.by)?.info.name ?? t('Someone');
           toast({
             kind: 'info',
-            title: next.locked ? `Room limited to ${next.limit} people` : 'Room unlocked',
-            body: `Changed by ${who}`,
+            title: next.locked ? t('Room limited to {n} people', { n: next.limit }) : t('Room unlocked'),
+            body: t('Changed by {name}', { name: who }),
           });
         }
         this.policy.value = next;
@@ -807,7 +853,7 @@ export class Session {
         const m: ChatMessage = {
           id: msg.id,
           from: id,
-          name: peer?.info.name ?? 'Guest',
+          name: peer?.info.name ?? t('Guest'),
           role: peer?.info.role ?? null,
           ts: Number(msg.ts) || Date.now(),
           kind: 'text',
@@ -877,7 +923,7 @@ export class Session {
     if (!this.chat.visible || document.hidden) {
       chime('message');
       bumpTitle();
-      systemNotify(m.name, m.kind === 'file' ? `Sent ${m.file?.name}` : (m.text ?? ''), 'chat');
+      systemNotify(m.name, m.kind === 'file' ? t('Sent {file}', { file: m.file?.name ?? '' }) : (m.text ?? ''), 'chat');
     }
   }
 
@@ -887,7 +933,16 @@ export class Session {
     const t = text.trim();
     if (!t) return;
     const me = this.self.peek();
-    const m: ChatMessage = { id: newId(), from: this.selfId, name: me.name, role: me.role, ts: Date.now(), kind: 'text', text: t, mine: true };
+    const m: ChatMessage = {
+      id: newId(),
+      from: this.selfId,
+      name: me.name,
+      role: me.role,
+      ts: Date.now(),
+      kind: 'text',
+      text: t,
+      mine: true,
+    };
     this.chat.add(m);
     for (const l of this.links.values()) l.sendControl({ t: 'chat', id: m.id, text: t, ts: m.ts });
     this.typingSentAt = 0;
@@ -916,7 +971,7 @@ export class Session {
   /** Share a file with everyone (sent directly, in chunks, over the file channel). */
   sendFile(file: File): void {
     if (file.size > MAX_FILE_BYTES) {
-      toast({ kind: 'warn', title: 'File too large', body: 'Files up to 50 MB can be shared in the chat.' });
+      toast({ kind: 'warn', title: t('File too large'), body: t('Files up to 50 MB can be shared in the chat.') });
       return;
     }
     const me = this.self.peek();
@@ -929,7 +984,14 @@ export class Session {
       role: me.role,
       ts: Date.now(),
       kind: 'file',
-      file: { id: fid, name: file.name, size: file.size, mime: file.type || 'application/octet-stream', url, progress: 0 },
+      file: {
+        id: fid,
+        name: file.name,
+        size: file.size,
+        mime: file.type || 'application/octet-stream',
+        url,
+        progress: 0,
+      },
       mine: true,
     });
     const links = [...this.links.values()].filter((l) => l.file.readyState === 'open');
@@ -938,7 +1000,14 @@ export class Session {
       return;
     }
     this.fileOutQueue = this.fileOutQueue.then(async () => {
-      const meta = JSON.stringify({ t: 'file', id: fid, name: file.name, size: file.size, mime: file.type, ts: Date.now() });
+      const meta = JSON.stringify({
+        t: 'file',
+        id: fid,
+        name: file.name,
+        size: file.size,
+        mime: file.type,
+        ts: Date.now(),
+      });
       const chunk = 64 * 1024;
       let sent = 0;
       const total = file.size * links.length;
@@ -992,7 +1061,7 @@ export class Session {
         const msg: ChatMessage = {
           id: m.id,
           from,
-          name: peer?.info.name ?? 'Guest',
+          name: peer?.info.name ?? t('Guest'),
           role: peer?.info.role ?? null,
           ts: Number(m.ts) || Date.now(),
           kind: 'file',
@@ -1022,9 +1091,7 @@ export class Session {
 
   private async pollStats(): Promise<void> {
     if (document.hidden && this.peers.peek().length === 0) return;
-    const updates = await Promise.all(
-      [...this.links.values()].map(async (l) => [l.id, await l.stats()] as const),
-    );
+    const updates = await Promise.all([...this.links.values()].map(async (l) => [l.id, await l.stats()] as const));
     batch(() => {
       for (const [id, st] of updates) if (st) this.patchPeer(id, { stats: st });
     });

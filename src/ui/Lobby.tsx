@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   FlipHorizontal2,
+  Languages,
   Headphones,
   Mic,
   MicOff,
@@ -18,9 +19,10 @@ import {
   VideoOff,
   Zap,
 } from 'lucide-preact';
-import { session, ROLE_LABEL } from '../app/session.ts';
+import { session, roleLabel } from '../app/session.ts';
+import { askNotifications, notifyPermission } from '../app/notify.ts';
 import { settings, update, updateMidi } from '../app/settings.ts';
-import { browser, BROWSER_NAMES, REPO_URL } from '../app/platform.ts';
+import { browserName, REPO_URL } from '../app/platform.ts';
 import { listDevices, type DeviceLists, type MediaProblem } from '../media/local.ts';
 import { normalizeRoomCode, prettyCode } from '../net/code.ts';
 import type { Role } from '../net/room.ts';
@@ -28,27 +30,38 @@ import { LevelBars, Qr, VideoView } from './common.tsx';
 import { GitHubIcon, initials, Logo, RoleIcon, Wordmark } from './icons.tsx';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
+import { capital, lang, LANGUAGES, t } from '../app/i18n.ts';
 
-const ROLES: { role: Role; sub: string }[] = [
-  { role: 'student', sub: 'Here to learn' },
-  { role: 'teacher', sub: 'Giving the lesson' },
-  { role: 'observer', sub: 'Parent, guest' },
+const roles = (): { role: Role; sub: string }[] => [
+  { role: 'student', sub: t('Here to learn') },
+  { role: 'teacher', sub: t('Giving the lesson') },
+  { role: 'observer', sub: t('Parent, guest') },
 ];
 
 export function problemText(p: MediaProblem, what: 'camera' | 'microphone'): string {
+  const cam = what === 'camera';
+  const name = browserName();
   switch (p) {
     case 'denied':
-      return `${what === 'camera' ? 'Camera' : 'Microphone'} blocked. Allow it from the icon in ${BROWSER_NAMES[browser]}'s address bar, then reload.`;
+      return cam
+        ? t("Camera blocked. Allow it from the icon in {browser}'s address bar, then reload.", { browser: name })
+        : t("Microphone blocked. Allow it from the icon in {browser}'s address bar, then reload.", { browser: name });
     case 'none':
-      return `No ${what} found.${what === 'camera' ? ' You can join with sound only.' : ''}`;
+      return cam ? t('No camera found. You can join with sound only.') : t('No microphone found.');
     case 'busy':
-      return `The ${what} is used by another app. Close it (Zoom, Teams, another tab), then try again.`;
+      return cam
+        ? t('The camera is used by another app. Close it (Zoom, Teams, another tab), then try again.')
+        : t('The microphone is used by another app. Close it (Zoom, Teams, another tab), then try again.');
     case 'insecure':
-      return 'Camera and microphone need a secure (https) page.';
+      return t('Camera and microphone need a secure (https) page.');
     case 'unsupported':
-      return `${BROWSER_NAMES[browser]} cannot use a ${what} here. Try Chrome, Edge, Safari or Firefox.`;
+      return capital(
+        cam
+          ? t('{browser} cannot use a camera here. Try Chrome, Edge, Safari or Firefox.', { browser: name })
+          : t('{browser} cannot use a microphone here. Try Chrome, Edge, Safari or Firefox.', { browser: name }),
+      );
     default:
-      return `The ${what} could not start.`;
+      return cam ? t('The camera could not start.') : t('The microphone could not start.');
   }
 }
 
@@ -110,6 +123,9 @@ export function Lobby() {
       return;
     }
     setBusy(true);
+    // whoever opens a new room waits for the others: the moment to offer a notification when they arrive
+    if (session.fresh.peek() && settings.peek().notifyJoin && notifyPermission.peek() === 'default')
+      void askNotifications();
     await session.enter();
   };
 
@@ -129,17 +145,27 @@ export function Lobby() {
     <div class="lobby">
       <div class="atmos" />
       <header class="lobby-top">
-        <a class="brand" href={REPO_URL} target="_blank" rel="noopener" aria-label="Sonora Live on GitHub">
+        <a class="brand" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('Sonora Live on GitHub')}>
           <Logo />
           <Wordmark />
         </a>
         <div style="display:flex;gap:6px;align-items:center">
           {installable.value && (
             <button class="btn btn-sm btn-ghost" onClick={() => void promptInstall()}>
-              <Download /> Install app
+              <Download /> {t('Install app')}
             </button>
           )}
-          <a class="icon-btn" href={REPO_URL} target="_blank" rel="noopener" aria-label="Source code on GitHub">
+          {LANGUAGES.filter((l) => l.value !== lang.value).map((l) => (
+            <button
+              class="btn btn-sm btn-ghost"
+              lang={l.value}
+              onClick={() => update({ language: l.value })}
+              data-testid="lobby-language"
+            >
+              <Languages /> {l.name}
+            </button>
+          ))}
+          <a class="icon-btn" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('Source code on GitHub')}>
             <GitHubIcon />
           </a>
         </div>
@@ -149,16 +175,18 @@ export function Lobby() {
         <section class="lobby-hero">
           {fresh ? (
             <h1>
-              Music lessons, <em>face to face</em>, from anywhere.
+              {t('Music lessons,')} <em>{t('face to face')}</em>
+              {t(', from anywhere.')}
             </h1>
           ) : (
             <h1>
-              You're invited to a <em>lesson</em>.
+              {t("You're invited to a")} <em>{t('lesson')}</em>.
             </h1>
           )}
           <p class="lede">
-            Your instrument, heard as it really sounds. Two-way MIDI between pianos. Direct, private, no account and
-            nothing to install.
+            {t(
+              'Your instrument, heard as it really sounds. Two-way MIDI between pianos. Direct, private, no account and nothing to install.',
+            )}
           </p>
           <div class="preview">
             {stream && media.camOn.value ? (
@@ -167,24 +195,27 @@ export function Lobby() {
               <div class="preview-empty">
                 <div>
                   <div class="avatar" data-role={s.role ?? 'student'}>
-                    {initials(name || 'You')}
+                    {initials(name || t('You'))}
                   </div>
-                  {vp ? problemText(vp, 'camera') : media.camOn.value ? 'Starting camera…' : 'Camera is off'}
+                  {vp ? problemText(vp, 'camera') : media.camOn.value ? t('Starting camera…') : t('Camera is off')}
                 </div>
               </div>
             )}
             {media.audio.value && (
-              <div class="preview-meter" title={clipping ? 'Too loud: lower the microphone level' : 'Microphone level'}>
+              <div
+                class="preview-meter"
+                title={clipping ? t('Too loud: lower the microphone level') : t('Microphone level')}
+              >
                 <Mic />
                 <LevelBars level={media.micOn.value ? level : 0} clipping={clipping} />
-                {clipping ? 'Too loud' : 'Mic'}
+                {clipping ? t('Too loud') : t('Mic')}
               </div>
             )}
             <div class="preview-bar">
               <button
                 class={`round ${media.micOn.value ? '' : 'off'}`}
                 onClick={() => media.setMicOn(!media.micOn.value)}
-                aria-label={media.micOn.value ? 'Mute microphone' : 'Unmute microphone'}
+                aria-label={media.micOn.value ? t('Mute microphone') : t('Unmute microphone')}
                 aria-pressed={!media.micOn.value}
               >
                 {media.micOn.value ? <Mic /> : <MicOff />}
@@ -196,7 +227,7 @@ export function Lobby() {
                   update({ camOff: !on });
                   void media.setCamOn(on);
                 }}
-                aria-label={media.camOn.value ? 'Turn camera off' : 'Turn camera on'}
+                aria-label={media.camOn.value ? t('Turn camera off') : t('Turn camera on')}
                 aria-pressed={!media.camOn.value}
               >
                 {media.camOn.value ? <Video /> : <VideoOff />}
@@ -205,9 +236,11 @@ export function Lobby() {
                 <button
                   class="round"
                   onClick={() => update({ mirror: !s.mirror })}
-                  aria-label={s.mirror ? 'Show my preview unmirrored' : 'Mirror my preview'}
+                  aria-label={s.mirror ? t('Show my preview unmirrored') : t('Mirror my preview')}
                   aria-pressed={s.mirror}
-                  title="Mirror my preview (only for you). Turn it off for a camera pointed at the keys or a score."
+                  title={t(
+                    'Mirror my preview (only for you). Turn it off for a camera pointed at the keys or a score.',
+                  )}
                 >
                   <FlipHorizontal2 />
                 </button>
@@ -219,7 +252,7 @@ export function Lobby() {
               {devices.mics.length > 0 && (
                 <select
                   class="select"
-                  aria-label="Microphone"
+                  aria-label={t('Microphone')}
                   value={media.microphoneId}
                   onChange={(e) => {
                     const id = (e.currentTarget as HTMLSelectElement).value;
@@ -228,14 +261,14 @@ export function Lobby() {
                   }}
                 >
                   {devices.mics.map((d, i) => (
-                    <option value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+                    <option value={d.deviceId}>{d.label || t('Microphone {n}', { n: i + 1 })}</option>
                   ))}
                 </select>
               )}
               {devices.cams.length > 0 && (
                 <select
                   class="select"
-                  aria-label="Camera"
+                  aria-label={t('Camera')}
                   value={media.cameraId}
                   onChange={(e) => {
                     const id = (e.currentTarget as HTMLSelectElement).value;
@@ -244,7 +277,7 @@ export function Lobby() {
                   }}
                 >
                   {devices.cams.map((d, i) => (
-                    <option value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                    <option value={d.deviceId}>{d.label || t('Camera {n}', { n: i + 1 })}</option>
                   ))}
                 </select>
               )}
@@ -252,25 +285,25 @@ export function Lobby() {
           )}
           <div class="features">
             <span>
-              <AudioWaveform /> Pure instrument sound
+              <AudioWaveform /> {t('Pure instrument sound')}
             </span>
             <span>
-              <Piano /> Piano-to-piano MIDI
+              <Piano /> {t('Piano-to-piano MIDI')}
             </span>
             <span>
-              <Zap /> Game-grade low latency
+              <Zap /> {t('Game-grade low latency')}
             </span>
             <span>
-              <ShieldCheck /> Peer to peer, encrypted
+              <ShieldCheck /> {t('Peer to peer, encrypted')}
             </span>
           </div>
         </section>
 
-        <section class="card join-card" aria-label="Join the lesson">
+        <section class="card join-card" aria-label={t('Join the lesson')}>
           <div class="room-code-box">
-            <span class="label">{fresh ? 'Your room is ready' : 'Joining room'}</span>
+            <span class="label">{fresh ? t('Your room is ready') : t('Joining room')}</span>
             <div class="room-code-row">
-              <span class="code" aria-label={`Room code ${code.split('').join(' ')}`}>
+              <span class="code" aria-label={t('Room code {code}', { code: code.split('').join(' ') })}>
                 {prettyCode(code)
                   .split(' ')
                   .map((p) => (
@@ -281,11 +314,11 @@ export function Lobby() {
             {fresh && (
               <div class="code-actions">
                 <button class="btn btn-sm" onClick={() => void copyLink(code)}>
-                  <Copy /> Copy link
+                  <Copy /> {t('Copy link')}
                 </button>
                 {canShare && (
                   <button class="btn btn-sm" onClick={() => void shareLink(code)}>
-                    <Share2 /> Share
+                    <Share2 /> {t('Share')}
                   </button>
                 )}
                 <button class="btn btn-sm btn-ghost" onClick={() => setShowQr(!showQr)} aria-expanded={showQr}>
@@ -296,18 +329,20 @@ export function Lobby() {
             {showQr && fresh && (
               <div style="display:flex;gap:14px;align-items:center">
                 <Qr text={roomLink(code)} />
-                <small style="color:var(--muted)">Scan with a phone or tablet to join this room (handy for a second camera).</small>
+                <small style="color:var(--muted)">
+                  {t('Scan with a phone or tablet to join this room (handy for a second camera).')}
+                </small>
               </div>
             )}
           </div>
 
           <label class="field">
-            <span class="label">Your name</span>
+            <span class="label">{t('Your name')}</span>
             <input
               class="input"
               value={s.name}
               maxLength={40}
-              placeholder="e.g. Clara"
+              placeholder={t('e.g. Clara')}
               autoComplete="name"
               enterKeyHint="go"
               onInput={(e) => update({ name: (e.currentTarget as HTMLInputElement).value })}
@@ -319,10 +354,10 @@ export function Lobby() {
 
           <div class="field">
             <span class="label" id="role-label">
-              I'm joining as
+              {t("I'm joining as")}
             </span>
             <div class={`roles ${shake ? 'shake' : ''}`} role="radiogroup" aria-labelledby="role-label">
-              {ROLES.map((r) => (
+              {roles().map((r) => (
                 <button
                   type="button"
                   role="radio"
@@ -338,7 +373,7 @@ export function Lobby() {
                   <span class="ico">
                     <RoleIcon role={r.role} />
                   </span>
-                  <b>{ROLE_LABEL[r.role]}</b>
+                  <b>{roleLabel(r.role)}</b>
                   <small>{r.sub}</small>
                 </button>
               ))}
@@ -354,19 +389,19 @@ export function Lobby() {
 
           <button class="btn btn-primary btn-lg btn-block" onClick={() => void enter()} disabled={busy}>
             {busy ? <span class="spinner" /> : null}
-            {fresh ? 'Enter the room' : 'Join the lesson'} <ArrowRight />
+            {fresh ? t('Enter the room') : t('Join the lesson')} <ArrowRight />
           </button>
 
           <div class="hint">
             <Headphones />
             <span>
-              Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.
+              {t('Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.')}
             </span>
           </div>
 
           {joinOther.value ? (
             <div class="field">
-              <span class="label">Room code</span>
+              <span class="label">{t('Room code')}</span>
               <div class="join-other">
                 <input
                   class="input"
@@ -384,18 +419,18 @@ export function Lobby() {
                   }}
                 />
                 <button class="btn" disabled={!typedCode.value} onClick={join}>
-                  Use
+                  {t('Use')}
                 </button>
               </div>
             </div>
           ) : (
             <div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap">
               <button class="link-btn" onClick={() => (joinOther.value = true)}>
-                Have a code? Join another room
+                {t('Have a code? Join another room')}
               </button>
               {!fresh && (
                 <button class="link-btn" onClick={() => session.newRoom()}>
-                  Start a new room instead
+                  {t('Start a new room instead')}
                 </button>
               )}
             </div>
@@ -404,12 +439,12 @@ export function Lobby() {
       </main>
 
       <footer class="lobby-foot">
-        <span>No account. No server sees your lesson.</span>
+        <span>{t('No account. No server sees your lesson.')}</span>
         <a href={`${REPO_URL}#how-it-works`} target="_blank" rel="noopener">
-          How it works
+          {t('How it works')}
         </a>
         <a href={`${REPO_URL}#privacy`} target="_blank" rel="noopener">
-          Privacy
+          {t('Privacy')}
         </a>
       </footer>
     </div>

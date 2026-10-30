@@ -1,5 +1,7 @@
 // Which system and browser this is, for the help we show (MIDI and Bluetooth support differ a lot).
 
+import { t } from './i18n.ts';
+
 export type OS = 'windows' | 'macos' | 'ios' | 'android' | 'linux' | 'chromeos' | 'other';
 export type Browser = 'chrome' | 'edge' | 'firefox' | 'safari' | 'samsung' | 'opera' | 'other';
 
@@ -44,25 +46,20 @@ export const browser = typeof navigator === 'undefined' ? 'other' : detectBrowse
 export const isTouch = typeof window !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 export const isMobile = os === 'ios' || os === 'android';
 
-export const BROWSER_NAMES: Record<Browser, string> = {
+const BROWSER_NAMES: Record<Browser, string> = {
   chrome: 'Chrome',
   edge: 'Edge',
   firefox: 'Firefox',
   safari: 'Safari',
   samsung: 'Samsung Internet',
   opera: 'Opera',
-  other: 'this browser',
+  other: '',
 };
 
-export const OS_NAMES: Record<OS, string> = {
-  windows: 'Windows',
-  macos: 'macOS',
-  ios: 'iPhone / iPad',
-  android: 'Android',
-  linux: 'Linux',
-  chromeos: 'ChromeOS',
-  other: 'this system',
-};
+/** This browser's name, for sentences ("this browser" when unknown). */
+export function browserName(): string {
+  return BROWSER_NAMES[browser] || t('this browser');
+}
 
 /** Running as an installed app (home screen / desktop PWA)? */
 export function isStandalone(): boolean {

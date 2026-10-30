@@ -1,8 +1,45 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
-import { CircleAlert, Info, LogIn, LogOut, MessageSquare, TriangleAlert, Check, X, DoorOpen } from 'lucide-preact';
+import {
+  CircleAlert,
+  Info,
+  LogIn,
+  LogOut,
+  MessageSquare,
+  TriangleAlert,
+  Check,
+  X,
+  DoorOpen,
+  ExternalLink,
+} from 'lucide-preact';
 import { encode } from 'uqr';
 import { dismiss, toasts, type ToastKind } from '../app/notify.ts';
+import { t } from '../app/i18n.ts';
+
+/**
+ * A translated sentence with a little markup in it: <b>…</b>, <code>…</code> and <a>…</a>, whose addresses are
+ * given in order in `links` (they open in a new tab).
+ */
+export function Rich({ text, links = [] }: { text: string; links?: string[] }) {
+  const out: ComponentChildren[] = [];
+  const re = /<(b|code|a)>(.*?)<\/\1>/g;
+  let at = 0;
+  let li = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > at) out.push(text.slice(at, m.index));
+    if (m[1] === 'b') out.push(<b>{m[2]}</b>);
+    else if (m[1] === 'code') out.push(<code>{m[2]}</code>);
+    else
+      out.push(
+        <a href={links[li++]} target="_blank" rel="noopener">
+          {m[2]} <ExternalLink size={12} />
+        </a>,
+      );
+    at = re.lastIndex;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return <>{out}</>;
+}
 
 export function Sheet(props: {
   title: string;
@@ -23,12 +60,17 @@ export function Sheet(props: {
   return (
     <>
       <div class="scrim" onClick={props.onClose} />
-      <section class={`sheet ${props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.label ?? props.title}>
+      <section
+        class={`sheet ${props.wide ? 'wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.label ?? props.title}
+      >
         <div>
           <header class="sheet-head">
             {props.icon && <div class="big-ico">{props.icon}</div>}
             <h2>{props.title}</h2>
-            <button class="icon-btn" onClick={props.onClose} aria-label="Close">
+            <button class="icon-btn" onClick={props.onClose} aria-label={t('Close')}>
               <X />
             </button>
           </header>
@@ -64,7 +106,11 @@ export function ToggleRow(props: {
   disabled?: boolean;
 }) {
   return (
-    <div class="row-toggle" style={props.disabled ? 'opacity:.5;pointer-events:none' : undefined} onClick={() => props.onChange(!props.checked)}>
+    <div
+      class="row-toggle"
+      style={props.disabled ? 'opacity:.5;pointer-events:none' : undefined}
+      onClick={() => props.onChange(!props.checked)}
+    >
       <div class="grow">
         <div class="row-title">{props.title}</div>
         {props.sub && <div class="row-sub">{props.sub}</div>}
@@ -83,7 +129,12 @@ export function Seg<T extends string | number>(props: {
   return (
     <div class="seg" role="group" aria-label={props.label}>
       {props.options.map((o) => (
-        <button type="button" aria-pressed={o.value === props.value} title={o.title} onClick={() => props.onChange(o.value)}>
+        <button
+          type="button"
+          aria-pressed={o.value === props.value}
+          title={o.title}
+          onClick={() => props.onChange(o.value)}
+        >
           {o.label}
         </button>
       ))}
@@ -92,7 +143,11 @@ export function Seg<T extends string | number>(props: {
 }
 
 /** A <video> showing a stream (muted: sound plays from separate audio elements). */
-export function VideoView(props: { stream: MediaStream | null; class?: string; onResize?: (w: number, h: number) => void }) {
+export function VideoView(props: {
+  stream: MediaStream | null;
+  class?: string;
+  onResize?: (w: number, h: number) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
@@ -131,9 +186,12 @@ export function LevelBars({ level, clipping, n = 5 }: { level: number; clipping?
   );
 }
 
+const qualityLabel = (q: 'good' | 'fair' | 'poor' | 'unknown') =>
+  ({ good: t('Good connection'), fair: t('Fair connection'), poor: t('Poor connection'), unknown: t('Connection') })[q];
+
 export function SignalBars({ quality }: { quality: 'good' | 'fair' | 'poor' | 'unknown' }) {
   return (
-    <span class={`signal ${quality}`} aria-label={`Connection ${quality}`}>
+    <span class={`signal ${quality}`} aria-label={qualityLabel(quality)}>
       <i />
       <i />
       <i />
@@ -154,7 +212,7 @@ export function Qr({ text }: { text: string }) {
     return { d: parts.join(''), size };
   }, [text]);
   return (
-    <div class="qr" role="img" aria-label="QR code of the room link">
+    <div class="qr" role="img" aria-label={t('QR code of the room link')}>
       <svg viewBox={`0 0 ${svg.size} ${svg.size}`} shape-rendering="geometricPrecision">
         <path d={svg.d} fill="#17141c" />
       </svg>
@@ -177,29 +235,34 @@ export function Toasts() {
   const list = toasts.value;
   return (
     <div class="toasts" aria-live="polite">
-      {list.map((t) => {
-        const Ico = TOAST_ICONS[t.kind];
+      {list.map((item) => {
+        const Ico = TOAST_ICONS[item.kind];
         return (
-          <div class={`toast ${t.kind}`} key={t.id} role="status">
+          <div class={`toast ${item.kind}`} key={item.id} role="status">
             <div class="t-ico">
               <Ico />
             </div>
             <div class="grow">
-              <b>{t.title}</b>
-              {t.body && <small>{t.body}</small>}
+              <b>{item.title}</b>
+              {item.body && <small>{item.body}</small>}
             </div>
-            {t.action && (
+            {item.action && (
               <button
                 class="btn btn-sm btn-primary"
                 onClick={() => {
-                  t.action!.run();
-                  dismiss(t.id);
+                  item.action!.run();
+                  dismiss(item.id);
                 }}
               >
-                {t.action.label}
+                {item.action.label}
               </button>
             )}
-            <button class="icon-btn" style="width:28px;height:28px" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+            <button
+              class="icon-btn"
+              style="width:28px;height:28px"
+              onClick={() => dismiss(item.id)}
+              aria-label={t('Dismiss')}
+            >
               <X size={16} />
             </button>
           </div>
