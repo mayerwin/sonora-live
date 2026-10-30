@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.ogg binary
+*.m4a binary
+*.png binary
+*.webp binary
+*.woff2 binary

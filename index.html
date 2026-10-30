@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Sonora Live · Remote music lessons with pure sound</title>
+    <meta
+      name="description"
+      content="Teach and learn an instrument face to face from anywhere. Peer-to-peer video, pure unprocessed instrument sound, and two-way MIDI between teacher and student pianos. Free, no account, nothing to install."
+    />
+    <meta name="theme-color" content="#0f0e13" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="application-name" content="Sonora Live" />
+    <meta name="apple-mobile-web-app-title" content="Sonora" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="referrer" content="no-referrer" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sonora Live" />
+    <meta property="og:title" content="Sonora Live · Join my music lesson" />
+    <meta
+      property="og:description"
+      content="Peer-to-peer video lessons with pure instrument sound and two-way MIDI. Open the link, pick your role, play."
+    />
+    <meta property="og:image" content="https://mayerwin.github.io/sonora-live/social/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0f0e13;
+        color: #f3eee6;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font: 500 15px/1.4 system-ui, sans-serif;
+        letter-spacing: 0.02em;
+        color: #a39e97;
+      }
+      #boot svg {
+        width: 56px;
+        height: 56px;
+        animation: boot 1.6s ease-in-out infinite;
+      }
+      @keyframes boot {
+        50% {
+          opacity: 0.45;
+          transform: scale(0.94);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="boot" aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none">
+        <rect x="2" y="2" width="60" height="60" rx="16" fill="#1d1a24" />
+        <path d="M14 38c6-14 12-14 18 0s12 14 18 0" stroke="#f5b544" stroke-width="5" stroke-linecap="round" />
+      </svg>
+    </div>
+    <noscript>Sonora Live needs JavaScript to run.</noscript>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
