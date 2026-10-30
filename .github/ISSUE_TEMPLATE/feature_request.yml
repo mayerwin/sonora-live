@@ -1,0 +1,24 @@
+name: An idea for lessons
+description: Something that would make teaching or learning with Sonora Live better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you like to do during a lesson?
+      description: Describe the situation and the need, rather than a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Sonora Live help?
+  - type: dropdown
+    id: who
+    attributes:
+      label: You are mostly a…
+      options:
+        - Teacher
+        - Student
+        - Parent / observer
+        - Developer

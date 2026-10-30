@@ -1,0 +1,53 @@
+name: Something doesn't work
+description: A problem during a lesson, with sound, video, MIDI, the chat or joining a room.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! The more we know about **both sides** of the lesson, the faster it gets fixed.
+        Tip: add `?debug` to the address before the `#` (e.g. `https://mayerwin.github.io/sonora-live/?debug#K7Q2MX`),
+        reproduce the problem, then copy the console lines starting with `[sonora]` (F12 → Console).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      multiple: true
+      options:
+        - Joining or creating a room
+        - Connection drops or reconnects
+        - Sound (pure / voice, quality, echo, delay)
+        - Video or screen sharing
+        - MIDI instrument (USB)
+        - MIDI instrument (Bluetooth)
+        - Built-in piano sound
+        - Chat or files
+        - Installing the app
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: me
+    attributes:
+      label: Your side
+      description: Device and system, browser and version, instrument and how it is connected (if any), network (home Wi-Fi, mobile, office…).
+      placeholder: 'Windows 11 laptop, Chrome 141, Roland FP-30X over Bluetooth, home Wi-Fi'
+    validations:
+      required: true
+  - type: textarea
+    id: them
+    attributes:
+      label: The other side (if you know)
+      placeholder: 'iPad, Safari 18, no instrument, mobile network'
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log or screenshot (Settings → Connection)
+      render: text

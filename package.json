@@ -5,7 +5,11 @@
   "description": "Remote music lessons in the browser: peer-to-peer video with pure, unprocessed instrument sound and two-way MIDI between teacher and student pianos.",
   "type": "module",
   "license": "MIT",
+  "author": "Erwin Mayer (https://github.com/mayerwin)",
   "homepage": "https://mayerwin.github.io/sonora-live/",
+  "bugs": {
+    "url": "https://github.com/mayerwin/sonora-live/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mayerwin/sonora-live.git"
@@ -13,12 +17,17 @@
   "keywords": [
     "webrtc",
     "webmidi",
+    "midi",
+    "bluetooth-midi",
     "music-education",
-    "low-latency-audio",
-    "p2p",
+    "music-lessons",
     "piano",
     "remote-teaching",
-    "opus-audio"
+    "video-conferencing",
+    "p2p",
+    "low-latency-audio",
+    "opus-audio",
+    "pwa"
   ],
   "scripts": {
     "dev": "vite",

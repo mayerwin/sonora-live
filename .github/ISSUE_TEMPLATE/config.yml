@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Open Sonora Live
+    url: https://mayerwin.github.io/sonora-live/
+    about: Start a lesson right now, in the browser.
+  - name: Bluetooth piano not found on Windows?
+    url: https://github.com/mayerwin/Perfect-Bluetooth-MIDI-For-Windows
+    about: Perfect Bluetooth MIDI for Windows makes Bluetooth MIDI instruments available to every app and browser.
+  - name: Security issue
+    url: https://github.com/mayerwin/sonora-live/security/advisories/new
+    about: Please report vulnerabilities privately.

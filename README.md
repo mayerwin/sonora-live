@@ -323,6 +323,13 @@ Built with [Vite](https://vite.dev), [TypeScript](https://www.typescriptlang.org
 [vite-plugin-pwa](https://vite-pwa-org.netlify.app), [emoji-picker-element](https://github.com/nolanlawson/emoji-picker-element),
 [Lucide](https://lucide.dev) icons, [linkifyjs](https://linkify.js.org) and [uqr](https://github.com/unjs/uqr).
 
+## Contributing
+
+Reports from real lessons are the most useful contribution: [open an issue](https://github.com/mayerwin/sonora-live/issues/new/choose)
+with each side's device, browser and instrument. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to capture the
+connection log and how to work on the code; security problems go through [SECURITY.md](SECURITY.md), and everyone is
+expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Credits
 
 **Producer / Director:** Erwin Mayer · **Lead Programmer:** Claude (Anthropic)
