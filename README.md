@@ -283,6 +283,7 @@ instead, and `?debug` to see the connection log in the console.
 | `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping |
 | `npm run e2e` | Browser tests: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
 | `npm run build` | Production build in `dist/` (installable web app with offline support) |
+| `npm run preview` then `E2E_URL=http://localhost:4173/ npm run e2e` | The browser tests against the production build |
 | `npm run icons` | App icons from `tools/brand/mark.svg` |
 | `node tools/screenshots.ts` | The screenshots above, from a staged lesson (with a development server on port 5180) |
 

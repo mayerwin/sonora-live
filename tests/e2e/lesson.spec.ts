@@ -5,11 +5,14 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 
 type Role = 'student' | 'teacher' | 'observer';
 
+/** the local relay of the dev/preview server, and the session on window (also in a production build) */
+const Q = '?relay=local&debug';
+
 async function person(browser: Browser, name: string, role: Role, hash = ''): Promise<Page> {
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] pageerror`, e.message));
-  await page.goto(`/${hash ? `#${hash}` : ''}`);
+  await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
   await page.getByPlaceholder('e.g. Clara').fill(name);
   await page.locator(`button.role[data-role=${role}]`).click();
   return page;
@@ -227,7 +230,7 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
     const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
     await ctx.addInitScript(fakeMidiScript(piano, thru));
     const page = await ctx.newPage();
-    await page.goto(`/${hash ? `#${hash}` : ''}`);
+    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
     await page.getByPlaceholder('e.g. Clara').fill(name);
     await page.locator(`button.role[data-role=${role}]`).click();
     return page;
@@ -273,7 +276,7 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
 test('a duplicated tab (same session storage) gets its own identity and connects', async ({ browser }) => {
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
   const a = await ctx.newPage();
-  await a.goto('/');
+  await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
   await a.locator('button.role[data-role=teacher]').click();
   await enter(a);
@@ -282,7 +285,7 @@ test('a duplicated tab (same session storage) gets its own identity and connects
   // "Duplicate tab" copies sessionStorage, so the copy starts with the same id
   const b = await ctx.newPage();
   await b.addInitScript((tab) => sessionStorage.setItem('sonora.tab', tab), id!);
-  await b.goto(`/#${code}`);
+  await b.goto(`/${Q}#${code}`);
   await b.getByPlaceholder('e.g. Clara').fill('Leo');
   await b.locator('button.role[data-role=student]').click();
   await enter(b);
