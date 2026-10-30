@@ -7,6 +7,7 @@ import { update } from '../app/settings.ts';
 import { emojiOnly, formatBytes, type ChatMessage } from '../app/chat.ts';
 import { chatOpen } from './state.ts';
 import frPicker from 'emoji-picker-element/i18n/fr';
+import versions from 'virtual:sonora-assets';
 import { clock, lang, t, tn } from '../app/i18n.ts';
 
 function Linkified({ text }: { text: string }) {
@@ -89,7 +90,7 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
       // the picker's own words and the emoji names (for search) in the language in use; English is its default
       const p = new Picker({
         locale: l,
-        dataSource: `${import.meta.env.BASE_URL}emoji/${l}.json`,
+        dataSource: `${import.meta.env.BASE_URL}emoji/${l}.json${versions.emoji[l] ? `?v=${versions.emoji[l]}` : ''}`,
         skinToneEmoji: '👍',
         ...(l === 'fr' ? { i18n: frPicker } : {}),
       });
@@ -97,7 +98,7 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
       host.current.appendChild(p);
       picker = p;
       requestAnimationFrame(() => (p.shadowRoot?.querySelector('input') as HTMLInputElement | null)?.focus());
-    });
+    }, onClose); // its code is gone when a newer version replaced this one during the lesson (it loads after)
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     const out = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest('.emoji-pop, .emoji-toggle')) onClose();

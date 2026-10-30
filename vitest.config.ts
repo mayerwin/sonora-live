@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { versioning } from './tools/versioning.ts';
 
 export default defineConfig({
+  plugins: [versioning()],
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   define: {
     __APP_VERSION__: JSON.stringify('test'),

@@ -476,9 +476,7 @@ test('playing in unison: a release on the student’s piano is not mistaken for 
   await b.context().close();
 });
 
-test('speaks French when the browser does, shows reactions with animations reduced, and switches language', async ({
-  browser,
-}) => {
+test('speaks French when the browser does, animates normally, and switches language', async ({ browser }) => {
   const ctx = await browser.newContext({
     locale: 'fr-FR',
     permissions: ['camera', 'microphone'],
@@ -494,20 +492,22 @@ test('speaks French when the browser does, shows reactions with animations reduc
   await expect(page.getByTestId('waiting')).toContainText('En attente des autres');
   await expect(page.getByTestId('waiting')).toContainText('Invitez votre élève');
 
-  // alone in the room, a reaction still shows (it used to jump straight to its faded-out end)
+  // alone in the room, a reaction shows, whatever the system's motion setting (it is not followed)
   await page.getByRole('button', { name: 'Réagir', exact: true }).click();
   await page.getByRole('button', { name: 'Réagir 👏' }).click();
   await expect
     .poll(() => page.locator('.reaction').evaluate((el) => Number(getComputedStyle(el).opacity)))
     .toBeGreaterThan(0.9);
-  // and nothing loops at a flickering speed
+  // and every looping animation runs at its own pace, never at a flickering speed
   const loops = await page.evaluate(() =>
     document
       .getAnimations()
-      .filter((a) => a.effect?.getComputedTiming().iterations === Infinity)
-      .map((a) => (a as CSSAnimation).animationName),
+      .map((a) => a.effect?.getComputedTiming())
+      .filter((tm) => tm?.iterations === Infinity)
+      .map((tm) => Number(tm!.duration)),
   );
-  expect(loops.every((n) => n === 'spin')).toBe(true);
+  expect(loops.length).toBeGreaterThan(0);
+  for (const d of loops) expect(d).toBeGreaterThanOrEqual(500);
 
   // Settings → General → English
   await page.getByTestId('btn-settings').click();

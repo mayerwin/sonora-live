@@ -60,8 +60,6 @@ export const FR: Record<string, string> = spaced({
     'Tout le monde dans la salle peut modifier ce réglage. Les salles sont privées par nature : seules les personnes à qui vous envoyez le code le connaissent, et tout est chiffré de bout en bout.',
   'Sonora Live installed': 'Sonora Live est installé',
   'Open it from your home screen or apps.': 'Ouvrez-le depuis votre écran d’accueil ou vos applications.',
-  'A new version is ready': 'Une nouvelle version est prête',
-  Update: 'Mettre à jour',
   'Add to Home Screen': 'Sur l’écran d’accueil',
   'Tap the Share button in Safari, then “Add to Home Screen”.':
     'Touchez le bouton Partager de Safari, puis « Sur l’écran d’accueil ».',

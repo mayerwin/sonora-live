@@ -9,3 +9,9 @@ interface ImportMetaEnv {
   readonly VITE_TURN_CREDENTIAL?: string;
   readonly VITE_TURN_API?: string;
 }
+
+/** Content hashes of the files of public/ the app loads (tools/versioning.ts); empty in development. */
+declare module 'virtual:sonora-assets' {
+  const versions: { piano: string; emoji: Record<string, string> };
+  export default versions;
+}

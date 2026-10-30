@@ -28,6 +28,7 @@ import {
   Sparkles,
 } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
+import { installUpdate } from '../app/update.ts';
 import { settings, update, updateMidi, type SoundSetting } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
@@ -257,7 +258,7 @@ function Knocking() {
         </div>
         <h2>{t('A newer version is in use')}</h2>
         <p>{t('The others use a newer Sonora Live. Reload to update, then join again.')}</p>
-        <button class="btn btn-primary" onClick={() => location.reload()}>
+        <button class="btn btn-primary" onClick={() => void installUpdate()}>
           {t('Reload')}
         </button>
       </div>

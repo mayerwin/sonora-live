@@ -105,8 +105,8 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   during the lesson, preferences remembered.
 - **In English and French** (*en français*), following the browser's language, with a switch in the lobby and in
   Settings → General. Emoji search and note names follow too (do3 for middle C in French).
-- **Calm with reduced motion**: when the system asks for fewer animations, nothing moves or blinks, and reactions
-  appear in place.
+- **Always the latest version**, with no refresh to force: a new release loads by itself in the lobby, and never
+  interrupts a lesson (it waits until you are back in the lobby).
 
 <table>
   <tr>
@@ -298,6 +298,12 @@ The workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) bui
 to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The build uses
 relative URLs, so it also works from any sub-folder or a custom domain.
 
+Releases reach everyone without a forced refresh, although GitHub Pages caches every file for 10 minutes and the app
+keeps an offline copy: every file's URL changes with its content (Vite's hashed names, and `?v=<hash>` on the icons,
+emoji names and piano samples, by [`tools/versioning.ts`](tools/versioning.ts)), the service worker fetches pages from
+the network first, and each build writes its id into `index.html` and `version.json`, which the running app compares
+([`src/app/update.ts`](src/app/update.ts)) at start-up, every 5 minutes and when it comes back to the foreground.
+
 ### Strict networks: add a TURN relay
 
 Most connections are direct. A few networks (some company or school firewalls, some mobile carriers) block every
@@ -321,7 +327,7 @@ account, or your own [coturn](https://github.com/coturn/coturn) server) and eith
 | [`server/relay.ts`](server/relay.ts) | The local relay of the development server |
 | [`public/piano`](public/piano) | The built-in piano's samples |
 | [`tests`](tests) | Unit tests (Vitest) and browser tests (Playwright) |
-| [`tools`](tools) | Icon and screenshot generation, brand sources |
+| [`tools`](tools) | Build versioning (cache busting), icon and screenshot generation, brand sources |
 
 Built with [Vite](https://vite.dev), [TypeScript](https://www.typescriptlang.org), [Preact](https://preactjs.com) and
 [signals](https://preactjs.com/guide/v10/signals), [Workbox](https://developer.chrome.com/docs/workbox) through

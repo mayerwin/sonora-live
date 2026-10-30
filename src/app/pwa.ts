@@ -1,8 +1,7 @@
-// Installing Sonora Live as an app (it then opens in its own window, works offline for the parts that can) and
-// picking up new versions. Updates never interrupt a lesson: they are offered, and applied on the next start.
+// Installing Sonora Live as an app (it then opens in its own window and works offline for the parts that can).
+// New versions: src/app/update.ts.
 
 import { signal } from '@preact/signals';
-import { registerSW } from 'virtual:pwa-register';
 import { toast } from './notify.ts';
 import { isStandalone, os } from './platform.ts';
 import { t } from './i18n.ts';
@@ -18,7 +17,7 @@ let deferred: InstallEvent | null = null;
 export const installable = signal(false);
 export const iosInstallHelp = signal(false);
 
-export function setupPwa(inLesson: () => boolean): void {
+export function setupPwa(): void {
   if (isStandalone()) return;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -31,19 +30,6 @@ export function setupPwa(inLesson: () => boolean): void {
     toast({ kind: 'success', title: t('Sonora Live installed'), body: t('Open it from your home screen or apps.') });
   });
   if (os === 'ios') installable.value = true;
-  if (import.meta.env.DEV) return;
-  const updateSW = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      if (inLesson()) return; // next start
-      toast({
-        kind: 'info',
-        title: t('A new version is ready'),
-        timeout: 0,
-        action: { label: t('Update'), run: () => void updateSW(true) },
-      });
-    },
-  });
 }
 
 export async function promptInstall(): Promise<void> {

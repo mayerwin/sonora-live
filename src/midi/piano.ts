@@ -17,6 +17,7 @@
 // Latency: notes start immediately on an "interactive" audio context, at the sample's first sample.
 
 import { signal } from '@preact/signals';
+import versions from 'virtual:sonora-assets';
 
 /** Sampled notes per layer (MIDI numbers), from public/piano. */
 const SAMPLES: Record<LayerName, number[]> = {
@@ -300,7 +301,9 @@ export class Piano {
   private async fetchSample(ctx: AudioContext, layer: LayerName, note: number, retry = true): Promise<void> {
     const name = sampleName(layer, note);
     try {
-      const r = await fetch(`${this.base}${this.format}/${name}.${this.format}`);
+      const r = await fetch(
+        `${this.base}${this.format}/${name}.${this.format}${versions.piano ? `?v=${versions.piano}` : ''}`,
+      );
       if (!r.ok) throw new Error(String(r.status));
       const buf = await ctx.decodeAudioData(await r.arrayBuffer());
       this.buffers.set(name, { buf, offset: onsetOf(buf) });

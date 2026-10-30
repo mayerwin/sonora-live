@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { attachRelay } from './server/relay.ts';
+import { versioning } from './tools/versioning.ts';
 
 /** The local publish/subscribe relay (server/relay.ts) on the dev and preview servers, for `?relay=local`. */
 function localRelay(): Plugin {
@@ -39,8 +40,10 @@ export default defineConfig({
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   plugins: [
     localRelay(),
+    versioning(),
     VitePWA({
-      registerType: 'prompt',
+      // registered by src/app/update.ts, which also decides when a page reloads (never during a lesson)
+      registerType: 'autoUpdate',
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
@@ -80,20 +83,35 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // the app shell is precached; the piano samples (tens of MB) are cached the first time they are used
-        globPatterns: ['**/*.{js,css,html,svg,woff2,webmanifest}', 'icons/*.png'],
+        // the app's code is precached for offline use; pages are not (they come from the network first, below)
+        globPatterns: ['**/*.{js,css,svg,woff2,webmanifest}', 'icons/*.png'],
         globIgnores: ['piano/**', 'social/**', 'emoji/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        navigateFallback: 'index.html',
+        navigateFallback: null,
+        // a new version takes over at once (the running page decides when to reload: src/app/update.ts)
+        skipWaiting: true,
+        clientsClaim: true,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
-            // emoji names in the language in use (the picker then keeps them in IndexedDB)
+            // the page: always the newest one online; the last one seen when offline
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'sonora-pages-v1',
+              networkTimeoutSeconds: 5,
+              matchOptions: { ignoreSearch: true },
+              expiration: { maxEntries: 4 },
+            },
+          },
+          {
+            // emoji names in the language in use (the picker then keeps them in IndexedDB); ?v= changes with them
             urlPattern: ({ url }) => url.pathname.includes('/emoji/'),
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: { cacheName: 'sonora-emoji-v1', expiration: { maxEntries: 4 } },
           },
           {
+            // ?v= changes with the samples, so a cached sample is never outdated
             urlPattern: ({ url }) => url.pathname.includes('/piano/'),
             handler: 'CacheFirst',
             options: {
