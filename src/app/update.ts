@@ -13,6 +13,7 @@ import { effect } from '@preact/signals';
 const CHECK_MS = 5 * 60_000;
 const TRIED_KEY = 'sonora.update.tried';
 const RETRY_SAME_BUILD_MS = 10 * 60_000;
+const TRIED_PROBE_KEY = 'sonora.update.probe';
 /** in the lobby, an update waits until nobody has touched the page for this long */
 const IDLE_MS = 20_000;
 
@@ -67,14 +68,22 @@ async function check(startup: boolean, inLesson: () => boolean): Promise<void> {
   try {
     tried = JSON.parse(sessionStorage.getItem(TRIED_KEY) ?? '{}') ?? {};
   } catch {
-    // no storage, or an old value: one try per page load
+    // an old value: as if nothing had been tried
   }
   if (tried.build === online && Date.now() - (tried.at ?? 0) < RETRY_SAME_BUILD_MS) return;
+  // the attempt must be remembered, or a stale page would reload again and again: without storage (site data
+  // blocked), no automatic reload at all (a normal visit still gets the newest page from the network)
+  try {
+    sessionStorage.setItem(TRIED_PROBE_KEY, '1');
+    sessionStorage.removeItem(TRIED_PROBE_KEY);
+  } catch {
+    return;
+  }
   const attempt = () => {
     try {
       sessionStorage.setItem(TRIED_KEY, JSON.stringify({ build: online, at: Date.now() }));
     } catch {
-      // no storage
+      return Promise.resolve();
     }
     return installUpdate();
   };

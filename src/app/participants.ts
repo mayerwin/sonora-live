@@ -109,7 +109,7 @@ interface Participant<L> {
   state: ParticipantState;
   link: L | null;
   /** a connection being created (offers and signals arriving meanwhile wait for it) */
-  creating: Promise<L> | null;
+  creating: Promise<L | null> | null;
   /** they introduced themselves (and were announced) */
   introduced: boolean;
   quiet: boolean;
@@ -208,7 +208,8 @@ export class Participants<L extends LinkLike> {
   }
 
   /** Connect to `info` (once: a connection there or being made is reused). */
-  open(info: MemberInfo, initiator: boolean, opts: { quiet?: boolean } = {}): Promise<L> {
+  /** Resolves to the link, or null when it could not be created (a bad relay setting, for one). */
+  open(info: MemberInfo, initiator: boolean, opts: { quiet?: boolean } = {}): Promise<L | null> {
     let p = this.people.get(info.id);
     if (p?.link) return Promise.resolve(p.link);
     if (p?.creating) return p.creating;
@@ -238,17 +239,28 @@ export class Participants<L extends LinkLike> {
     }
     this.missing.delete(info.id);
     const record = p;
-    const creating = this.host.createLink(record.info, initiator).then((link) => {
-      // given up meanwhile (they left, we left): this connection is not wanted any more
-      if (this.people.get(record.id) !== record || record.creating !== creating) {
-        link.close();
+    const creating: Promise<L | null> = this.host.createLink(record.info, initiator).then(
+      (link) => {
+        // given up meanwhile (they left, we left): this connection is not wanted any more
+        if (this.people.get(record.id) !== record || record.creating !== creating) {
+          link.close();
+          return null;
+        }
+        record.link = link;
+        record.creating = null;
+        this.publish();
         return link;
-      }
-      record.link = link;
-      record.creating = null;
-      this.publish();
-      return link;
-    });
+      },
+      (e: unknown) => {
+        // the connection could not even be made: an attempt that failed, like one that never opened
+        this.host.log('connection to', record.id.slice(0, 4), 'could not be created', e);
+        if (this.people.get(record.id) === record && record.creating === creating) {
+          record.creating = null;
+          this.failed(record);
+        }
+        return null;
+      },
+    );
     record.creating = creating;
     this.publish();
     return creating;
@@ -259,8 +271,9 @@ export class Participants<L extends LinkLike> {
     if (!d || typeof d !== 'object' || from === this.selfId()) return;
     const p = this.people.get(from);
     let link = p?.link ?? (p?.creating ? await p.creating : null);
-    // meant for an older connection of ours (their old link still talking to the one we replaced): not for this one
-    if (link && typeof d.to === 'string' && d.to !== link.cid) {
+    // meant for a connection of ours that is not the current one (their old link still talking to one we replaced,
+    // or to a page of ours that was reloaded): a fresh connection's first offer never names a receiver
+    if (typeof d.to === 'string' && d.to !== link?.cid) {
       this.host.log('signal for an old connection dropped', from.slice(0, 4));
       return;
     }
@@ -287,7 +300,7 @@ export class Participants<L extends LinkLike> {
       }
       link = await this.open(p?.info ?? this.stranger(from), false);
     }
-    await link.receiveSignal(d);
+    if (link) await link.receiveSignal(d);
   }
 
   /** Close a person's link to make a new one, keeping who they are (no notices). */
@@ -335,14 +348,23 @@ export class Participants<L extends LinkLike> {
       this.remove(p, 'lost');
       return;
     }
+    this.failed(p);
+  }
+
+  /** An attempt that never connected. */
+  private failed(p: Participant<L>): void {
+    if (p.introduced) {
+      this.remove(p, 'lost');
+      return;
+    }
     if (p.quiet) {
       // a background repair attempt that did not work: nothing to show
       this.remove(p, null);
       return;
     }
-    // never connected: their network and ours found no direct path. The person stays on screen with an
-    // explanation; the room keeps trying (each side says hello again while alone), and the next attempt
-    // continues this record rather than flashing back to a plain spinner.
+    // their network and ours found no direct path. The person stays on screen with an explanation; the room
+    // keeps trying (each side says hello again while alone), and the next attempt continues this record rather
+    // than flashing back to a plain spinner.
     p.failures++;
     p.state = 'unreachable';
     this.host.log('no direct path to', p.id.slice(0, 4), `(attempt ${p.failures})`);

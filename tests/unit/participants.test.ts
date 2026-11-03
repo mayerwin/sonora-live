@@ -329,6 +329,45 @@ describe('the people in a lesson', () => {
     expect(w.links).toHaveLength(1);
   });
 
+  it('a signal addressed to a connection of ours that no longer exists is dropped, even with none open', async () => {
+    await w.parts.signal('leo', offer('OLD', { cid: 'theirs-1', to: 'our-old-page' }));
+    expect(w.links).toHaveLength(0);
+    // their fresh offer (no receiver named) is taken
+    await w.parts.signal('leo', offer('NEW', { cid: 'theirs-2' }));
+    expect(w.links).toHaveLength(1);
+  });
+
+  it('a connection that cannot even be created counts as a failed attempt, and the next attempt is made', async () => {
+    let fail = true;
+    const made: FakeLink[] = [];
+    const host = {
+      createLink: async (i: MemberInfo) => {
+        if (fail) throw new Error('InvalidAccessError');
+        const l = new FakeLink(i.id, true);
+        made.push(l);
+        return l;
+      },
+      acceptOffer: () => true,
+      onConnected: () => {},
+      onJoined: () => {},
+      onLeft: () => {},
+      onGone: () => {},
+      publish: (v: PeerView[]) => (views = v),
+      now: () => 0,
+      setTimer: () => 0,
+      clearTimer: () => {},
+      log: () => {},
+    };
+    let views: PeerView[] = [];
+    const parts = new Participants<FakeLink>(host, () => 'me');
+    expect(await parts.open(info('leo', 'Leo'), true)).toBeNull();
+    expect(views[0]).toMatchObject({ link: 'closed', failures: 1 });
+    expect(parts.busy()).toBe(false);
+    fail = false;
+    expect(await parts.open(info('leo', 'Leo'), true)).toBe(made[0]);
+    expect(views[0].link).toBe('connecting');
+  });
+
   it('leaving closes everything and announces nothing, even what was pending', async () => {
     await w.parts.open(info('leo', 'Leo'), true);
     await w.connect(w.last(), 'Leo');

@@ -665,3 +665,49 @@ test('steady-noise reduction: switched on in Settings, the sound still reaches t
   await a.context().close();
   await b.context().close();
 });
+
+test('both sides opening a connection at the same moment still carry picture and sound both ways', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type P = { sonora: { parts: { people: Map<string, unknown>; replace(p: unknown, reconnect: boolean): void } } };
+  // each side replaces its connection with a new one of its own, at once: two offers cross
+  const collide = () => {
+    const parts = (window as unknown as P).sonora.parts;
+    for (const p of parts.people.values()) parts.replace(p, true);
+  };
+  await Promise.all([a.evaluate(collide), b.evaluate(collide)]);
+  await connected(a, 1);
+  await connected(b, 1);
+  for (const p of [a, b]) {
+    await expect
+      .poll(
+        () =>
+          p.evaluate(
+            () => (document.querySelector('[data-testid=tile] video') as HTMLVideoElement | null)?.videoWidth ?? 0,
+          ),
+        {
+          timeout: 15_000,
+        },
+      )
+      .toBeGreaterThan(0);
+    await expect
+      .poll(
+        () =>
+          p.evaluate(
+            () =>
+              (window as unknown as { sonora: { peers: { value: { stats: { audioInKbps: number } | null }[] } } })
+                .sonora.peers.value[0]?.stats?.audioInKbps ?? 0,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(10);
+  }
+  await a.context().close();
+  await b.context().close();
+});

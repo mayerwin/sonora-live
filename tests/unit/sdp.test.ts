@@ -89,3 +89,19 @@ describe('room codes', () => {
     expect(prettyCode('K7Q2MX')).toBe('K7Q 2MX');
   });
 });
+
+describe('ICE server entries', async () => {
+  const { usable } = await import('../../src/net/ice.ts');
+  it('leaves out TURN addresses without a username and credential (the browser would refuse every connection)', () => {
+    expect(usable(['turn:relay.example:3478'])).toBeNull();
+    expect(usable(['turn:relay.example:3478'], 'u')).toBeNull();
+    expect(usable(['stun:relay.example:3478', 'turn:relay.example:3478'])).toEqual({
+      urls: ['stun:relay.example:3478'],
+    });
+    expect(usable(['turns:relay.example:443'], 'u', 'p')).toEqual({
+      urls: ['turns:relay.example:443'],
+      username: 'u',
+      credential: 'p',
+    });
+  });
+});

@@ -105,6 +105,51 @@ describe('MQTT client sockets', () => {
     expect(c.connected).toBe(true);
   });
 
+  it('an established socket that errors (then closes) is reported once, so the relay reconnects', async () => {
+    const c = new MqttClient('wss://e');
+    let drops = 0;
+    c.onClose = () => drops++;
+    const p = c.connect('a');
+    sockets[0].open();
+    sockets[0].connack();
+    await p;
+    sockets[0].onerror?.();
+    sockets[0].dies();
+    expect(c.connected).toBe(false);
+    expect(drops).toBe(1);
+  });
+
+  it('a socket that stops answering pings counts as dead', async () => {
+    const c = new MqttClient('wss://p');
+    let drops = 0;
+    c.onClose = () => drops++;
+    const p = c.connect('a');
+    sockets[0].open();
+    sockets[0].connack();
+    await p;
+    await vi.advanceTimersByTimeAsync(20_000 + 9_000);
+    expect(drops).toBe(0);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(drops).toBe(1);
+    expect(c.connected).toBe(false);
+  });
+
+  it('a socket that answers its pings stays up', async () => {
+    const c = new MqttClient('wss://q');
+    let drops = 0;
+    c.onClose = () => drops++;
+    const p = c.connect('a');
+    sockets[0].open();
+    sockets[0].connack();
+    await p;
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(20_000);
+      sockets[0].onmessage?.({ data: mqttPacket(13, 0, []).buffer as ArrayBuffer });
+    }
+    expect(drops).toBe(0);
+    expect(c.connected).toBe(true);
+  });
+
   it('close() really leaves it disconnected', async () => {
     const c = new MqttClient('wss://w');
     const p = c.connect('a');

@@ -59,6 +59,9 @@ export function mqttParse(
   return buf.slice(pos);
 }
 
+/** how long an answer to a keep-alive ping may take before the socket counts as dead */
+const PONG_TIMEOUT_MS = 10_000;
+
 export class MqttClient {
   readonly url: string;
   /** CONNACK received on the current socket */
@@ -70,6 +73,7 @@ export class MqttClient {
   private buf: Uint8Array = new Uint8Array(0);
   private packetId = 1;
   private keepAlive: ReturnType<typeof setInterval> | null = null;
+  private pongTimer: ReturnType<typeof setTimeout> | null = null;
   /** the connection attempt in progress (a second connect() joins it rather than racing it) */
   private pending: Promise<void> | null = null;
 
@@ -92,13 +96,19 @@ export class MqttClient {
       let ws: WebSocket | null = null;
       const mine = () => ws !== null && this.ws === ws;
       const fail = (why: string) => {
+        const established = settled;
         if (!settled) {
           settled = true;
           clearTimeout(timer);
           reject(new Error(`${this.url}: ${why}`));
         }
         // only this attempt's socket: a newer one may be working by now
-        if (mine()) this.close();
+        if (!mine()) return;
+        const was = this.connected;
+        this.close();
+        // an established connection broke (an error before its close, a garbled packet, no answer to a ping):
+        // the relay must hear it, to reconnect
+        if (established && was) this.onClose();
       };
       const timer = setTimeout(() => fail('timeout'), timeoutMs);
       try {
@@ -142,7 +152,12 @@ export class MqttClient {
               settled = true;
               clearTimeout(timer);
               this.stopKeepAlive();
-              this.keepAlive = setInterval(() => this.send(mqttPacket(12, 0, [])), 20_000);
+              // a ping every 20 s; no answer within 10 s means the socket is dead (half-open after a network change)
+              this.keepAlive = setInterval(() => {
+                this.send(mqttPacket(12, 0, []));
+                if (this.pongTimer) clearTimeout(this.pongTimer);
+                this.pongTimer = setTimeout(() => fail('no answer to ping'), PONG_TIMEOUT_MS);
+              }, 20_000);
               resolve();
             } else if (type === 3) {
               // PUBLISH
@@ -151,8 +166,12 @@ export class MqttClient {
               let p = 2 + tl;
               if ((flags >> 1) & 3) p += 2; // packet identifier (QoS > 0)
               this.onMessage(topic, body.slice(p));
+            } else if (type === 13) {
+              // PINGRESP
+              if (this.pongTimer) clearTimeout(this.pongTimer);
+              this.pongTimer = null;
             }
-            // SUBACK, UNSUBACK, PINGRESP: nothing to do
+            // SUBACK, UNSUBACK: nothing to do
           });
         } catch {
           fail('malformed');
@@ -169,7 +188,9 @@ export class MqttClient {
 
   private stopKeepAlive(): void {
     if (this.keepAlive) clearInterval(this.keepAlive);
+    if (this.pongTimer) clearTimeout(this.pongTimer);
     this.keepAlive = null;
+    this.pongTimer = null;
   }
 
   private send(p: Uint8Array<ArrayBuffer>): void {

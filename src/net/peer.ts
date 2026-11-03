@@ -113,6 +113,8 @@ export class PeerLink {
   private makingOffer = false;
   private ignoreOffer = false;
   private answeredFirst = false;
+  /** a first offer/answer exchange completed on this link */
+  private negotiated = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
   private queue: string[] = [];
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -192,7 +194,11 @@ export class PeerLink {
           // not supported
         }
       }
-      const slot = SLOTS[pc.getTransceivers().indexOf(e.transceiver)];
+      // by the order of the media sections both sides agree on (the offer's), not by our own list, which also
+      // holds the unused transceivers of an offer we gave up in a collision
+      const order = midsOf(pc.remoteDescription?.sdp);
+      const at = e.transceiver.mid ? order.indexOf(e.transceiver.mid) : -1;
+      const slot = SLOTS[at >= 0 ? at : pc.getTransceivers().indexOf(e.transceiver)];
       if (slot) this.onTrack(slot, e.track);
     };
     pc.onconnectionstatechange = () => this.onConnectionState();
@@ -272,11 +278,14 @@ export class PeerLink {
         if (this.ignoreOffer) return;
         await pc.setRemoteDescription(d);
         if (d.type === 'offer') {
-          if (!this.initiator && !this.answeredFirst) await this.adoptTransceivers();
+          // the first negotiation of this link comes from their offer (we answer it, or we gave up our own
+          // offer in a collision): its media sections are the ones to send on
+          if (!this.negotiated) await this.adoptTransceivers(d.sdp);
           await pc.setLocalDescription();
           this.answeredFirst = true;
           this.sendDescription();
         }
+        this.negotiated = true;
         for (const c of this.pendingCandidates.splice(0)) await pc.addIceCandidate(c).catch(() => {});
       } else if (data.candidate) {
         if (!pc.remoteDescription) {
@@ -294,12 +303,23 @@ export class PeerLink {
     }
   }
 
-  /** Answerer: take over the media sections of the first offer and send on them too. */
-  private async adoptTransceivers(): Promise<void> {
-    const ts = this.pc.getTransceivers();
-    for (let i = 0; i < SLOTS.length && i < ts.length; i++) {
+  /** Take over the media sections of their first offer (in its order) and send on them too. */
+  private async adoptTransceivers(sdp?: string): Promise<void> {
+    const all = this.pc.getTransceivers();
+    const mids = midsOf(sdp);
+    for (let i = 0; i < SLOTS.length; i++) {
       const slot = SLOTS[i];
-      const t = ts[i];
+      const t = all.find((x) => x.mid !== null && x.mid === mids[i]) ?? (mids.length ? undefined : all[i]);
+      if (!t) continue;
+      const before = this.tx[slot];
+      // ours from an offer given up in a collision: never negotiated, it must not come back in a later offer
+      if (before && before !== t) {
+        try {
+          before.stop();
+        } catch {
+          // already
+        }
+      }
       this.tx[slot] = t;
       t.direction = 'sendrecv';
       await t.sender.replaceTrack(this.local[slot]).catch(() => {});
@@ -645,6 +665,14 @@ export class PeerLink {
       // ignore
     }
   }
+}
+
+/** The `a=mid:` of each media section of a session description, in order. */
+export function midsOf(sdp: string | undefined): string[] {
+  if (!sdp) return [];
+  const out: string[] = [];
+  for (const line of sdp.split(/\r?\n/)) if (line.startsWith('a=mid:')) out.push(line.slice(6).trim());
+  return out;
 }
 
 /** `a=fingerprint:` of a session description (one per connection: a new value is a new connection). */

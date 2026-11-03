@@ -45,16 +45,24 @@ function splitUrls(s: string): string[] {
     .filter((u) => /^(stun|turns?):/i.test(u));
 }
 
+/**
+ * A server entry the browser accepts: TURN needs a username and a credential (without them, creating any
+ * connection throws), so TURN addresses without both are left out; STUN ones are kept.
+ */
+export function usable(urls: string[], username?: string, credential?: string): RTCIceServer | null {
+  const ok = urls.filter((u) => /^stun:/i.test(u) || (!!username && !!credential));
+  if (!ok.length) return null;
+  return ok.some((u) => /^turns?:/i.test(u)) ? { urls: ok, username, credential } : { urls: ok };
+}
+
 export async function iceServers(user?: TurnConfig | null): Promise<RTCIceServer[]> {
   const list: RTCIceServer[] = [STUN];
   const env = import.meta.env ?? {};
-  const urls = splitUrls(String(env.VITE_TURN_URLS ?? ''));
-  if (urls.length) list.push({ urls, username: env.VITE_TURN_USERNAME, credential: env.VITE_TURN_CREDENTIAL });
+  const add = (s: RTCIceServer | null) => s && list.push(s);
+  add(usable(splitUrls(String(env.VITE_TURN_URLS ?? '')), env.VITE_TURN_USERNAME, env.VITE_TURN_CREDENTIAL));
   if (env.VITE_TURN_API) list.push(...(await fromApi(String(env.VITE_TURN_API))));
-  if (user && user.urls.trim()) {
-    const u = splitUrls(user.urls);
-    if (u.length) list.push({ urls: u, username: user.username || undefined, credential: user.credential || undefined });
-  }
+  if (user && user.urls.trim())
+    add(usable(splitUrls(user.urls), user.username || undefined, user.credential || undefined));
   return list;
 }
 
