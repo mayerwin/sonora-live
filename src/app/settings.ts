@@ -25,6 +25,8 @@ export interface Settings {
   lockRooms: boolean;
   roomLimit: number;
   joinSound: boolean;
+  /** steady background noise reduction (pure mode) */
+  denoise: boolean;
   notifyJoin: boolean;
   chatOpen: boolean;
   midi: {
@@ -56,6 +58,7 @@ export const DEFAULTS: Settings = {
   lockRooms: true,
   roomLimit: 2,
   joinSound: true,
+  denoise: false,
   notifyJoin: true,
   chatOpen: true,
   midi: {

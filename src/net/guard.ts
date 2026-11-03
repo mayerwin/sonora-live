@@ -1,0 +1,43 @@
+// Sound and MIDI first. When the round trip grows well past its usual value, packets are queuing somewhere on the
+// path (a slow upload, busy Wi-Fi, a relay). Video is what fills that queue, so its bitrate is cut at once, and
+// comes back gently once the round trip is back to normal. The browser's own congestion control reacts too, but
+// more slowly, and mostly to loss: a second of queue is a second of late notes.
+
+/** a round trip this much above its usual value means a queue is building on the path */
+export const QUEUE_MS = 60;
+export const MIN_VIDEO_BPS = 150_000;
+/** the usual round trip: the lowest over this window */
+const BASE_WINDOW_MS = 30_000;
+/** calm samples in a row before the video gets more room again */
+const CALM_SAMPLES = 4;
+
+export class LatencyGuard {
+  /** video bitrate allowed now (Infinity: whatever was asked) */
+  cap = Infinity;
+  private log: { t: number; rtt: number }[] = [];
+  private calm = 0;
+
+  /** A new round-trip sample (ms); returns true when the cap changed. `wanted`: the video bitrate asked for. */
+  sample(rtt: number, now: number, wanted: number): boolean {
+    this.log.push({ t: now, rtt });
+    while (this.log.length && now - this.log[0].t > BASE_WINDOW_MS) this.log.shift();
+    let base = Infinity;
+    for (const x of this.log) base = Math.min(base, x.rtt);
+    let cap = this.cap;
+    if (rtt > base + QUEUE_MS) {
+      // halve at every queued sample: a second-long queue drains within a few samples
+      cap = Math.max(MIN_VIDEO_BPS, Math.min(cap, wanted) * 0.5);
+      this.calm = 0;
+    } else if (rtt < base + QUEUE_MS / 2 && cap !== Infinity) {
+      if (++this.calm >= CALM_SAMPLES) {
+        this.calm = 0;
+        cap = cap * 1.25 >= wanted ? Infinity : cap * 1.25;
+      }
+    } else {
+      this.calm = 0;
+    }
+    if (cap === this.cap) return false;
+    this.cap = cap;
+    return true;
+  }
+}

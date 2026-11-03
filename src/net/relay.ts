@@ -87,9 +87,13 @@ export class MqttRelay implements Relay {
     });
   }
 
-  /** Reconnect dropped brokers now (the network came back). */
-  kick(): void {
-    for (const c of this.clients) if (!c.connected) this.open(c).catch(() => {});
+  /** Reconnect dropped brokers now (the network came back). `all`: also those that look connected, whose
+   * socket may have died silently while the page was asleep (a phone switching apps). */
+  kick(all = false): void {
+    for (const c of this.clients) {
+      if (all && c.connected) c.close();
+      if (all || !c.connected) this.open(c).catch(() => this.retry(c, 2000));
+    }
   }
 
   subscribe(topic: string, cb: Listener): () => void {

@@ -645,7 +645,8 @@ a:hover {
 .preview video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* the whole picture: what the others will see */
+  object-fit: contain;
   display: block;
 }
 
@@ -1410,8 +1411,11 @@ a:hover {
 .pip {
   position: absolute;
   z-index: 5;
+  /* the camera's own shape (set from its picture), never cropped: a portrait phone gets a narrower box */
+  --ar: 16 / 9;
   width: clamp(132px, 19vw, 260px);
-  aspect-ratio: 16 / 10;
+  max-height: 38%;
+  aspect-ratio: var(--ar);
   border-radius: 18px;
   overflow: hidden;
   background: #0b0a0e;
@@ -1432,10 +1436,15 @@ a:hover {
   cursor: grabbing;
 }
 
+.pip.portrait {
+  width: auto;
+  height: clamp(150px, 30vh, 280px);
+}
+
 .pip video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   pointer-events: none;
 }

@@ -16,6 +16,7 @@
 // The "perfect negotiation" pattern keeps offers from both sides safe (ICE restarts can start on either side), and
 // a connection that drops (Wi-Fi change, a laptop waking up) is restarted instead of rebuilt.
 
+import { LatencyGuard } from './guard.ts';
 import { tuneOpus, type OpusTuning } from './sdp.ts';
 
 export type Slot = 'audio' | 'video' | 'extra';
@@ -39,7 +40,12 @@ export interface LinkStats {
   rtt: number | null;
   /** the path goes through a TURN relay */
   relayed: boolean;
+  /** how the two meet: on the same network, across the internet, or through a relay */
+  via: 'local' | 'internet' | 'relay' | null;
+  /** transport protocol of the path (UDP, TCP) */
   path: string;
+  /** round trip measured on the audio itself (RTCP), ms */
+  audioRtt: number | null;
   audioInKbps: number;
   audioOutKbps: number;
   audioOutPps: number;
@@ -108,6 +114,8 @@ export class PeerLink {
   private resendTimer: ReturnType<typeof setInterval> | null = null;
   private prev: Map<string, { t: number; v: Record<string, number> }> = new Map();
   private closed = false;
+  /** keeps video from queuing ahead of sound and MIDI (src/net/guard.ts) */
+  readonly guard = new LatencyGuard();
 
   constructor(opts: {
     id: string;
@@ -150,18 +158,30 @@ export class PeerLink {
         streams: [this.streams.extra],
       });
     }
-    this.ctl = pc.createDataChannel('ctl', { negotiated: true, id: 0, ordered: true });
-    this.midi = pc.createDataChannel('midi', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
-    this.file = pc.createDataChannel('file', { negotiated: true, id: 2, ordered: true });
+    // MIDI goes first on the shared connection; files only fill what is left (priority: browsers that support it)
+    const dc = (label: string, init: RTCDataChannelInit & { priority?: RTCPriorityType }) =>
+      pc.createDataChannel(label, init);
+    this.ctl = dc('ctl', { negotiated: true, id: 0, ordered: true, priority: 'medium' });
+    this.midi = dc('midi', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0, priority: 'high' });
+    this.file = dc('file', { negotiated: true, id: 2, ordered: true, priority: 'very-low' });
     this.midi.binaryType = 'arraybuffer';
     this.file.binaryType = 'arraybuffer';
-    this.file.bufferedAmountLowThreshold = 256 * 1024;
+    this.file.bufferedAmountLowThreshold = 64 * 1024;
 
     pc.onnegotiationneeded = () => void this.negotiate();
     pc.onicecandidate = (e) => {
       if (e.candidate) this.onSignal({ candidate: e.candidate.toJSON() });
     };
     pc.ontrack = (e) => {
+      // video frames are shown as soon as they are decoded, without the smoothing buffer: hands on the keys
+      // seen at once matter more than perfectly even motion (Chromium; other browsers ignore it)
+      if (e.track.kind === 'video') {
+        try {
+          (e.receiver as RTCRtpReceiver & { playoutDelayHint?: number }).playoutDelayHint = 0;
+        } catch {
+          // not supported
+        }
+      }
       const slot = SLOTS[pc.getTransceivers().indexOf(e.transceiver)];
       if (slot) this.onTrack(slot, e.track);
     };
@@ -324,7 +344,7 @@ export class PeerLink {
     await set(
       'video',
       (e) => {
-        e.maxBitrate = this.params.videoBitrate;
+        e.maxBitrate = Math.min(this.params.videoBitrate, this.guard.cap);
         e.maxFramerate = 30;
         e.priority = 'medium';
         e.networkPriority = 'medium';
@@ -462,7 +482,9 @@ export class PeerLink {
       at: Date.now(),
       rtt: null,
       relayed: false,
+      via: null,
       path: '',
+      audioRtt: null,
       audioInKbps: 0,
       audioOutKbps: 0,
       audioOutPps: 0,
@@ -489,9 +511,23 @@ export class PeerLink {
       const lc = all.get(String(pair.localCandidateId));
       const rc = all.get(String(pair.remoteCandidateId));
       out.relayed = lc?.candidateType === 'relay' || rc?.candidateType === 'relay';
-      const kind = (c?: Record<string, unknown>) =>
-        c?.candidateType === 'host' ? 'local network' : c?.candidateType === 'relay' ? 'relay' : 'internet';
-      out.path = `${out.relayed ? 'Relayed (TURN)' : 'Direct'} · ${String(lc?.protocol ?? 'udp').toUpperCase()} · ${kind(rc)}`;
+      out.via = out.relayed
+        ? 'relay'
+        : lc?.candidateType === 'host' && rc?.candidateType === 'host'
+          ? 'local'
+          : 'internet';
+      out.path = String(lc?.protocol ?? 'udp').toUpperCase();
+    }
+    // the audio's own round trip (each RTCP report, about every second): sees a queue sooner than the pair's
+    for (const v of all.values()) {
+      if (
+        v.type === 'remote-inbound-rtp' &&
+        v.kind === 'audio' &&
+        typeof v.roundTripTime === 'number' &&
+        v.roundTripTime > 0
+      ) {
+        out.audioRtt = Math.round(v.roundTripTime * 1000);
+      }
     }
     const delta = (key: string, v: Record<string, number>) => {
       const p = this.prev.get(key);
@@ -553,6 +589,8 @@ export class PeerLink {
         };
       }
     }
+    const probe = out.audioRtt ?? out.rtt;
+    if (probe !== null) this.guardLatency(probe);
     if (out.rtt !== null) {
       // capture (~10 ms) + one 10 ms frame + network (half the round trip) + jitter buffer + playout (~10 ms)
       out.latencyMs = Math.round(10 + this.tuning.ptime + out.rtt / 2 + out.bufferMs + 10);
@@ -560,6 +598,10 @@ export class PeerLink {
         out.rtt < 160 && out.audioLossPct < 2 ? 'good' : out.rtt < 320 && out.audioLossPct < 6 ? 'fair' : 'poor';
     }
     return out;
+  }
+
+  private guardLatency(rtt: number): void {
+    if (this.guard.sample(rtt, performance.now(), this.params.videoBitrate)) void this.applyParams();
   }
 
   close(): void {

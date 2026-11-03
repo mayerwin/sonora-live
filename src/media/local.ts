@@ -3,6 +3,7 @@
 
 import { signal } from '@preact/signals';
 import { PictureWatch } from './picture.ts';
+import { Denoise } from './denoise.ts';
 import { audioConstraints, videoConstraints, type SoundMode, type VideoQuality } from './constraints.ts';
 import type { Slot } from '../net/peer.ts';
 
@@ -32,6 +33,11 @@ export class LocalMedia {
   readonly facing = signal<'user' | 'environment'>('user');
   /** waiting for the browser's permission prompt (or the devices) to answer */
   readonly asking = signal(false);
+  /** the microphone as sent: through the steady-noise reduction when it is on (pure mode only) */
+  readonly sentAudio = signal<MediaStreamTrack | null>(null);
+  private denoiseOn = false;
+  private denoise = new Denoise();
+  private emitting = 0;
   /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
   readonly picture = new PictureWatch();
   /** a track the peers should send now changed */
@@ -124,7 +130,7 @@ export class LocalMedia {
       if (this.audio.value === t) void this.restartAudio(mode, '');
     });
     this.audio.value = t;
-    this.onTrack('audio', t);
+    void this.emitAudio();
     if (old && old !== t) old.stop();
   }
 
@@ -190,6 +196,24 @@ export class LocalMedia {
         this.onTrack('video', null);
       }
     });
+  }
+
+  /** Hand the peers the microphone as it should be sent (raw, or through the noise reduction). */
+  private async emitAudio(): Promise<void> {
+    const n = ++this.emitting;
+    const raw = this.audio.peek();
+    let out = raw;
+    if (raw && this.denoiseOn && this.mode.peek() === 'pure') out = await this.denoise.process(raw);
+    else this.denoise.stop();
+    if (n !== this.emitting) return; // a newer change won
+    this.sentAudio.value = out;
+    this.onTrack('audio', out);
+  }
+
+  /** Steady background noise reduction on or off (applies in pure mode). Call it from a click the first time. */
+  setDenoise(on: boolean): Promise<void> {
+    this.denoiseOn = on;
+    return this.emitAudio();
   }
 
   setMicOn(on: boolean): void {

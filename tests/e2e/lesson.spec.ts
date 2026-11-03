@@ -124,9 +124,19 @@ test('chat with emoji reaches the other side', async ({ browser }) => {
   await b.getByTestId('chat-send').click();
   await expect(a.locator('.bubble.emoji')).toHaveText('👏👏');
 
-  // the emoji picker opens and inserts
+  // the emoji picker opens and inserts several in a row, after what was typed (each one used to replace the last)
+  const box = a.getByRole('textbox', { name: 'Message' });
+  await box.fill('Bravo ');
   await a.getByRole('button', { name: 'Emoji' }).click();
   await expect(a.locator('emoji-picker')).toBeVisible();
+  const pick = a.locator('emoji-picker').locator('[role=tabpanel] button.emoji');
+  await expect(pick.first()).toBeVisible();
+  for (const i of [0, 1, 2]) await pick.nth(i).click();
+  const added = async () => {
+    const value = await box.inputValue();
+    return value.startsWith('Bravo ') ? [...new Intl.Segmenter().segment(value.slice('Bravo '.length))].length : -1;
+  };
+  await expect.poll(added).toBe(3);
 
   await a.context().close();
   await b.context().close();
@@ -577,6 +587,80 @@ test('when the networks block a direct path, the tile explains it calmly and con
   await connected(a, 1);
   await connected(b, 1);
   await expect(a.getByTestId('no-direct-path')).toHaveCount(0);
+  await a.context().close();
+  await b.context().close();
+});
+
+test('back from a long time in the background (a phone switching apps), the lesson reconnects at once', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type S = {
+    sonora: { dropLink(id: string, bye: boolean): void; resume(ms: number): void; peers: { value: { id: string }[] } };
+  };
+  // the teacher's side gave up on the phone long ago; the phone still holds its old, dead connection
+  await a.evaluate(() => {
+    const s = (window as unknown as S).sonora;
+    s.dropLink(s.peers.value[0].id, false);
+  });
+  const t0 = Date.now();
+  await b.evaluate(() => (window as unknown as S).sonora.resume(90_000));
+  await connected(a, 1);
+  await connected(b, 1);
+  expect(Date.now() - t0).toBeLessThan(10_000);
+  // the phone's side says nothing: it never left
+  await expect(b.locator('.toast.join, .toast.leave')).toHaveCount(0);
+  await a.context().close();
+  await b.context().close();
+});
+
+test('steady-noise reduction: switched on in Settings, the sound still reaches the other side', async ({ browser }) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  const errors: string[] = [];
+  a.on('pageerror', (e) => errors.push(e.message));
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
+  type M = {
+    sonora: { media: { audio: { value: MediaStreamTrack | null }; sentAudio: { value: MediaStreamTrack | null } } };
+  };
+  // what is sent is now the processed track, not the microphone itself
+  await expect
+    .poll(() =>
+      a.evaluate(() => {
+        const m = (window as unknown as M).sonora.media;
+        return !!m.sentAudio.value && m.sentAudio.value !== m.audio.value && m.sentAudio.value.readyState === 'live';
+      }),
+    )
+    .toBe(true);
+  // and it carries sound: the student keeps receiving audio
+  const audioIn = () =>
+    b.evaluate(
+      () =>
+        (window as unknown as { sonora: { peers: { value: { stats: { audioInKbps: number } | null }[] } } }).sonora
+          .peers.value[0]?.stats?.audioInKbps ?? 0,
+    );
+  await b.waitForTimeout(3000);
+  await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
+  // off again: back to the microphone itself
+  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
+  await expect
+    .poll(() =>
+      a.evaluate(() => {
+        const m = (window as unknown as M).sonora.media;
+        return m.sentAudio.value === m.audio.value;
+      }),
+    )
+    .toBe(true);
+  expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();
 });

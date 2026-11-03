@@ -111,7 +111,9 @@ export function leaderOf(members: MemberInfo[]): MemberInfo | undefined {
 export function newPeerId(): string {
   const r = new Uint8Array(9);
   crypto.getRandomValues(r);
-  return Array.from(r, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
+  return Array.from(r, (b) => b.toString(36).padStart(2, '0'))
+    .join('')
+    .slice(0, 14);
 }
 
 type Msg = Record<string, unknown> & { t: string; from: string; mid: string; v: number };
@@ -185,6 +187,11 @@ export class Room {
   private hello(): void {
     const joining = this.phase !== 'in';
     this.post({ t: 'hello', info: this.self, joining, alone: joining || this.alone() });
+  }
+
+  /** Say hello again now (back from the background: the others may have given up on us). */
+  announce(): void {
+    if (this.phase === 'in') this.hello();
   }
 
   /** Update what this browser tells others about itself (name / role changes before joining). */
@@ -430,7 +437,12 @@ export function validInfo(x: unknown): x is MemberInfo {
 export function validPolicy(x: unknown): Policy | null {
   const p = x as Policy;
   if (!p || typeof p.locked !== 'boolean' || typeof p.limit !== 'number' || typeof p.ver !== 'number') return null;
-  return { locked: p.locked, limit: Math.max(2, Math.min(12, Math.round(p.limit))), ver: p.ver, by: String(p.by ?? '') };
+  return {
+    locked: p.locked,
+    limit: Math.max(2, Math.min(12, Math.round(p.limit))),
+    ver: p.ver,
+    by: String(p.by ?? ''),
+  };
 }
 
 /** Which of two policies wins (the most recent change). */

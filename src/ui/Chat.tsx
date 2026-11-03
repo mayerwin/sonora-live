@@ -157,15 +157,19 @@ export function ChatPanel() {
     requestAnimationFrame(autosize);
   };
 
+  // the picker keeps the function it was given when it opened: read the box as it is now, not `text` from then
   const insert = (s: string) => {
     const el = ta.current;
     if (!el) {
-      setText(text + s);
+      setText((cur) => cur + s);
       return;
     }
-    const a = el.selectionStart ?? text.length;
-    const b = el.selectionEnd ?? text.length;
-    const next = text.slice(0, a) + s + text.slice(b);
+    const cur = el.value;
+    const a = el.selectionStart ?? cur.length;
+    const b = el.selectionEnd ?? cur.length;
+    const next = cur.slice(0, a) + s + cur.slice(b);
+    el.value = next;
+    el.selectionStart = el.selectionEnd = a + s.length;
     setText(next);
     requestAnimationFrame(() => {
       el.focus();

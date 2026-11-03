@@ -32,6 +32,8 @@ import { t } from './i18n.ts';
 const LESSON_KEY = 'sonora.lesson';
 /** a departure is announced after this, unless the person is back (a page reload takes a second or two) */
 const LEAVE_NOTICE_MS = 3000;
+/** after this long in the background, the old connections are replaced at once rather than repaired */
+const RECONNECT_AFTER_AWAY_MS = 20_000;
 
 export const roleLabel = (r: Role): string =>
   ({ student: t('Student'), teacher: t('Teacher'), observer: t('Observer') })[r];
@@ -70,7 +72,7 @@ export interface Reaction {
   at: number;
 }
 
-const STATS_EVERY_MS = 2000;
+const STATS_EVERY_MS = 1000;
 
 function initialPolicy(selfId: string): Policy {
   const s = settings.peek();
@@ -220,9 +222,22 @@ export class Session {
         setTitleRoom(c);
       }
     });
-    // the moment a page may be closed or frozen: remember the lesson is still going
+    // the moment a page may be closed or frozen: remember the lesson is still going; and when it comes back
+    // (a phone switching apps), reconnect at once rather than waiting for the old connections to time out
+    let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
-      if (this.phase.peek() === 'room') this.markInLesson(true);
+      if (this.phase.peek() !== 'room') return;
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        this.markInLesson(true);
+      } else if (hiddenAt) {
+        this.resume(Date.now() - hiddenAt);
+        hiddenAt = 0;
+      }
+    });
+    // Chrome's page lifecycle: a frozen page thawed
+    document.addEventListener('resume', () => {
+      if (this.phase.peek() === 'room') this.resume(RECONNECT_AFTER_AWAY_MS);
     });
     window.addEventListener('pagehide', () => {
       if (this.phase.peek() === 'room') this.markInLesson(true);
@@ -301,6 +316,41 @@ export class Session {
   }
 
   /** Enter the lesson (from the lobby's button: this click also unlocks sound). */
+  /**
+   * Back after `away` ms in the background. A short absence recovers by itself (ICE restart). After a long one,
+   * the others have given up on our old connection (after GIVE_UP in src/net/peer.ts) and would not take it
+   * back: open fresh ones now (they replace the old ones on the other side), with the brokers' sockets, which
+   * a sleeping phone often loses without noticing, reopened first.
+   */
+  private resume(away: number): void {
+    if (away < 3000) return;
+    log('back after', Math.round(away / 1000), 's');
+    const long = away >= RECONNECT_AFTER_AWAY_MS;
+    (this.relay as { kick?: (all?: boolean) => void }).kick?.(long);
+    this.room.announce();
+    for (const l of [...this.links.values()]) l.restartIce();
+    // whatever is not back by then gets a new connection (at once after a long absence)
+    setTimeout(
+      () => {
+        for (const l of [...this.links.values()]) {
+          if (l.pc.connectionState === 'connected' && l.ctlOpen) continue;
+          const peer = this.peers.peek().find((p) => p.id === l.id);
+          if (!peer) continue;
+          log('fresh connection to', l.id.slice(0, 4), 'after the background');
+          this.dropLink(l.id, false, true);
+          // the same people as before: no "joined" when it connects
+          clearTimeout(this.leaving.get(l.id));
+          this.leaving.set(
+            l.id,
+            setTimeout(() => this.leaving.delete(l.id), 60_000),
+          );
+          void this.link(peer.info, true);
+        }
+      },
+      long ? 300 : 4000,
+    );
+  }
+
   /** This tab was in this room's lesson a moment ago (a reload, or the phone closed the tab in the background). */
   wasInLesson(): boolean {
     try {
@@ -326,6 +376,8 @@ export class Session {
     resumeMeters();
     this.midi.piano.context();
     this.setAudioSession('play-and-record');
+    // steady-noise reduction, if chosen: started from this click (its audio context needs one)
+    void this.media.setDenoise(settings.peek().denoise);
     await this.uniqueTab();
     this.since = Date.now();
     this.room.setSelf(this.self.peek());
@@ -363,7 +415,7 @@ export class Session {
       let tick = 0;
       this.statsTimer = setInterval(() => {
         void this.pollStats();
-        if (++tick % 3 === 0) this.sendRoster();
+        if (++tick % 6 === 0) this.sendRoster();
       }, STATS_EVERY_MS);
     }
     void this.lockScreen();
@@ -476,7 +528,11 @@ export class Session {
       selfId: this.selfId,
       initiator,
       iceServers: servers,
-      tracks: { audio: this.media.audio.peek(), video: this.media.video.peek(), extra: this.media.extra.peek() },
+      tracks: {
+        audio: this.media.sentAudio.peek() ?? this.media.audio.peek(),
+        video: this.media.video.peek(),
+        extra: this.media.extra.peek(),
+      },
       streams: { audio: new MediaStream(), video: new MediaStream(), extra: new MediaStream() },
       params: this.sendParams(),
       tuning: DEFAULT_TUNING,
@@ -687,7 +743,8 @@ export class Session {
 
   private sendTrack(slot: Slot, track: MediaStreamTrack | null): void {
     for (const l of this.links.values()) void l.setTrack(slot, track);
-    if (slot === 'audio') this.meter.attach(track);
+    // the meter shows the microphone itself (before any noise reduction)
+    if (slot === 'audio') this.meter.attach(this.media.audio.peek());
     this.broadcastState();
   }
 
@@ -847,6 +904,14 @@ export class Session {
             });
           }
         }, wait);
+      }),
+    );
+    // the noise reduction follows its setting (and the sound mode: pure only)
+    this.disposers.push(
+      effect(() => {
+        const on = settings.value.denoise;
+        void this.media.mode.value;
+        void this.media.setDenoise(on);
       }),
     );
     // quality changes apply at once
@@ -1114,7 +1179,7 @@ export class Session {
           ch.send(meta);
           for (let off = 0; off < file.size; off += size) {
             const buf = await file.slice(off, off + size).arrayBuffer();
-            if (ch.bufferedAmount > 4 * 1024 * 1024) {
+            if (ch.bufferedAmount > 256 * 1024) {
               await new Promise<void>((resolve) => {
                 const done = () => {
                   ch.removeEventListener('bufferedamountlow', done);

@@ -82,7 +82,7 @@ export function PeerTile({
               data-latency
               title={t('Estimated delay of the sound from {name}', { name: peer.info.name })}
             >
-              <SignalBars quality={st.quality} /> {st.latencyMs} ms
+              <SignalBars quality={st.quality} /> {st.latencyMs} ms{st.relayed ? ` · ${t('relay')}` : ''}
             </span>
           )}
         </div>
@@ -163,11 +163,13 @@ export function SelfPip() {
         [corner.includes('b') ? 'bottom' : 'top']: '14px',
         [corner.includes('r') ? 'right' : 'left']: '18px',
       };
+  // the box takes the camera's shape, so nothing of the picture is cut off
+  const [shape, setShape] = useState({ w: 16, h: 9 });
   return (
     <div
       ref={ref}
-      class={`pip ${drag ? 'dragging' : ''}`}
-      style={pos}
+      class={`pip ${drag ? 'dragging' : ''} ${shape.h > shape.w ? 'portrait' : ''}`}
+      style={{ ...pos, '--ar': `${shape.w} / ${shape.h}` }}
       data-role={me.role}
       data-testid="self-view"
       onPointerDown={(e) => {
@@ -200,7 +202,11 @@ export function SelfPip() {
       }}
     >
       {stream && media.camOn.value ? (
-        <VideoView stream={stream} class={s.mirror && media.facing.value === 'user' ? 'mirror' : ''} />
+        <VideoView
+          stream={stream}
+          class={s.mirror && media.facing.value === 'user' ? 'mirror' : ''}
+          onResize={(w, h) => w && h && setShape({ w, h })}
+        />
       ) : (
         <div class="tile-center">
           <div class="avatar" data-role={me.role}>

@@ -43,6 +43,14 @@ const audioHint = (q: AudioQuality) =>
     high: t('192 kbps stereo · recommended'),
     studio: t('320 kbps stereo · broadcast quality'),
   })[q];
+/** how the two browsers reach each other */
+export const viaLabel = (v: 'local' | 'internet' | 'relay') =>
+  v === 'local'
+    ? t('Direct, same local network')
+    : v === 'internet'
+      ? t('Direct, across the internet')
+      : t('Through a relay server (no direct path)');
+
 /** why the browser sends less video than asked (WebRTC's qualityLimitationReason) */
 const limitLabel = (r: string) =>
   r === 'cpu'
@@ -161,6 +169,21 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
             </span>
           </div>
         )}
+      </div>
+
+      <div class="section">
+        <ToggleRow
+          title={t('Remove steady background noise')}
+          sub={
+            mode === 'pure'
+              ? t(
+                  'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.',
+                )
+              : t('In pure sound only (voice mode already removes noise).')
+          }
+          checked={s.denoise}
+          onChange={(v) => update({ denoise: v })}
+        />
       </div>
 
       <div class="section">
@@ -421,7 +444,7 @@ function ConnectionTab() {
                 <tbody>
                   <tr>
                     <td>{t('Path')}</td>
-                    <td>{st.path || '—'}</td>
+                    <td>{st.via ? `${viaLabel(st.via)} · ${st.path}` : '—'}</td>
                   </tr>
                   <tr>
                     <td>{t('Network round trip')}</td>

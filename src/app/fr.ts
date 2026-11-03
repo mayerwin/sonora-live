@@ -504,4 +504,12 @@ export const FR: Record<string, string> = spaced({
     'Votre caméra affiche une image fixe, pas vous : Windows la bloque. Vérifiez Paramètres → Confidentialité et sécurité → Caméra, la touche ou le cache de la caméra, et fermez les autres applications qui l’utilisent (Teams, Zoom). Puis coupez et rallumez la caméra ci-dessous.',
   'Your camera shows a still image, not you: it may be blocked by the system or used by another app. Close other apps using it, then turn the camera off and on below.':
     'Votre caméra affiche une image fixe, pas vous : elle est peut-être bloquée par le système ou utilisée par une autre application. Fermez les autres applications qui l’utilisent, puis coupez et rallumez la caméra ci-dessous.',
+  'Direct, same local network': 'Direct, même réseau local',
+  'Direct, across the internet': 'Direct, par Internet',
+  'Through a relay server (no direct path)': 'Par un serveur relais (pas de chemin direct)',
+  relay: 'relais',
+  'Remove steady background noise': 'Retirer le bruit de fond constant',
+  'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.':
+    'Souffle, ventilateur, climatisation : retirés, tandis que votre instrument et votre voix restent tels quels. Ajoute 8 ms.',
+  'In pure sound only (voice mode already removes noise).': 'En son pur seulement (le mode voix retire déjà le bruit).',
 });
