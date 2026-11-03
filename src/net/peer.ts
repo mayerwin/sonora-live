@@ -385,6 +385,11 @@ export class PeerLink {
     }
   }
 
+  /** Connected, with its control channel open. */
+  healthy(): boolean {
+    return this.pc.connectionState === 'connected' && this.ctlOpen;
+  }
+
   get ctlOpen(): boolean {
     return this.ctl.readyState === 'open';
   }

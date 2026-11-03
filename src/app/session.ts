@@ -1,14 +1,14 @@
 // The lesson: one room, the direct connections to everyone in it, this side's camera, microphone and instrument,
 // and the chat. The UI reads its signals and calls its methods; everything below it is framework-free.
 
-import { batch, computed, effect, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import { AUDIO_QUALITY, VIDEO_QUALITY, type SoundMode } from '../media/constraints.ts';
 import { LocalMedia } from '../media/local.ts';
 import { Meter, resumeMeters } from '../media/meter.ts';
 import { MidiHub } from '../midi/hub.ts';
 import { newRoomCode, normalizeRoomCode } from '../net/code.ts';
 import { hasBuiltInTurn, iceServers } from '../net/ice.ts';
-import { fingerprintOf, PeerLink, type LinkState, type LinkStats, type SignalData, type Slot } from '../net/peer.ts';
+import { PeerLink, type SignalData, type Slot } from '../net/peer.ts';
 import { createRelay, type Relay } from '../net/relay.ts';
 import {
   newerPolicy,
@@ -27,45 +27,23 @@ import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, updateMidi } from './settings.ts';
 import { log } from './log.ts';
+import {
+  Participants,
+  RECONNECT_AFTER_AWAY_MS,
+  type Departure,
+  type PeerView,
+  type RemoteState,
+} from './participants.ts';
 import { t } from './i18n.ts';
 
 const LESSON_KEY = 'sonora.lesson';
-/** a departure is announced after this, unless the person is back (a page reload takes a second or two) */
-const LEAVE_NOTICE_MS = 3000;
-/** after this long in the background, the old connections are replaced at once rather than repaired */
-const RECONNECT_AFTER_AWAY_MS = 20_000;
 
 export const roleLabel = (r: Role): string => (r === 'observer' ? t('Observer') : t('Musician'));
 
 /** Opened with an observer's link (`?watch`): joins to watch and listen, not to play. */
 export const watching = (): boolean => typeof location !== 'undefined' && /[?&]watch\b/.test(location.search);
 
-/** What a peer tells us about itself. */
-export interface RemoteState {
-  mic: boolean;
-  cam: boolean;
-  extra: 'screen' | 'camera' | null;
-  sound: SoundMode;
-  stereo: boolean;
-  midi: { device: string; sending: boolean; receiving: boolean };
-  away: boolean;
-}
-
-export interface PeerView {
-  id: string;
-  info: MemberInfo;
-  link: LinkState;
-  remote: RemoteState | null;
-  audio: MediaStream | null;
-  video: MediaStream | null;
-  extra: MediaStream | null;
-  stats: LinkStats | null;
-  joinedAt: number;
-  /** a background repair attempt: not shown until it connects */
-  quiet?: boolean;
-  /** attempts that never connected (their networks block a direct path): the tile explains and keeps trying */
-  failures?: number;
-}
+export type { PeerView, RemoteState } from './participants.ts';
 
 export interface Reaction {
   id: number;
@@ -130,16 +108,8 @@ export class Session {
 
   private relay: Relay;
   private room: Room;
-  private links = new Map<string, PeerLink>();
-  private creating = new Map<string, Promise<PeerLink>>();
-  /** members others are connected to and we are not (id -> first noticed) */
-  private missing = new Map<string, number>();
-  /** departures not announced yet (see dropLink) */
-  private leaving = new Map<string, ReturnType<typeof setTimeout>>();
-  /** who the room let in, so a connection they open shows their name */
-  private known = new Map<string, MemberInfo>();
-  /** connections that failed before ever opening, by person, and when to forget a silent one */
-  private failed = new Map<string, { n: number; forget: ReturnType<typeof setTimeout> }>();
+  /** everyone else in the lesson: one state machine each, with their connection (src/app/participants.ts) */
+  private parts: Participants<PeerLink>;
   private since = Date.now();
   private statsTimer: ReturnType<typeof setInterval> | null = null;
   private audioEls = new Map<string, HTMLAudioElement>();
@@ -162,9 +132,29 @@ export class Session {
       this.relayUp.value = this.relay.up;
       if (this.relay.up) this.relayFailed.value = false;
     };
+    this.parts = new Participants<PeerLink>(
+      {
+        createLink: (info, initiator) => this.connect(info, initiator),
+        acceptOffer: (from) => {
+          const p = this.policy.peek();
+          const others = this.memberList().filter((m) => m.id !== from && m.id !== this.selfId).length;
+          return !p.locked || others + 1 < p.limit;
+        },
+        onConnected: (link) => this.onConnected(link),
+        onJoined: (view) => this.announceJoin(view),
+        onLeft: (info, how) => this.announceLeave(info, how),
+        onGone: (id) => this.releasePeer(id),
+        publish: (views) => (this.peers.value = views),
+        now: () => Date.now(),
+        setTimer: (fn, ms) => setTimeout(fn, ms),
+        clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+        log,
+      },
+      () => this.selfId,
+    );
     this.room = new Room(this.relay, this.self.peek(), {
       members: () => this.memberList(),
-      busy: () => [...this.links.values()].some((l) => l.state === 'connecting'),
+      busy: () => this.parts.busy(),
       policy: () => this.policy.peek(),
       onWelcome: (members, policy) => this.onWelcome(members, policy),
       onDeny: (reason, policy) => {
@@ -180,19 +170,16 @@ export class Session {
       },
       onAdmitted: (info, again) => {
         log('admitted', info.name, again ? '(again)' : '');
-        this.known.set(info.id, info);
-        if (again) {
-          // it reloaded its page: the old connection is dead
-          const old = this.links.get(info.id);
-          if (old) this.dropLink(info.id, false);
-        }
+        this.parts.remember(info);
+        // it reloaded its page: its old connection is dead, its new one on its way
+        if (again) this.parts.expectBack(info.id);
       },
       onKnock: (info) => this.onKnock(info),
-      onSignal: (from, data) => void this.onSignal(from, data),
-      onBye: (from) => this.dropLink(from, true),
+      onSignal: (from, data) => void this.parts.signal(from, data as SignalData),
+      onBye: (from) => this.parts.bye(from),
     });
     this.midi.broadcast = (p) => {
-      for (const l of this.links.values()) l.sendMidi(p);
+      for (const l of this.parts.links()) l.sendMidi(p);
     };
     this.media.onTrack = (slot, track) => this.sendTrack(slot, track);
   }
@@ -248,7 +235,7 @@ export class Session {
     });
     window.addEventListener('online', () => {
       (this.relay as { kick?: () => void }).kick?.();
-      for (const l of this.links.values()) l.restartIce();
+      for (const l of this.parts.links()) l.restartIce();
     });
     window.addEventListener('pagehide', () => this.sayBye());
     document.addEventListener('visibilitychange', () => {
@@ -319,40 +306,17 @@ export class Session {
     setTitleRoom(this.code.value);
   }
 
-  /** Enter the lesson (from the lobby's button: this click also unlocks sound). */
   /**
-   * Back after `away` ms in the background. A short absence recovers by itself (ICE restart). After a long one,
-   * the others have given up on our old connection (after GIVE_UP in src/net/peer.ts) and would not take it
-   * back: open fresh ones now (they replace the old ones on the other side), with the brokers' sockets, which
-   * a sleeping phone often loses without noticing, reopened first.
+   * Back after `away` ms in the background: the brokers' sockets, which a sleeping phone often loses without
+   * noticing, reopened first (all of them after a long absence), the room greeted, then each connection
+   * repaired or replaced (src/app/participants.ts).
    */
   private resume(away: number): void {
     if (away < 3000) return;
     log('back after', Math.round(away / 1000), 's');
-    const long = away >= RECONNECT_AFTER_AWAY_MS;
-    (this.relay as { kick?: (all?: boolean) => void }).kick?.(long);
+    (this.relay as { kick?: (all?: boolean) => void }).kick?.(away >= RECONNECT_AFTER_AWAY_MS);
     this.room.announce();
-    for (const l of [...this.links.values()]) l.restartIce();
-    // whatever is not back by then gets a new connection (at once after a long absence)
-    setTimeout(
-      () => {
-        for (const l of [...this.links.values()]) {
-          if (l.pc.connectionState === 'connected' && l.ctlOpen) continue;
-          const peer = this.peers.peek().find((p) => p.id === l.id);
-          if (!peer) continue;
-          log('fresh connection to', l.id.slice(0, 4), 'after the background');
-          this.dropLink(l.id, false, true);
-          // the same people as before: no "joined" when it connects
-          clearTimeout(this.leaving.get(l.id));
-          this.leaving.set(
-            l.id,
-            setTimeout(() => this.leaving.delete(l.id), 60_000),
-          );
-          void this.link(peer.info, true);
-        }
-      },
-      long ? 300 : 4000,
-    );
+    this.parts.resume(away);
   }
 
   /** This tab was in this room's lesson a moment ago (a reload, or the phone closed the tab in the background). */
@@ -374,6 +338,7 @@ export class Session {
     }
   }
 
+  /** Enter the lesson (from the lobby's button: this click also unlocks sound). */
   async enter(): Promise<void> {
     this.markInLesson(true);
     unlockChimes();
@@ -429,7 +394,7 @@ export class Session {
   leave(): void {
     this.markInLesson(false);
     this.sayBye();
-    for (const id of [...this.links.keys()]) this.dropLink(id, false, true);
+    this.parts.clear();
     this.room.leave(false);
     this.roomPhase.value = 'idle';
     this.phase.value = 'left';
@@ -437,11 +402,6 @@ export class Session {
     this.meter.detach();
     this.chat.clear();
     this.knocks.value = [];
-    for (const l of this.leaving.values()) clearTimeout(l);
-    this.leaving.clear();
-    for (const f of this.failed.values()) clearTimeout(f.forget);
-    this.failed.clear();
-    this.peers.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
     this.statsTimer = null;
     void this.wakeLock?.release().catch(() => {});
@@ -450,17 +410,13 @@ export class Session {
   }
 
   private sayBye(): void {
-    for (const l of this.links.values()) l.sendControl({ t: 'bye' });
+    for (const l of this.parts.links()) l.sendControl({ t: 'bye' });
     if (this.phase.peek() === 'room') this.room.leave(true);
   }
 
   /** Who is in the room as far as this browser knows: itself and the peers that introduced themselves. */
   private memberList(): MemberInfo[] {
-    const list: MemberInfo[] = [{ ...this.self.peek(), since: this.since }];
-    for (const p of this.peers.peek()) {
-      if (p.remote && (p.link === 'connected' || p.link === 'reconnecting')) list.push(p.info);
-    }
-    return list;
+    return [{ ...this.self.peek(), since: this.since }, ...this.parts.members()];
   }
 
   private onWelcome(members: MemberInfo[], policy: Policy): void {
@@ -473,10 +429,10 @@ export class Session {
     this.policy.value = policy;
     this.denied.value = null;
     this.roomPhase.value = 'in';
-    for (const m of members) this.known.set(m.id, m);
+    for (const m of members) this.parts.remember(m);
     for (const m of members) {
-      if (m.id === this.selfId || this.links.has(m.id)) continue;
-      void this.link(m, true);
+      if (m.id === this.selfId || this.parts.link(m.id)) continue;
+      void this.parts.open(m, true);
     }
   }
 
@@ -517,15 +473,14 @@ export class Session {
       by: this.selfId,
     };
     this.policy.value = next;
-    for (const l of this.links.values()) l.sendControl({ t: 'policy', policy: next });
+    for (const l of this.parts.links()) l.sendControl({ t: 'policy', policy: next });
   }
 
   // =========================================================================================== links
 
+  /** A new WebRTC link to `info`, its events routed to the participant (src/app/participants.ts). */
   private async connect(info: MemberInfo, initiator: boolean): Promise<PeerLink> {
     const servers = await this.warmIce();
-    const existing = this.links.get(info.id);
-    if (existing) return existing;
     log('link', initiator ? 'to' : 'from', `${info.name}#${info.id.slice(0, 4)}`);
     const link = new PeerLink({
       id: info.id,
@@ -541,26 +496,26 @@ export class Session {
       params: this.sendParams(),
       tuning: DEFAULT_TUNING,
     });
-    this.links.set(info.id, link);
-    this.upsertPeer(info.id, {
-      id: info.id,
-      info,
-      link: 'connecting',
-      remote: null,
-      audio: null,
-      video: null,
-      extra: null,
-      stats: null,
-      joinedAt: this.peers.peek().find((p) => p.id === info.id)?.joinedAt ?? Date.now(),
-      failures: this.failed.get(info.id)?.n,
-    });
+    // events of a link that was replaced meanwhile are ignored
+    const current = () => this.parts.link(info.id) === link;
     link.onSignal = (data) => this.sendSignal(info.id, data);
-    link.onState = (s) => this.onLinkState(link, s);
-    link.onTrack = (slot, track) => this.onRemoteTrack(info.id, slot, track);
-    link.onControl = (msg) => this.onControl(link, msg);
-    link.onMidi = (data) => this.midi.fromPeer(info.id, data);
-    link.onFile = (data) => this.onFileData(info.id, data);
-    link.onLost = () => this.dropLink(info.id, false);
+    link.onState = (s) => {
+      log('link', info.id.slice(0, 4), s);
+      this.parts.linkState(link, s);
+    };
+    link.onTrack = (slot, track) => {
+      if (current()) this.onRemoteTrack(info.id, slot, track);
+    };
+    link.onControl = (msg) => {
+      if (current()) this.onControl(link, msg);
+    };
+    link.onMidi = (data) => {
+      if (current()) this.midi.fromPeer(info.id, data);
+    };
+    link.onFile = (data) => {
+      if (current()) this.onFileData(info.id, data);
+    };
+    link.onLost = () => this.parts.lost(link);
     link.onMidiOpen = () => link.sendMidi(this.midi.helloPacket());
     return link;
   }
@@ -569,89 +524,24 @@ export class Session {
     const mid = Math.random().toString(36).slice(2, 12);
     this.room.signal(to, data, mid);
     // the direct channel is faster when it works (and does not depend on the brokers)
-    const l = this.links.get(to);
+    const l = this.parts.link(to);
     if (l && l.ctlOpen && l.state === 'connected') l.sendControl({ t: 'sig', data, mid });
   }
 
-  private async onSignal(from: string, data: unknown, viaLink = false): Promise<void> {
-    const d = data as SignalData;
-    if (!d || typeof d !== 'object') return;
-    let link = this.links.get(from) ?? (await this.creating.get(from));
-    // an offer from a new connection of theirs (they reloaded, or gave up on the old one): the old link is dead
-    if (link && d.description?.type === 'offer' && link.remoteFingerprint) {
-      const fp = fingerprintOf(d.description.sdp);
-      if (fp && fp !== link.remoteFingerprint) {
-        log('new connection from', from.slice(0, 4), '(old one replaced)');
-        const info = this.peers.peek().find((p) => p.id === from)?.info;
-        this.dropLink(from, false, true);
-        link = await this.link(info ?? this.stranger(from), false);
-        await link.receiveSignal(d);
-        return;
-      }
-    }
-    if (!link) {
-      // an offer from someone the room let in
-      if (!d.description || d.description.type !== 'offer' || viaLink) return;
-      const p = this.policy.peek();
-      const others = this.memberList().filter((m) => m.id !== from && m.id !== this.selfId).length;
-      if (p.locked && others + 1 >= p.limit) {
-        log('offer refused (room full)', from, p);
-        return;
-      }
-      link = await this.link(this.stranger(from), false);
-    }
-    await link.receiveSignal(d);
+  /** A link just opened: introduce ourselves on it. */
+  private onConnected(link: PeerLink): void {
+    this.room.connected(link.id);
+    link.sendControl(this.stateMessage());
+    link.sendControl({ t: 'policy', policy: this.policy.peek() });
+    const hist = this.chat.history();
+    if (hist.length) link.sendControl({ t: 'history', messages: hist });
+    link.setParams(this.sendParams());
+    this.sendRoster();
+    this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
   }
 
-  /** Someone whose offer arrives first: the room told us who they are, or they say it once connected. */
-  private stranger(id: string): MemberInfo {
-    return this.known.get(id) ?? { id, name: '…', role: 'player', since: 0 };
-  }
-
-  /** The connection to `info`, created once even when signals arrive while it is being set up. */
-  private link(info: MemberInfo, initiator: boolean): Promise<PeerLink> {
-    const have = this.links.get(info.id);
-    if (have) return Promise.resolve(have);
-    let p = this.creating.get(info.id);
-    if (!p) {
-      p = this.connect(info, initiator);
-      this.creating.set(info.id, p);
-      void p.finally(() => this.creating.delete(info.id));
-    }
-    return p;
-  }
-
-  private onLinkState(link: PeerLink, s: LinkState): void {
-    const p = this.peers.peek().find((x) => x.id === link.id);
-    const firstConnect = s === 'connected' && p?.link === 'connecting';
-    log('link', link.id.slice(0, 4), s);
-    if (s === 'reconnecting' && !link.everConnected) return; // still the first attempt: keep saying "connecting"
-    this.patchPeer(link.id, s === 'connected' ? { link: s, quiet: false, failures: undefined } : { link: s });
-    if (s === 'connected') {
-      const f = this.failed.get(link.id);
-      if (f) clearTimeout(f.forget);
-      this.failed.delete(link.id);
-      this.room.connected(link.id);
-      // introduce ourselves on the new channel
-      link.sendControl(this.stateMessage());
-      link.sendControl({ t: 'policy', policy: this.policy.peek() });
-      const hist = this.chat.history();
-      if (hist.length) link.sendControl({ t: 'history', messages: hist });
-      link.setParams(this.sendParams());
-      this.sendRoster();
-      if (firstConnect) this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
-    }
-  }
-
-  /** The other side announced itself: now we can say who joined. */
+  /** The other side introduced itself for the first time: now we can say who joined. */
   private announceJoin(peer: PeerView): void {
-    const back = this.leaving.get(peer.id);
-    if (back) {
-      // the same person, back from a reload: as if nothing happened
-      clearTimeout(back);
-      this.leaving.delete(peer.id);
-      return;
-    }
     const name = peer.info.name;
     const role = roleLabel(peer.info.role);
     if (settings.peek().joinSound) chime('join');
@@ -663,75 +553,30 @@ export class Session {
     bumpTitle();
   }
 
-  private dropLink(id: string, bye: boolean, silent = false): void {
-    log('drop', id.slice(0, 4), bye ? 'bye' : 'lost', silent ? 'silent' : '');
-    const link = this.links.get(id);
-    const peer = this.peers.peek().find((p) => p.id === id);
-    if (link) {
-      this.links.delete(id);
-      link.close();
-    }
+  /** Someone left (or their connection was lost for good), a moment ago and not back since. */
+  private announceLeave(info: MemberInfo, how: Departure): void {
+    if (this.phase.peek() !== 'room') return;
+    const name = info.name;
+    const bye = how === 'left';
+    if (settings.peek().joinSound) chime('leave');
+    toast({
+      kind: 'leave',
+      title: bye ? t('{name} left', { name }) : t('Lost connection to {name}', { name }),
+      body: bye ? undefined : t('They can rejoin with the same link; it reconnects by itself.'),
+    });
+    this.chat.system(bye ? t('{name} left the lesson', { name }) : t('Connection to {name} was lost', { name }));
+  }
+
+  /** Release what this side held for someone whose connection is gone (their sound, their notes, a file). */
+  private releasePeer(id: string): void {
     this.midi.peerGone(id);
+    this.fileIn.delete(id);
     const el = this.audioEls.get(id);
     if (el) {
       el.srcObject = null;
       el.remove();
       this.audioEls.delete(id);
     }
-    if (peer && !bye && !silent && !peer.remote && !peer.quiet && this.phase.peek() === 'room') {
-      // never connected: their network and ours found no direct path. Keep the person on screen with an
-      // explanation; the room keeps trying (each side says hello again while alone) and the next attempt
-      // replaces this tile without flashing back to a plain spinner.
-      const f = this.failed.get(id);
-      if (f) clearTimeout(f.forget);
-      const n = (f?.n ?? 0) + 1;
-      const forget = setTimeout(() => {
-        this.failed.delete(id);
-        if (!this.links.has(id)) this.peers.value = this.peers.peek().filter((p) => p.id !== id);
-      }, 120_000);
-      this.failed.set(id, { n, forget });
-      log('no direct path to', id.slice(0, 4), `(attempt ${n})`);
-      this.patchPeer(id, { link: 'closed', failures: n });
-      return;
-    }
-    if (bye) {
-      const f = this.failed.get(id);
-      if (f) clearTimeout(f.forget);
-      this.failed.delete(id);
-    }
-    if (peer) {
-      this.peers.value = this.peers.peek().filter((p) => p.id !== id);
-      if (!silent && peer.remote) {
-        // said a moment later: someone who reloads the page is back before it, and nothing needs saying
-        const name = peer.info.name;
-        clearTimeout(this.leaving.get(id));
-        this.leaving.set(
-          id,
-          setTimeout(() => {
-            this.leaving.delete(id);
-            if (this.phase.peek() !== 'room') return;
-            if (settings.peek().joinSound) chime('leave');
-            toast({
-              kind: 'leave',
-              title: bye ? t('{name} left', { name }) : t('Lost connection to {name}', { name }),
-              body: bye ? undefined : t('They can rejoin with the same link; it reconnects by itself.'),
-            });
-            this.chat.system(
-              bye ? t('{name} left the lesson', { name }) : t('Connection to {name} was lost', { name }),
-            );
-          }, LEAVE_NOTICE_MS),
-        );
-      }
-    }
-  }
-
-  private upsertPeer(id: string, v: PeerView): void {
-    const list = this.peers.peek().filter((p) => p.id !== id);
-    this.peers.value = [...list, v];
-  }
-
-  private patchPeer(id: string, patch: Partial<PeerView>): void {
-    this.peers.value = this.peers.peek().map((p) => (p.id === id ? { ...p, ...patch } : p));
   }
 
   // =========================================================================================== media
@@ -746,7 +591,7 @@ export class Session {
   }
 
   private sendTrack(slot: Slot, track: MediaStreamTrack | null): void {
-    for (const l of this.links.values()) void l.setTrack(slot, track);
+    for (const l of this.parts.links()) void l.setTrack(slot, track);
     // the meter shows the microphone itself (before any noise reduction)
     if (slot === 'audio') this.meter.attach(this.media.audio.peek());
     this.broadcastState();
@@ -754,7 +599,7 @@ export class Session {
 
   private onRemoteTrack(id: string, slot: Slot, track: MediaStreamTrack): void {
     const stream = new MediaStream([track]);
-    this.patchPeer(id, { [slot]: stream } as Partial<PeerView>);
+    this.parts.patch(id, { [slot]: stream });
     if (slot === 'audio') this.playAudio(id, stream);
   }
 
@@ -857,9 +702,10 @@ export class Session {
   }
 
   broadcastState(): void {
-    if (!this.links.size) return;
+    const links = this.parts.links();
+    if (!links.length) return;
     const msg = this.stateMessage();
-    for (const l of this.links.values()) l.sendControl(msg);
+    for (const l of links) l.sendControl(msg);
   }
 
   private startEffects(): void {
@@ -924,7 +770,7 @@ export class Session {
         void settings.value.audioQuality;
         void settings.value.videoQuality;
         const p = this.sendParams();
-        for (const l of this.links.values()) l.setParams(p);
+        for (const l of this.parts.links()) l.setParams(p);
       }),
     );
     // MIDI preferences
@@ -976,15 +822,10 @@ export class Session {
         const info = msg.info;
         const st = msg.state as RemoteState;
         if (!validInfo(info) || info.id !== id || !st) return;
-        const before = this.peers.peek().find((p) => p.id === id);
-        const wasKnown = !!before?.remote;
         const name = info.name.slice(0, 40) || t('Guest');
-        const prevMidi = before?.remote?.midi;
-        this.patchPeer(id, { info: { ...info, name }, remote: st });
-        if (!wasKnown) {
-          const now = this.peers.peek().find((p) => p.id === id);
-          if (now) this.announceJoin(now);
-        } else if (prevMidi && !prevMidi.sending && st.midi?.sending) {
+        const { first, before } = this.parts.introduced(link, { ...info, name }, st);
+        const prevMidi = before?.midi;
+        if (!first && prevMidi && !prevMidi.sending && st.midi?.sending) {
           toast({
             kind: 'info',
             title: st.midi.device
@@ -1042,10 +883,10 @@ export class Session {
         break;
       case 'sig':
         if (typeof msg.mid === 'string' && !this.room.remember(msg.mid)) return;
-        void this.onSignal(id, msg.data, true);
+        void this.parts.signal(id, msg.data as SignalData, true);
         break;
       case 'bye':
-        this.dropLink(id, true);
+        this.parts.bye(id);
         break;
       case 'roster':
         this.onRoster(msg.members);
@@ -1059,7 +900,7 @@ export class Session {
       .peek()
       .filter((p) => p.link === 'connected' && p.remote)
       .map((p) => p.info);
-    for (const l of this.links.values()) l.sendControl({ t: 'roster', members });
+    for (const l of this.parts.links()) l.sendControl({ t: 'roster', members });
   }
 
   /**
@@ -1068,20 +909,7 @@ export class Session {
    */
   private onRoster(list: unknown): void {
     if (!Array.isArray(list) || this.phase.peek() !== 'room') return;
-    const now = Date.now();
-    for (const m of list.slice(0, 16)) {
-      if (!validInfo(m) || m.id === this.selfId) continue;
-      if (this.links.has(m.id) || this.creating.has(m.id)) {
-        this.missing.delete(m.id);
-        continue;
-      }
-      // a newcomer connects to everyone itself: only step in when that clearly did not happen
-      const since = this.missing.get(m.id) ?? now;
-      this.missing.set(m.id, since);
-      if (now - since < 8000 || this.selfId > m.id) continue;
-      this.missing.delete(m.id);
-      void this.link(m, true).then((l) => this.patchPeer(l.id, { quiet: true }));
-    }
+    this.parts.roster(list.slice(0, 16).filter((m): m is MemberInfo => validInfo(m)));
   }
 
   private onIncomingChat(m: ChatMessage): void {
@@ -1109,7 +937,7 @@ export class Session {
       mine: true,
     };
     this.chat.add(m);
-    for (const l of this.links.values()) l.sendControl({ t: 'chat', id: m.id, text: t, ts: m.ts });
+    for (const l of this.parts.links()) l.sendControl({ t: 'chat', id: m.id, text: t, ts: m.ts });
     this.typingSentAt = 0;
   }
 
@@ -1117,12 +945,12 @@ export class Session {
     const now = Date.now();
     if (now - this.typingSentAt < 2500) return;
     this.typingSentAt = now;
-    for (const l of this.links.values()) l.sendControl({ t: 'typing' });
+    for (const l of this.parts.links()) l.sendControl({ t: 'typing' });
   }
 
   react(emoji: string): void {
     this.addReaction(this.selfId, emoji);
-    for (const l of this.links.values()) l.sendControl({ t: 'react', emoji });
+    for (const l of this.parts.links()) l.sendControl({ t: 'react', emoji });
   }
 
   private addReaction(from: string, emoji: string): void {
@@ -1159,7 +987,7 @@ export class Session {
       },
       mine: true,
     });
-    const links = [...this.links.values()].filter((l) => l.file.readyState === 'open');
+    const links = this.parts.links().filter((l) => l.file.readyState === 'open');
     if (!links.length) {
       this.chat.updateFile(fid, { progress: 1 });
       return;
@@ -1256,10 +1084,10 @@ export class Session {
 
   private async pollStats(): Promise<void> {
     if (document.hidden && this.peers.peek().length === 0) return;
-    const updates = await Promise.all([...this.links.values()].map(async (l) => [l.id, await l.stats()] as const));
-    batch(() => {
-      for (const [id, st] of updates) if (st) this.patchPeer(id, { stats: st });
-    });
+    const updates = await Promise.all(
+      this.parts.links().map(async (l) => [l.id, await l.stats()] as [string, Awaited<ReturnType<PeerLink['stats']>>]),
+    );
+    this.parts.patchStats(updates);
   }
 
   /** The connection settings changed (TURN server): new connections use them. */

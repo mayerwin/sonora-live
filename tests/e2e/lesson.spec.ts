@@ -598,12 +598,16 @@ test('back from a long time in the background (a phone switching apps), the less
   await connected(a, 1);
   await connected(b, 1);
   type S = {
-    sonora: { dropLink(id: string, bye: boolean): void; resume(ms: number): void; peers: { value: { id: string }[] } };
+    sonora: {
+      parts: { lost(l: unknown): void; link(id: string): unknown };
+      resume(ms: number): void;
+      peers: { value: { id: string }[] };
+    };
   };
   // the teacher's side gave up on the phone long ago; the phone still holds its old, dead connection
   await a.evaluate(() => {
     const s = (window as unknown as S).sonora;
-    s.dropLink(s.peers.value[0].id, false);
+    s.parts.lost(s.parts.link(s.peers.value[0].id));
   });
   const t0 = Date.now();
   await b.evaluate(() => (window as unknown as S).sonora.resume(90_000));
