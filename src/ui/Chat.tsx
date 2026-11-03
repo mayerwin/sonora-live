@@ -253,7 +253,7 @@ export function ChatPanel() {
             <div
               class={`msg ${m.mine ? 'mine' : ''} ${first ? 'first' : ''}`}
               key={m.id}
-              data-role={m.role ?? undefined}
+              data-role={m.mine ? 'self' : (m.role ?? undefined)}
             >
               {first && (
                 <div class="who">

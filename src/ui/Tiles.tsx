@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AudioWaveform, Copy, MicOff, MonitorUp, Piano, QrCode, Share2, SwitchCamera, Video } from 'lucide-preact';
-import { session, roleLabel, type PeerView } from '../app/session.ts';
+import { session, roleLabel, watching, type PeerView } from '../app/session.ts';
 import { settings } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
@@ -170,7 +170,7 @@ export function SelfPip() {
       ref={ref}
       class={`pip ${drag ? 'dragging' : ''} ${shape.h > shape.w ? 'portrait' : ''}`}
       style={{ ...pos, '--ar': `${shape.w} / ${shape.h}` }}
-      data-role={me.role}
+      data-role="self"
       data-testid="self-view"
       onPointerDown={(e) => {
         const el = ref.current!;
@@ -209,7 +209,7 @@ export function SelfPip() {
         />
       ) : (
         <div class="tile-center">
-          <div class="avatar" data-role={me.role}>
+          <div class="avatar" data-role="self">
             {initials(me.name)}
           </div>
         </div>
@@ -234,21 +234,14 @@ export function SelfPip() {
 
 export function Waiting() {
   const code = session.code.value;
-  const role = settings.value.role;
   return (
     <div class="card waiting" data-testid="waiting">
       <div>
         <div class="status-line">
           <span class="pulse-ring" /> {t("You're in. Waiting for others…")}
         </div>
-        <h2>
-          {role === 'teacher'
-            ? t('Invite your student')
-            : role === 'student'
-              ? t('Invite your teacher')
-              : t('Invite the others')}
-        </h2>
-        <p>{t("Send the link or the code. They open it, pick their role, and appear here. You'll hear a chime.")}</p>
+        <h2>{watching() ? t('Waiting for the musicians') : t('Invite your student or your teacher')}</h2>
+        <p>{t("Send the link or the code. They open it and appear here. You'll hear a chime.")}</p>
         <div class="code" aria-label={t('Room code {code}', { code: code.split('').join(' ') })}>
           {prettyCode(code)
             .split(' ')

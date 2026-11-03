@@ -1,4 +1,4 @@
-import { Copy, Lock, LockOpen, Minus, Plus, Share2, Users } from 'lucide-preact';
+import { Copy, Eye, Lock, LockOpen, Minus, Plus, Share2, Users } from 'lucide-preact';
 import { session } from '../app/session.ts';
 import { update } from '../app/settings.ts';
 import { prettyCode } from '../net/code.ts';
@@ -10,6 +10,7 @@ import { t, tn } from '../app/i18n.ts';
 export function ShareSheet() {
   const code = session.code.value;
   const link = roomLink(code);
+  const watchLink = roomLink(code, true);
   return (
     <Sheet title={t('Invite to this lesson')} icon={<Share2 />} onClose={() => (sheet.value = null)}>
       <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
@@ -43,10 +44,28 @@ export function ShareSheet() {
         </div>
       </div>
       <p class="lead" style="margin:0;color:var(--text-2)">
-        {t(
-          'They open the link (or type the code on Sonora Live), choose Student, Teacher or Observer, and appear here. Scan the QR code with a phone to add it as a second camera, for example pointed at the keys.',
-        )}
+        {t('They open the link, or type the code on Sonora Live, and appear here.')}
       </p>
+      <div class="section" data-testid="watch-link">
+        <h3>
+          <Eye size={15} style="vertical-align:-2px" /> {t('To watch: a parent, a guest, a second camera')}
+        </h3>
+        <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+          <Qr text={watchLink} />
+          <div style="display:grid;gap:10px;flex:1;min-width:220px">
+            <p class="lead" style="margin:0">
+              {t(
+                'With this link they watch and listen, without being asked to play. Scan it with a phone to add a second camera, for example pointed at the keys.',
+              )}
+            </p>
+            <div class="code-actions">
+              <button class="btn" onClick={() => void copyLink(code, true)}>
+                <Copy /> {t('Copy the link to watch')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </Sheet>
   );
 }

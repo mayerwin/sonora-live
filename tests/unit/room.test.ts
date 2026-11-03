@@ -16,7 +16,7 @@ class Member {
 
   constructor(name: string, id = newPeerId(), limit = 2) {
     this.policy = { locked: true, limit, ver: 0, by: id };
-    this.room = new Room(new MemoryRelay(), { id, name, role: 'student', since: 0 }, {
+    this.room = new Room(new MemoryRelay(), { id, name, role: 'player', since: 0 }, {
       members: () => [this.room.self, ...this.peers.values()],
       busy: () => false,
       policy: () => this.policy,

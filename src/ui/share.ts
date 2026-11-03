@@ -4,8 +4,9 @@ import { settings } from '../app/settings.ts';
 import { prettyCode } from '../net/code.ts';
 import { copyText } from './common.tsx';
 
-export function roomLink(code: string): string {
-  return `${location.origin}${location.pathname}#${code}`;
+/** The room's link; `watch`: the link for observers (a parent, a guest, a phone as a second camera). */
+export function roomLink(code: string, watch = false): string {
+  return `${location.origin}${location.pathname}${watch ? '?watch' : ''}#${code}`;
 }
 
 /** Sending the link is the moment to want a notification when they arrive: ask then (once), from this click. */
@@ -13,9 +14,9 @@ function askToNotify(): void {
   if (settings.peek().notifyJoin && notifyPermission.peek() === 'default') void askNotifications();
 }
 
-export async function copyLink(code: string): Promise<void> {
+export async function copyLink(code: string, watch = false): Promise<void> {
   askToNotify();
-  const ok = await copyText(roomLink(code));
+  const ok = await copyText(roomLink(code, watch));
   toast(
     ok
       ? {

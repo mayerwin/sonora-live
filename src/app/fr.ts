@@ -44,8 +44,6 @@ export const FR: Record<string, string> = spaced({
   'Room link': 'Lien de la salle',
   'Copy link': 'Copier le lien',
   'Share…': 'Partager…',
-  'They open the link (or type the code on Sonora Live), choose Student, Teacher or Observer, and appear here. Scan the QR code with a phone to add it as a second camera, for example pointed at the keys.':
-    'Il leur suffit d’ouvrir le lien (ou de saisir le code sur Sonora Live) et de choisir Élève, Professeur ou Observateur pour apparaître ici. Scannez le QR code avec un téléphone pour l’ajouter comme deuxième caméra, par exemple pointée vers le clavier.',
   'Who can join': 'Qui peut entrer',
   'Limit the room to {n} people': 'Limiter la salle à {n} personnes',
   'Anyone else with the link has to knock; someone inside can let them in.':
@@ -134,8 +132,6 @@ export const FR: Record<string, string> = spaced({
   'Leave the lesson': 'Quitter le cours',
   'Camera and microphone turn off.': 'La caméra et le micro se coupent.',
   Stay: 'Rester',
-  Student: 'Élève',
-  Teacher: 'Professeur',
   Observer: 'Observateur',
   Guest: 'Invité',
   'Someone is knocking': 'Quelqu’un frappe à la porte',
@@ -168,9 +164,6 @@ export const FR: Record<string, string> = spaced({
   'Sent {file}': 'A envoyé {file}',
   'File too large': 'Fichier trop volumineux',
   'Files up to 50 MB can be shared in the chat.': 'La discussion permet de partager des fichiers jusqu’à 50 Mo.',
-  'Here to learn': 'Je viens apprendre',
-  'Giving the lesson': 'Je donne le cours',
-  'Parent, guest': 'Parent, invité',
   'No camera found. You can join with sound only.': 'Aucune caméra trouvée. Vous pouvez entrer avec le son seulement.',
   'No microphone found.': 'Aucun micro trouvé.',
   'The camera is used by another app. Close it (Zoom, Teams, another tab), then try again.':
@@ -215,11 +208,8 @@ export const FR: Record<string, string> = spaced({
   'Your room is ready': 'Votre salle est prête',
   'Joining room': 'Vous rejoignez la salle',
   'Room code {code}': 'Code de la salle {code}',
-  'Scan with a phone or tablet to join this room (handy for a second camera).':
-    'Scannez avec un téléphone ou une tablette pour rejoindre cette salle (pratique pour une deuxième caméra).',
   'Your name': 'Votre nom',
   'e.g. Clara': 'ex. Clara',
-  "I'm joining as": 'Je rejoins en tant que',
   'Enter the room': 'Entrer dans la salle',
   'Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.':
     'Utilisez un casque, filaire si possible : le son pur n’a pas d’annulation d’écho, et le Bluetooth ajoute du retard.',
@@ -242,11 +232,6 @@ export const FR: Record<string, string> = spaced({
   'Connecting to a new participant…': 'Connexion à un nouveau participant…',
   'Connecting to {name}…': 'Connexion à {name}…',
   "You're in. Waiting for others…": 'Vous êtes dans la salle. En attente des autres…',
-  'Invite your student': 'Invitez votre élève',
-  'Invite your teacher': 'Invitez votre professeur',
-  'Invite the others': 'Invitez les autres',
-  "Send the link or the code. They open it, pick their role, and appear here. You'll hear a chime.":
-    'Envoyez le lien ou le code. Il suffit de l’ouvrir et de choisir son rôle pour apparaître ici. Un carillon vous préviendra.',
   'Scan to join': 'Scannez pour entrer',
   sent: 'envoyé',
   'tap to open': 'touchez pour ouvrir',
@@ -495,11 +480,7 @@ export const FR: Record<string, string> = spaced({
   "Microphone blocked. Allow it from the icon in {browser}'s address bar: it starts at once.":
     'Micro bloqué. Autorisez-le avec l’icône de la barre d’adresse de {browser} : il démarre aussitôt.',
   'Try again': 'Réessayer',
-  'Enter your name, choose your role and enter the room.':
-    'Indiquez votre nom, choisissez votre rôle et entrez dans la salle.',
   'Send the link (or the code) to the other person.': 'Envoyez le lien (ou le code) à l’autre personne.',
-  'They open it, choose their role, and you see and hear each other.':
-    'Elle l’ouvre, choisit son rôle, et vous vous voyez et vous entendez.',
   'Your camera shows a still image, not you: Windows is blocking it. Check Settings → Privacy & security → Camera, the camera key or cover, and close other apps using it (Teams, Zoom). Then turn the camera off and on below.':
     'Votre caméra affiche une image fixe, pas vous : Windows la bloque. Vérifiez Paramètres → Confidentialité et sécurité → Caméra, la touche ou le cache de la caméra, et fermez les autres applications qui l’utilisent (Teams, Zoom). Puis coupez et rallumez la caméra ci-dessous.',
   'Your camera shows a still image, not you: it may be blocked by the system or used by another app. Close other apps using it, then turn the camera off and on below.':
@@ -512,4 +493,22 @@ export const FR: Record<string, string> = spaced({
   'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.':
     'Souffle, ventilateur, climatisation : retirés, tandis que votre instrument et votre voix restent tels quels. Ajoute 8 ms.',
   'In pure sound only (voice mode already removes noise).': 'En son pur seulement (le mode voix retire déjà le bruit).',
+  Musician: 'Musicien',
+  'Scan with a phone or tablet to join this room.':
+    'Scannez avec un téléphone ou une tablette pour rejoindre cette salle.',
+  'Enter your name and enter the room.': 'Indiquez votre nom et entrez dans la salle.',
+  'They open it, and you see and hear each other.': 'Elle l’ouvre, et vous vous voyez et vous entendez.',
+  'You are joining to watch and listen: a parent, a guest, or a phone as a second camera.':
+    'Vous entrez pour regarder et écouter : un parent, un invité, ou un téléphone comme deuxième caméra.',
+  'Join as a musician instead': 'Entrer plutôt en musicien',
+  'They open the link, or type the code on Sonora Live, and appear here.':
+    'Il suffit d’ouvrir le lien, ou de saisir le code sur Sonora Live, pour apparaître ici.',
+  'To watch: a parent, a guest, a second camera': 'Pour regarder : un parent, un invité, une deuxième caméra',
+  'With this link they watch and listen, without being asked to play. Scan it with a phone to add a second camera, for example pointed at the keys.':
+    'Avec ce lien, on regarde et on écoute, sans être invité à jouer. Scannez-le avec un téléphone pour ajouter une deuxième caméra, par exemple pointée vers le clavier.',
+  'Copy the link to watch': 'Copier le lien pour regarder',
+  'Waiting for the musicians': 'En attente des musiciens',
+  'Invite your student or your teacher': 'Invitez votre élève ou votre professeur',
+  "Send the link or the code. They open it and appear here. You'll hear a chime.":
+    'Envoyez le lien ou le code : il suffit de l’ouvrir pour apparaître ici. Un carillon vous préviendra.',
 });

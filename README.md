@@ -42,7 +42,7 @@ cancelling chops the decay of a note, automatic gain flattens a crescendo, and t
 fraction of the bitrate music needs. Teachers end up hunting for "original sound" switches that reset every call.
 
 **Sonora Live is built for the lesson.** Open the page and your room exists. Send the 6-character code or the link,
-and your student picks *Student*, you pick *Teacher*, and you are face to face, hearing each other's instruments the
+and your student opens it and you are face to face, hearing each other's instruments the
 way they actually sound. With a digital piano on each side, the notes themselves travel: what the student plays
 sounds on the teacher's piano, and what the teacher plays sounds on the student's.
 
@@ -58,6 +58,10 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   in-band error correction against packet loss.
 - **Sound never waits for the picture**: audio and video are not lip-synced on purpose. Lip sync holds the sound back
   until the slower video has been decoded; here the sound plays the instant it arrives.
+- **Sound and MIDI before video**: when the connection starts to queue (a slow upload, busy Wi-Fi), the video gives
+  way at once, and comes back once the queue is gone, so a note never waits behind a picture.
+- **Steady background noise removal** (optional): takes out what does not change, hiss, a fan, air conditioning, and
+  keeps the instrument and voices as they are, unlike speech noise suppression; 8 ms.
 - **Smart voice mode**: on *Auto*, while your piano travels as MIDI, your microphone switches to speech processing,
   so talking stays clear and the piano is not sent twice. It switches back by itself.
 - **Clip warning**: with automatic gain off, the meter tells you when a forte passage overloads your microphone.
@@ -88,7 +92,9 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **Join notifications**, on by default: a soft chime, a toast, a system notification when the tab is in the
   background (the browser asks for it when you open a room or copy its link), a counter in the tab title, and a
   vibration on phones.
-- **Roles**: Student, Teacher, Observer (a parent, a guest). Each has its colour on the keys and in the chat.
+- **Musicians and observers**: everyone who opens the room's link plays and talks, with nothing to choose; a parent,
+  a guest or a phone used as a second camera gets the observer's link instead (from the share sheet), and comes in to
+  watch and listen. On the keys and in the chat you are in gold and the others in their own colour.
 - **No host**: anyone can leave or reload without ending the lesson. A reload rejoins as the same person, even in a full
   room, and two people opening the same link at the same moment always find each other.
 
@@ -110,7 +116,7 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 
 <table>
   <tr>
-    <td width="66%"><img src="docs/screenshots/lobby.webp" alt="The lobby: camera preview, room code, name and role"></td>
+    <td width="66%"><img src="docs/screenshots/lobby.webp" alt="The lobby: camera preview, room code and name"></td>
     <td><img src="docs/screenshots/mobile.webp" alt="The student's view on a phone"></td>
   </tr>
   <tr>
@@ -153,7 +159,7 @@ depends on what the browser allows:
   add 100–200 ms of delay. On *Voice* mode, speakers are fine.
 - **Cable or 5 GHz Wi-Fi** beats a crowded 2.4 GHz network; the connection panel shows what you get.
 - **Point a second camera at the keys**: a webcam above the keyboard (*Settings → Video → Second camera*), or a phone
-  that joins by scanning the room's QR code, as an Observer.
+  that joins by scanning the observer's QR code (share sheet).
 - **Teaching on a digital piano?** Connect it on both sides: you play to each other's instruments, and the microphones
   switch to voice mode so you can talk over the music.
 - **Microphone too loud?** If the meter says *Too loud* on forte passages, lower the input level in the system's sound

@@ -12,7 +12,7 @@ import {
   Usb,
 } from 'lucide-preact';
 import { capital, t } from '../app/i18n.ts';
-import { session } from '../app/session.ts';
+import { session, watching } from '../app/session.ts';
 import { settings, updateMidi } from '../app/settings.ts';
 import { BLUEFY_IOS, browser, browserName, os, PERFECT_BT_MIDI, WEB_MIDI_BROWSER_IOS } from '../app/platform.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -362,8 +362,8 @@ export function MidiSheet() {
                 ? t('Your notes and pedals reach their instrument or built-in piano.')
                 : t('When an instrument is connected.')
             }
-            checked={s.send}
-            onChange={(v) => updateMidi({ send: v })}
+            checked={watching() ? session.observerPlays.value : s.send}
+            onChange={(v) => (watching() ? (session.observerPlays.value = v) : updateMidi({ send: v }))}
           />
           <ToggleRow
             title={t('Show the piano keys')}

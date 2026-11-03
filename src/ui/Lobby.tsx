@@ -19,25 +19,18 @@ import {
   VideoOff,
   Zap,
 } from 'lucide-preact';
-import { session, roleLabel } from '../app/session.ts';
+import { session, watching } from '../app/session.ts';
 import { askNotifications, notifyPermission } from '../app/notify.ts';
-import { settings, update, updateMidi } from '../app/settings.ts';
+import { settings, update } from '../app/settings.ts';
 import { browserName, os, REPO_URL } from '../app/platform.ts';
 import type { Picture } from '../media/picture.ts';
 import { listDevices, type DeviceLists, type MediaProblem } from '../media/local.ts';
 import { normalizeRoomCode, prettyCode } from '../net/code.ts';
-import type { Role } from '../net/room.ts';
 import { LevelBars, Qr, VideoView } from './common.tsx';
 import { GitHubIcon, initials, Logo, RoleIcon, Wordmark } from './icons.tsx';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
 import { capital, lang, LANGUAGES, t } from '../app/i18n.ts';
-
-const roles = (): { role: Role; sub: string }[] => [
-  { role: 'student', sub: t('Here to learn') },
-  { role: 'teacher', sub: t('Giving the lesson') },
-  { role: 'observer', sub: t('Parent, guest') },
-];
 
 export function problemText(p: MediaProblem, what: 'camera' | 'microphone'): string {
   const cam = what === 'camera';
@@ -92,7 +85,6 @@ export function Lobby() {
   const [devices, setDevices] = useState<DeviceLists>({ mics: [], cams: [], speakers: [] });
   const joinOther = useSignal(false);
   const typed = useSignal('');
-  const [shake, setShake] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const videoTrack = media.video.value;
@@ -120,7 +112,7 @@ export function Lobby() {
         if (alive) setDevices(d);
       });
     // back from a reload in the middle of a lesson: straight back in
-    const resume = session.wasInLesson() && !!settings.peek().role;
+    const resume = session.wasInLesson();
     if (!media.audio.peek() && !media.video.peek())
       void startMedia().then(() => {
         refresh();
@@ -158,12 +150,6 @@ export function Lobby() {
   }, []);
 
   const enter = async () => {
-    if (!settings.peek().role) {
-      setShake(true);
-      setTimeout(() => setShake(false), 450);
-      document.querySelector('.roles')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
     setBusy(true);
     // whoever opens a new room waits for the others: the moment to offer a notification when they arrive
     if (session.fresh.peek() && settings.peek().notifyJoin && notifyPermission.peek() === 'default')
@@ -245,7 +231,7 @@ export function Lobby() {
             ) : (
               <div class="preview-empty">
                 <div>
-                  <div class="avatar" data-role={s.role ?? 'student'}>
+                  <div class="avatar" data-role="self">
                     {initials(name || t('You'))}
                   </div>
                   {vp ? (
@@ -403,16 +389,14 @@ export function Lobby() {
             {showQr && fresh && (
               <div style="display:flex;gap:14px;align-items:center">
                 <Qr text={roomLink(code)} />
-                <small style="color:var(--muted)">
-                  {t('Scan with a phone or tablet to join this room (handy for a second camera).')}
-                </small>
+                <small style="color:var(--muted)">{t('Scan with a phone or tablet to join this room.')}</small>
               </div>
             )}
             {fresh && (
               <ol class="steps" data-testid="steps">
-                <li>{t('Enter your name, choose your role and enter the room.')}</li>
+                <li>{t('Enter your name and enter the room.')}</li>
                 <li>{t('Send the link (or the code) to the other person.')}</li>
-                <li>{t('They open it, choose their role, and you see and hear each other.')}</li>
+                <li>{t('They open it, and you see and hear each other.')}</li>
               </ol>
             )}
           </div>
@@ -433,33 +417,17 @@ export function Lobby() {
             />
           </label>
 
-          <div class="field">
-            <span class="label" id="role-label">
-              {t("I'm joining as")}
-            </span>
-            <div class={`roles ${shake ? 'shake' : ''}`} role="radiogroup" aria-labelledby="role-label">
-              {roles().map((r) => (
-                <button
-                  type="button"
-                  role="radio"
-                  class="role"
-                  data-role={r.role}
-                  aria-checked={s.role === r.role}
-                  onClick={() => {
-                    update({ role: r.role });
-                    // an observer listens: it does not send MIDI unless it chooses to
-                    updateMidi({ send: r.role !== 'observer' });
-                  }}
-                >
-                  <span class="ico">
-                    <RoleIcon role={r.role} />
-                  </span>
-                  <b>{roleLabel(r.role)}</b>
-                  <small>{r.sub}</small>
-                </button>
-              ))}
+          {watching() && (
+            <div class="hint" data-testid="watching">
+              <RoleIcon role="observer" size={18} />
+              <span>
+                {t('You are joining to watch and listen: a parent, a guest, or a phone as a second camera.')}{' '}
+                <a class="link-btn" href={`${location.pathname}${location.hash}`}>
+                  {t('Join as a musician instead')}
+                </a>
+              </span>
             </div>
-          </div>
+          )}
 
           {ap && (
             <div class="hint hint-bad">

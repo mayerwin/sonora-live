@@ -3,18 +3,21 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+/** who someone is in a test: musicians all join alike; an observer comes with the observer's link */
 type Role = 'student' | 'teacher' | 'observer';
 
 /** the local relay of the dev/preview server, and the session on window (also in a production build) */
 const Q = '?relay=local&debug';
 
+/** The address a person opens: an observer gets the observer's link (`watch`). */
+const urlFor = (role: Role, hash = '') => `/${Q}${role === 'observer' ? '&watch' : ''}${hash ? `#${hash}` : ''}`;
+
 async function person(browser: Browser, name: string, role: Role, hash = ''): Promise<Page> {
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] pageerror`, e.message));
-  await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+  await page.goto(urlFor(role, hash));
   await page.getByPlaceholder('e.g. Clara').fill(name);
-  await page.locator(`button.role[data-role=${role}]`).click();
   return page;
 }
 
@@ -185,6 +188,8 @@ test('a locked room makes a third person knock; letting them in works', async ({
   await expect(a.getByTestId('lock-chip')).toContainText('2/2');
 
   const c = await person(browser, 'Mum', 'observer', code);
+  // the observer's link says so before anything else
+  await expect(c.getByTestId('watching')).toBeVisible();
   await enter(c);
   await expect(c.getByTestId('knocking')).toBeVisible({ timeout: 20_000 });
   await expect(a.getByTestId('knock')).toContainText('Mum (Observer) is knocking');
@@ -289,9 +294,8 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
     const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
     await ctx.addInitScript(fakeMidiScript(piano, thru));
     const page = await ctx.newPage();
-    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+    await page.goto(urlFor(role, hash));
     await page.getByPlaceholder('e.g. Clara').fill(name);
-    await page.locator(`button.role[data-role=${role}]`).click();
     return page;
   };
   const a = await mk('Clara', 'teacher', 'Roland FP-30X', false);
@@ -346,7 +350,6 @@ test('a duplicated tab (same session storage) gets its own identity and connects
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
-  await a.locator('button.role[data-role=teacher]').click();
   await enter(a);
   const code = await codeOf(a);
   const id = await a.evaluate(() => sessionStorage.getItem('sonora.tab'));
@@ -355,7 +358,6 @@ test('a duplicated tab (same session storage) gets its own identity and connects
   await b.addInitScript((tab) => sessionStorage.setItem('sonora.tab', tab), id!);
   await b.goto(`/${Q}#${code}`);
   await b.getByPlaceholder('e.g. Clara').fill('Leo');
-  await b.locator('button.role[data-role=student]').click();
   await enter(b);
   await connected(a, 1);
   await connected(b, 1);
@@ -370,7 +372,6 @@ test('unplugging the instrument mid-note releases it on the other side', async (
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
-  await a.locator('button.role[data-role=teacher]').click();
   await enter(a);
   const code = await codeOf(a);
   const b = await person(browser, 'Leo', 'student', code);
@@ -421,7 +422,6 @@ test('the room keeps its rules when someone with other defaults joins', async ({
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
-  await a.locator('button.role[data-role=teacher]').click();
   await enter(a);
   const code = await codeOf(a);
   for (let i = 0; i < 3; i++) {
@@ -447,9 +447,8 @@ test('playing in unison: a release on the student’s piano is not mistaken for 
     const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
     await ctx.addInitScript(fakeMidiScript(piano));
     const page = await ctx.newPage();
-    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+    await page.goto(urlFor(role, hash));
     await page.getByPlaceholder('e.g. Clara').fill(name);
-    await page.locator(`button.role[data-role=${role}]`).click();
     return page;
   };
   const a = await mk('Clara', 'teacher', 'Roland FP-30X');
@@ -498,7 +497,6 @@ test('speaks French when the browser does, animates normally, and switches langu
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
   await expect(page.locator('.join-card')).toContainText('Votre salle est prête');
   await page.getByPlaceholder('ex. Clara').fill('Clara');
-  await page.locator('button.role[data-role=teacher]').click();
   await page.locator('.join-card .btn-primary').click();
   await expect(page.getByTestId('waiting')).toContainText('En attente des autres');
   await expect(page.getByTestId('waiting')).toContainText('Invitez votre élève');
@@ -565,9 +563,8 @@ test('when the networks block a direct path, the tile explains it calmly and con
     const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
     await ctx.addInitScript(() => ((window as unknown as { sonoraNoDirect: boolean }).sonoraNoDirect = true));
     const page = await ctx.newPage();
-    await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
+    await page.goto(urlFor(role, hash));
     await page.getByPlaceholder('e.g. Clara').fill(name);
-    await page.locator(`button.role[data-role=${role}]`).click();
     await enter(page);
     return page;
   };

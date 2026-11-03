@@ -1,4 +1,4 @@
-import { Eye, GraduationCap, Music4 } from 'lucide-preact';
+import { Eye, Music4 } from 'lucide-preact';
 import type { Role } from '../net/room.ts';
 
 /** The Sonora Live mark: piano keys sounding live, both ways (teacher and student). */
@@ -49,9 +49,7 @@ export function GitHubIcon({ size = 18 }: { size?: number }) {
 }
 
 export function RoleIcon({ role, size = 20 }: { role: Role; size?: number }) {
-  if (role === 'teacher') return <Music4 size={size} />;
-  if (role === 'observer') return <Eye size={size} />;
-  return <GraduationCap size={size} />;
+  return role === 'observer' ? <Eye size={size} /> : <Music4 size={size} />;
 }
 
 export function initials(name: string): string {

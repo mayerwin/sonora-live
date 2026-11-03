@@ -35,8 +35,10 @@ const LEAVE_NOTICE_MS = 3000;
 /** after this long in the background, the old connections are replaced at once rather than repaired */
 const RECONNECT_AFTER_AWAY_MS = 20_000;
 
-export const roleLabel = (r: Role): string =>
-  ({ student: t('Student'), teacher: t('Teacher'), observer: t('Observer') })[r];
+export const roleLabel = (r: Role): string => (r === 'observer' ? t('Observer') : t('Musician'));
+
+/** Opened with an observer's link (`?watch`): joins to watch and listen, not to play. */
+export const watching = (): boolean => typeof location !== 'undefined' && /[?&]watch\b/.test(location.search);
 
 /** What a peer tells us about itself. */
 export interface RemoteState {
@@ -104,10 +106,12 @@ export class Session {
   readonly relayFailed = signal(false);
   /** sound could not start without a tap (autoplay rules) */
   readonly needsTap = signal(false);
+  /** an observer chose to send its playing too (MIDI sheet) */
+  readonly observerPlays = signal(false);
   readonly self = computed<MemberInfo>(() => ({
     id: this.id.value,
-    name: settings.value.name.trim() || (settings.value.role ? roleLabel(settings.value.role) : t('Guest')),
-    role: settings.value.role ?? 'student',
+    name: settings.value.name.trim() || roleLabel(watching() ? 'observer' : 'player'),
+    role: watching() ? 'observer' : 'player',
     since: this.since,
   }));
 
@@ -601,7 +605,7 @@ export class Session {
 
   /** Someone whose offer arrives first: the room told us who they are, or they say it once connected. */
   private stranger(id: string): MemberInfo {
-    return this.known.get(id) ?? { id, name: '…', role: 'student', since: 0 };
+    return this.known.get(id) ?? { id, name: '…', role: 'player', since: 0 };
   }
 
   /** The connection to `info`, created once even when signals arrive while it is being set up. */
@@ -935,7 +939,8 @@ export class Session {
     );
     this.disposers.push(
       effect(() => {
-        const send = settings.value.midi.send;
+        // an observer does not send what it plays unless it says so (its own switch, not the saved one)
+        const send = watching() ? this.observerPlays.value : settings.value.midi.send;
         if (send !== this.midi.sending.peek()) this.midi.setSending(send);
       }),
     );

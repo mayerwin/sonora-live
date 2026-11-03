@@ -81,14 +81,13 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   const hub = session.midi;
   void hub.version.value; // redraw on every change
   const peers = session.peers.value;
-  const me = session.self.value;
   const s = settings.value;
   const qwerty = s.midi.qwerty;
   const [octave, setOctave] = useState(4);
   const pointers = useRef(new Map<number, number>());
   const box = useRef<HTMLDivElement>(null);
   const pedals = hub.sustainHeld();
-  const roleOf = (id: string | null) => peers.find((p) => p.id === id)?.info.role ?? 'teacher';
+  const roleOf = (id: string | null) => peers.find((p) => p.id === id)?.info.role ?? 'player';
 
   // the keys are out: get the piano's sound ready
   useEffect(() => {
@@ -162,7 +161,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   return (
     <section class="keys" aria-label={t('Piano keyboard')} data-testid="keyboard">
       <div class="keys-head">
-        <span class="legend" data-role={me.role}>
+        <span class="legend" data-role="self">
           <i /> {t('You')}
         </span>
         {peers.map((p) => (
@@ -170,7 +169,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
             <i /> {p.info.name}
           </span>
         ))}
-        <span class={`pedal ${pedals.local ? 'on' : ''}`} data-role={me.role} title={t('Your sustain pedal')}>
+        <span class={`pedal ${pedals.local ? 'on' : ''}`} data-role="self" title={t('Your sustain pedal')}>
           {t('Pedal')}
         </span>
         {peers.length > 0 && (
@@ -239,7 +238,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
         {keys.map((k) => {
           const h = hub.holder(k.note);
           const on = h.local || !!h.remote;
-          const role = h.local ? me.role : roleOf(h.remote);
+          const role = h.local ? 'self' : roleOf(h.remote);
           const name = noteName(k.note);
           return (
             <div

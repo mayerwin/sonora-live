@@ -16,9 +16,10 @@
 
 import type { Relay } from './relay.ts';
 
-export const ROOM_PROTOCOL = 1;
+export const ROOM_PROTOCOL = 2;
 
-export type Role = 'student' | 'teacher' | 'observer';
+/** a musician plays and talks; an observer (a parent, a guest, a phone as a second camera) mostly watches */
+export type Role = 'player' | 'observer';
 
 export interface MemberInfo {
   /** random per browser tab (kept across reloads of the tab) */
@@ -419,7 +420,7 @@ export class Room {
   }
 }
 
-const ROLES = new Set(['student', 'teacher', 'observer']);
+const ROLES = new Set(['player', 'observer']);
 
 export function validInfo(x: unknown): x is MemberInfo {
   const m = x as MemberInfo;

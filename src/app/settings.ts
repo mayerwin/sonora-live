@@ -4,7 +4,6 @@ import { effect, signal } from '@preact/signals';
 import type { AudioQuality, VideoQuality } from '../media/constraints.ts';
 import type { PlayOn } from '../midi/hub.ts';
 import type { TurnConfig } from '../net/ice.ts';
-import type { Role } from '../net/room.ts';
 
 export type SoundSetting = 'auto' | 'pure' | 'voice';
 
@@ -12,7 +11,6 @@ export interface Settings {
   /** 'auto': the browser's language */
   language: 'auto' | 'en' | 'fr';
   name: string;
-  role: Role | null;
   sound: SoundSetting;
   audioQuality: AudioQuality;
   videoQuality: VideoQuality;
@@ -46,7 +44,6 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   language: 'auto',
   name: '',
-  role: null,
   sound: 'auto',
   audioQuality: 'high',
   videoQuality: 'hd',
