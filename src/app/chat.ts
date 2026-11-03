@@ -55,9 +55,9 @@ export class Chat {
   }
 
   updateFile(fileId: string, patch: Partial<ChatFile>): void {
-    this.messages.value = this.messages.peek().map((m) =>
-      m.file?.id === fileId ? { ...m, file: { ...m.file, ...patch } } : m,
-    );
+    this.messages.value = this.messages
+      .peek()
+      .map((m) => (m.file?.id === fileId ? { ...m, file: { ...m.file, ...patch } } : m));
   }
 
   setTyping(id: string, name: string): void {
@@ -92,8 +92,9 @@ export class Chat {
         id: m.id,
         from: String(m.from),
         name: String(m.name).slice(0, 40),
-        role: m.role ?? null,
-        ts: Number(m.ts) || Date.now(),
+        role: m.role === 'player' || m.role === 'observer' ? m.role : null,
+        // their clock may be ahead: never in the future, so it cannot jump above what is said next
+        ts: Math.min(Number(m.ts) || Date.now(), Date.now()),
         kind: 'text',
         text: m.text.slice(0, 4000),
         mine: m.from === selfId,

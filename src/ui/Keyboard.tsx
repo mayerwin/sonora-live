@@ -84,6 +84,9 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   const s = settings.value;
   const qwerty = s.midi.qwerty;
   const [octave, setOctave] = useState(4);
+  // read by the key handlers as it is now (changing octave must not reinstall them and cut held notes)
+  const octaveRef = useRef(octave);
+  octaveRef.current = octave;
   const pointers = useRef(new Map<number, number>());
   const box = useRef<HTMLDivElement>(null);
   const pedals = hub.sustainHeld();
@@ -108,24 +111,27 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!qwerty) return;
     const held = new Map<string, number>();
+    let pedal = false;
     const down = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || typingTarget(e.target)) return;
       if (e.code === 'KeyZ') return setOctave((o) => Math.max(1, o - 1));
       if (e.code === 'KeyX') return setOctave((o) => Math.min(7, o + 1));
       if (e.code === 'Space') {
         e.preventDefault();
+        pedal = true;
         hub.fromScreen([0xb0, 64, 127]);
         return;
       }
       const semi = QWERTY[e.code];
       if (semi === undefined || held.has(e.code)) return;
-      const note = 12 * (octave + 1) + semi;
+      const note = 12 * (octaveRef.current + 1) + semi;
       if (note < LOW || note > HIGH) return;
       held.set(e.code, note);
       play(note, 92);
     };
     const up = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
+        pedal = false;
         hub.fromScreen([0xb0, 64, 0]);
         return;
       }
@@ -134,9 +140,12 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
       held.delete(e.code);
       stop(note);
     };
+    // the window loses the keys (another app, the keys closed): their key-ups will never come
     const blur = () => {
       for (const n of held.values()) stop(n);
       held.clear();
+      if (pedal) hub.fromScreen([0xb0, 64, 0]);
+      pedal = false;
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -147,7 +156,7 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [qwerty, octave]);
+  }, [qwerty]);
 
   const noteAt = (x: number, y: number): { note: number; vel: number } | null => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;

@@ -91,7 +91,7 @@ export class MqttRelay implements Relay {
    * socket may have died silently while the page was asleep (a phone switching apps). */
   kick(all = false): void {
     for (const c of this.clients) {
-      if (all && c.connected) c.close();
+      // a new connection replaces the current one (connect() closes it first and ignores its late events)
       if (all || !c.connected) this.open(c).catch(() => this.retry(c, 2000));
     }
   }
@@ -115,7 +115,8 @@ export class MqttRelay implements Relay {
   publish(topic: string, data: Uint8Array): void {
     let sent = false;
     for (const c of this.clients) {
-      if (c.connected) {
+      // only a socket that can send now: one being replaced (a reconnect) would drop it silently
+      if (c.ready) {
         c.publish(topic, data);
         sent = true;
       }

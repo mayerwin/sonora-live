@@ -96,7 +96,6 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
   const s = settings.value;
   const media = session.media;
   const mode = session.soundMode.value;
-  const level = session.meter.level.value;
   const clipping = session.meter.clipping.value;
   const speakerLabel =
     devices.speakers.find((d) => d.deviceId === s.speakerId)?.label ?? devices.speakers[0]?.label ?? '';
@@ -217,7 +216,7 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
         </select>
         <div style="display:flex;align-items:center;gap:10px;color:var(--text-2);font-size:13.5px">
           <Mic size={16} />
-          <LevelBars level={media.micOn.value ? level : 0} clipping={clipping} n={12} />
+          <LevelBars level={session.meter.level} clipping={session.meter.clipping} on={media.micOn.value} n={12} />
           <span>{media.stereo.value ? t('Stereo input') : t('Mono input')}</span>
         </div>
         {clipping && (

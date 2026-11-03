@@ -570,6 +570,9 @@ export class Session {
   /** Release what this side held for someone whose connection is gone (their sound, their notes, a file). */
   private releasePeer(id: string): void {
     this.midi.peerGone(id);
+    // a file they were sending will not finish
+    const f = this.fileIn.get(id);
+    if (f) this.chat.updateFile(f.id, { progress: 1, failed: true });
     this.fileIn.delete(id);
     const el = this.audioEls.get(id);
     if (el) {
@@ -778,7 +781,7 @@ export class Session {
       effect(() => {
         const m = settings.value.midi;
         this.midi.playOn.value = m.playOn;
-        this.midi.outChannel.value = m.outChannel;
+        this.midi.setOutChannel(m.outChannel);
         this.midi.piano.setVolume(m.pianoVolume);
         this.midi.piano.setReverb(m.reverb);
       }),
@@ -861,7 +864,8 @@ export class Session {
           from: id,
           name: peer?.info.name ?? t('Guest'),
           role: peer?.info.role ?? null,
-          ts: Number(msg.ts) || Date.now(),
+          // in the order it arrives here (their clock may be minutes off ours)
+          ts: Date.now(),
           kind: 'text',
           text: msg.text.slice(0, 4000),
           mine: false,
@@ -1001,7 +1005,8 @@ export class Session {
         mime: file.type,
         ts: Date.now(),
       });
-      const chunk = 64 * 1024;
+      // small chunks: a chunk being sent cannot be overtaken, and MIDI shares the connection
+      const chunk = 16 * 1024;
       let sent = 0;
       const total = file.size * links.length;
       for (const l of links) {
@@ -1012,17 +1017,7 @@ export class Session {
           ch.send(meta);
           for (let off = 0; off < file.size; off += size) {
             const buf = await file.slice(off, off + size).arrayBuffer();
-            if (ch.bufferedAmount > 256 * 1024) {
-              await new Promise<void>((resolve) => {
-                const done = () => {
-                  ch.removeEventListener('bufferedamountlow', done);
-                  ch.removeEventListener('close', done);
-                  resolve();
-                };
-                ch.addEventListener('bufferedamountlow', done);
-                ch.addEventListener('close', done);
-              });
-            }
+            if (ch.bufferedAmount > 256 * 1024) await drained(ch);
             if (ch.readyState !== 'open') break;
             ch.send(buf);
             sent += buf.byteLength;
@@ -1099,6 +1094,26 @@ export class Session {
   get isLeader(): boolean {
     return this.room.isLeader;
   }
+}
+
+/**
+ * Until a data channel's send buffer has drained (or the channel is closed: a channel closed by our own side
+ * fires no event, so its state is checked too).
+ */
+function drained(ch: RTCDataChannel): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      clearInterval(poll);
+      ch.removeEventListener('bufferedamountlow', done);
+      ch.removeEventListener('close', done);
+      resolve();
+    };
+    const poll = setInterval(() => {
+      if (ch.readyState !== 'open' || ch.bufferedAmount <= ch.bufferedAmountLowThreshold) done();
+    }, 250);
+    ch.addEventListener('bufferedamountlow', done);
+    ch.addEventListener('close', done);
+  });
 }
 
 /**

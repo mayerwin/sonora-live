@@ -28,7 +28,10 @@ export function mqttPacket(type: number, flags: number, body: ArrayLike<number>)
 }
 
 /** Split a byte stream into packets; returns the bytes of an incomplete trailing packet. */
-export function mqttParse(buf: Uint8Array, handle: (type: number, flags: number, body: Uint8Array) => void): Uint8Array {
+export function mqttParse(
+  buf: Uint8Array,
+  handle: (type: number, flags: number, body: Uint8Array) => void,
+): Uint8Array {
   let pos = 0;
   for (;;) {
     if (buf.length - pos < 2) break;
@@ -58,6 +61,7 @@ export function mqttParse(buf: Uint8Array, handle: (type: number, flags: number,
 
 export class MqttClient {
   readonly url: string;
+  /** CONNACK received on the current socket */
   connected = false;
   onMessage: (topic: string, payload: Uint8Array) => void = () => {};
   /** the connection dropped after it had been established */
@@ -66,47 +70,62 @@ export class MqttClient {
   private buf: Uint8Array = new Uint8Array(0);
   private packetId = 1;
   private keepAlive: ReturnType<typeof setInterval> | null = null;
-  private closing = false;
+  /** the connection attempt in progress (a second connect() joins it rather than racing it) */
+  private pending: Promise<void> | null = null;
 
   constructor(url: string) {
     this.url = url;
   }
 
+  /** Connected, with a socket that can send right now. */
+  get ready(): boolean {
+    return this.connected && !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
   connect(clientId: string, timeoutMs = 8000): Promise<void> {
-    this.closing = false;
+    if (this.pending) return this.pending;
+    // one socket at a time: whatever was there is closed first, and its late events are ignored below
+    this.close();
     this.buf = new Uint8Array(0);
-    return new Promise((resolve, reject) => {
+    const attempt = new Promise<void>((resolve, reject) => {
       let settled = false;
+      let ws: WebSocket | null = null;
+      const mine = () => ws !== null && this.ws === ws;
       const fail = (why: string) => {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
           reject(new Error(`${this.url}: ${why}`));
         }
-        this.close();
+        // only this attempt's socket: a newer one may be working by now
+        if (mine()) this.close();
       };
       const timer = setTimeout(() => fail('timeout'), timeoutMs);
-      let ws: WebSocket;
       try {
         ws = new WebSocket(this.url, ['mqtt']);
       } catch (e) {
         fail(String(e));
         return;
       }
-      this.ws = ws;
-      ws.binaryType = 'arraybuffer';
+      const sock = ws;
+      this.ws = sock;
+      sock.binaryType = 'arraybuffer';
       // CONNECT: protocol "MQTT" level 4, clean session, keep-alive 30 s
-      ws.onopen = () => ws.send(mqttPacket(1, 0, [...utf8('MQTT'), 4, 0x02, 0, 30, ...utf8(clientId)]));
-      ws.onerror = () => fail('connection error');
-      ws.onclose = () => {
-        const was = this.connected;
-        this.connected = false;
-        if (this.keepAlive) clearInterval(this.keepAlive);
-        this.keepAlive = null;
-        if (!settled) fail('closed');
-        else if (was && !this.closing) this.onClose();
+      sock.onopen = () => {
+        if (mine()) sock.send(mqttPacket(1, 0, [...utf8('MQTT'), 4, 0x02, 0, 30, ...utf8(clientId)]));
       };
-      ws.onmessage = (ev) => {
+      sock.onerror = () => fail('connection error');
+      sock.onclose = () => {
+        if (!mine()) return; // an old socket closing late: not ours to report
+        const was = this.connected;
+        this.ws = null;
+        this.connected = false;
+        this.stopKeepAlive();
+        if (!settled) fail('closed');
+        else if (was) this.onClose();
+      };
+      sock.onmessage = (ev) => {
+        if (!mine()) return;
         const data = new Uint8Array(ev.data as ArrayBuffer);
         const all = new Uint8Array(this.buf.length + data.length);
         all.set(this.buf);
@@ -122,6 +141,7 @@ export class MqttClient {
               this.connected = true;
               settled = true;
               clearTimeout(timer);
+              this.stopKeepAlive();
               this.keepAlive = setInterval(() => this.send(mqttPacket(12, 0, [])), 20_000);
               resolve();
             } else if (type === 3) {
@@ -135,10 +155,21 @@ export class MqttClient {
             // SUBACK, UNSUBACK, PINGRESP: nothing to do
           });
         } catch {
-          this.close();
+          fail('malformed');
         }
       };
     });
+    this.pending = attempt;
+    const done = () => {
+      if (this.pending === attempt) this.pending = null;
+    };
+    attempt.then(done, done);
+    return attempt;
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepAlive) clearInterval(this.keepAlive);
+    this.keepAlive = null;
   }
 
   private send(p: Uint8Array<ArrayBuffer>): void {
@@ -168,9 +199,11 @@ export class MqttClient {
   }
 
   close(): void {
-    this.closing = true;
     const ws = this.ws;
     this.ws = null;
+    this.connected = false;
+    this.pending = null;
+    this.stopKeepAlive();
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) {
       try {

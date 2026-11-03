@@ -156,7 +156,6 @@ export function SelfPip() {
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const start = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const level = session.meter.level.value;
   const pos: Record<string, string> = drag
     ? { left: `${drag.x}px`, top: `${drag.y}px` }
     : {
@@ -215,7 +214,7 @@ export function SelfPip() {
         </div>
       )}
       <div class="pip-label">
-        {media.micOn.value ? <LevelBars level={level} n={4} /> : <MicOff size={13} color="var(--red)" />}
+        {media.micOn.value ? <LevelBars level={session.meter.level} n={4} /> : <MicOff size={13} color="var(--red)" />}
         {t('You')}
       </div>
       {isMobile && media.camOn.value && (

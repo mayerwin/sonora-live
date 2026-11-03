@@ -115,7 +115,9 @@ export function encodeBleMidi(messages: number[][], nowMs = performance.now()): 
 }
 
 export const webBluetoothAvailable = (): boolean =>
-  typeof navigator !== 'undefined' && 'bluetooth' in navigator && !!(navigator as Navigator & { bluetooth?: unknown }).bluetooth;
+  typeof navigator !== 'undefined' &&
+  'bluetooth' in navigator &&
+  !!(navigator as Navigator & { bluetooth?: unknown }).bluetooth;
 
 // Minimal Web Bluetooth typings (not in the standard DOM library)
 interface BtCharacteristic extends EventTarget {
@@ -161,11 +163,16 @@ export class BleMidiDevice {
   private writing = false;
   private closed = false;
   private retry = 0;
+  /** the connection dropped since the last connect */
+  private dropped = false;
 
   constructor(device: BtDevice) {
     this.device = device;
     device.addEventListener('gattserverdisconnected', () => {
       this.ch = null;
+      // what was waiting is stale now (a note-on whose note-off is lost would hang once reconnected)
+      this.queue = [];
+      this.dropped = true;
       this.onStatus(false);
       if (!this.closed) this.reconnect();
     });
@@ -211,6 +218,14 @@ export class BleMidiDevice {
     await ch.startNotifications();
     this.ch = ch;
     this.retry = 0;
+    // back after a drop: releases sent meanwhile were lost, so nothing may stay held
+    if (this.dropped) {
+      this.dropped = false;
+      for (let c = 0; c < 16; c++) {
+        this.send([0xb0 | c, 64, 0]);
+        this.send([0xb0 | c, 123, 0]);
+      }
+    }
     this.onStatus(true);
   }
 

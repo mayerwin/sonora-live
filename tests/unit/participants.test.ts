@@ -15,9 +15,12 @@ import {
 import type { SignalData } from '../../src/net/peer.ts';
 import type { MemberInfo } from '../../src/net/room.ts';
 
+let cids = 0;
 class FakeLink implements LinkLike {
   everConnected = false;
   remoteFingerprint: string | null = null;
+  readonly cid = `c${++cids}`;
+  remoteCid: string | null = null;
   closed = false;
   ok = false;
   restarts = 0;
@@ -31,6 +34,7 @@ class FakeLink implements LinkLike {
   }
   async receiveSignal(d: SignalData): Promise<void> {
     this.received.push(d);
+    if (d.cid && !this.remoteCid) this.remoteCid = d.cid;
     const fp = d.description?.sdp?.match(/a=fingerprint:(\S+ \S+)/)?.[1];
     if (fp) this.remoteFingerprint = fp;
   }
@@ -53,8 +57,9 @@ const STATE: RemoteState = {
 };
 
 const info = (id: string, name = id): MemberInfo => ({ id, name, role: 'player', since: 1 });
-const offer = (fp: string): SignalData => ({
+const offer = (fp: string, tags: { cid?: string; to?: string } = {}): SignalData => ({
   description: { type: 'offer', sdp: `v=0\r\na=fingerprint:sha-256 ${fp}\r\n` },
+  ...tags,
 });
 
 /** A lesson as seen from "me", with a clock that only moves when told. */
@@ -230,6 +235,32 @@ describe('the people in a lesson', () => {
     expect(fresh.initiator).toBe(true);
     await w.connect(fresh, 'Leo');
     expect(w.events.filter((e) => /^(joined|left|lost)/.test(e))).toEqual([]);
+  });
+
+  it('back from the background, a stale offer from their old connection is dropped, not applied to the new one', async () => {
+    await w.parts.signal('leo', offer('THEIRS', { cid: 'theirs-1' }));
+    const old = w.last();
+    await w.connect(old, 'Leo');
+    old.ok = false;
+    w.parts.resume(90_000);
+    await w.advance(300);
+    const fresh = w.last();
+    expect(fresh).not.toBe(old);
+    // their old link, still repairing, resends its offer to our old connection
+    await w.parts.signal('leo', offer('THEIRS', { cid: 'theirs-1', to: old.cid }));
+    expect(fresh.received).toHaveLength(0);
+    // their answer to our new offer goes through
+    await w.parts.signal('leo', { description: { type: 'answer', sdp: 'v=0' }, cid: 'theirs-2', to: fresh.cid });
+    expect(fresh.received).toHaveLength(1);
+    expect(w.links).toHaveLength(2);
+  });
+
+  it('an offer from a newer connection of theirs (a new connection id) replaces the old one', async () => {
+    await w.parts.signal('leo', offer('SAME', { cid: 'old' }));
+    await w.connect(w.last(), 'Leo');
+    await w.parts.signal('leo', offer('SAME', { cid: 'new' }));
+    expect(w.links).toHaveLength(2);
+    expect(w.links[0].closed).toBe(true);
   });
 
   it('back after a short absence: a healthy connection is left alone', async () => {

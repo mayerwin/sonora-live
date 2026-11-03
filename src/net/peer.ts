@@ -27,6 +27,10 @@ export type LinkState = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 export interface SignalData {
   description?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  /** the sending connection's id, and (once known) the receiving connection's: a signal meant for an older
+   * connection is dropped, an offer from a newer one replaces the old (src/app/participants.ts) */
+  cid?: string;
+  to?: string;
 }
 
 export interface SendParams {
@@ -86,6 +90,9 @@ export class PeerLink {
   state: LinkState = 'connecting';
   /** the data channels opened at least once */
   everConnected = false;
+  /** this connection's id (random), and the other side's connection's, learnt from its first signal */
+  readonly cid = Math.random().toString(36).slice(2, 12);
+  remoteCid: string | null = null;
 
   onState: (s: LinkState) => void = () => {};
   onTrack: (slot: Slot, track: MediaStreamTrack) => void = () => {};
@@ -116,6 +123,9 @@ export class PeerLink {
   private closed = false;
   /** keeps video from queuing ahead of sound and MIDI (src/net/guard.ts) */
   readonly guard = new LatencyGuard();
+  /** measurement counters at the last poll: the guard only takes new measurements */
+  private pairResponses = -1;
+  private audioRttCount = -1;
 
   constructor(opts: {
     id: string;
@@ -170,7 +180,7 @@ export class PeerLink {
 
     pc.onnegotiationneeded = () => void this.negotiate();
     pc.onicecandidate = (e) => {
-      if (e.candidate) this.onSignal({ candidate: e.candidate.toJSON() });
+      if (e.candidate) this.signalOut({ candidate: e.candidate.toJSON() });
     };
     pc.ontrack = (e) => {
       // video frames are shown as soon as they are decoded, without the smoothing buffer: hands on the keys
@@ -242,11 +252,17 @@ export class PeerLink {
   private sendDescription(): void {
     const d = this.pc.localDescription;
     if (!d) return;
-    this.onSignal({ description: { type: d.type, sdp: tuneOpus(d.sdp, this.tuning) } });
+    this.signalOut({ description: { type: d.type, sdp: tuneOpus(d.sdp, this.tuning) } });
+  }
+
+  /** Signals leave tagged with this connection's id and, once known, the other side's. */
+  private signalOut(data: SignalData): void {
+    this.onSignal({ ...data, cid: this.cid, ...(this.remoteCid ? { to: this.remoteCid } : {}) });
   }
 
   async receiveSignal(data: SignalData): Promise<void> {
     if (this.closed) return;
+    if (typeof data.cid === 'string' && !this.remoteCid) this.remoteCid = data.cid;
     const pc = this.pc;
     try {
       if (data.description) {
@@ -504,6 +520,8 @@ export class PeerLink {
       quality: 'unknown',
     };
     // the candidate pair in use
+    /** round trips measured since the last poll (for the latency guard) */
+    const fresh: number[] = [];
     let pair: Record<string, unknown> | undefined;
     for (const v of all.values()) {
       if (v.type === 'transport' && v.selectedCandidatePairId) pair = all.get(String(v.selectedCandidatePairId));
@@ -513,6 +531,10 @@ export class PeerLink {
     }
     if (pair) {
       if (typeof pair.currentRoundTripTime === 'number') out.rtt = Math.round(pair.currentRoundTripTime * 1000);
+      // a new measurement only when the pair received a new answer to its checks
+      const responses = Number(pair.responsesReceived ?? 0);
+      if (responses !== this.pairResponses && out.rtt !== null) fresh.push(out.rtt);
+      this.pairResponses = responses;
       const lc = all.get(String(pair.localCandidateId));
       const rc = all.get(String(pair.remoteCandidateId));
       out.relayed = lc?.candidateType === 'relay' || rc?.candidateType === 'relay';
@@ -523,7 +545,7 @@ export class PeerLink {
           : 'internet';
       out.path = String(lc?.protocol ?? 'udp').toUpperCase();
     }
-    // the audio's own round trip (each RTCP report, about every second): sees a queue sooner than the pair's
+    // the audio's own round trip (each RTCP report): a new measurement when its count moves
     for (const v of all.values()) {
       if (
         v.type === 'remote-inbound-rtp' &&
@@ -532,6 +554,9 @@ export class PeerLink {
         v.roundTripTime > 0
       ) {
         out.audioRtt = Math.round(v.roundTripTime * 1000);
+        const n = Number(v.roundTripTimeMeasurements ?? 0);
+        if (n !== this.audioRttCount) fresh.push(out.audioRtt);
+        this.audioRttCount = n;
       }
     }
     const delta = (key: string, v: Record<string, number>) => {
@@ -594,8 +619,8 @@ export class PeerLink {
         };
       }
     }
-    const probe = out.audioRtt ?? out.rtt;
-    if (probe !== null) this.guardLatency(probe);
+    // the guard takes each new measurement once (a value read again at the next poll is not a new sample)
+    for (const rtt of fresh) this.guardLatency(rtt);
     if (out.rtt !== null) {
       // capture (~10 ms) + one 10 ms frame + network (half the round trip) + jitter buffer + playout (~10 ms)
       out.latencyMs = Math.round(10 + this.tuning.ptime + out.rtt / 2 + out.bufferMs + 10);

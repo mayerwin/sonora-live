@@ -43,3 +43,22 @@ describe('latency guard', () => {
     expect(g.cap).toBe(Infinity);
   });
 });
+
+describe('latency guard timing', () => {
+  it('one spike costs one halving, and recovery takes the same time whether measurements come every 1 s or 5 s', () => {
+    for (const every of [1000, 5000]) {
+      const g = new LatencyGuard();
+      let t = 0;
+      for (; t < 30_000; t += every) g.sample(20, t, WANT);
+      g.sample(200, t, WANT);
+      expect(g.cap).toBe(WANT / 2);
+      const start = t;
+      while (g.cap !== Infinity && t < start + 120_000) {
+        t += every;
+        g.sample(20, t, WANT);
+      }
+      expect(g.cap).toBe(Infinity);
+      expect(t - start).toBeLessThanOrEqual(20_000);
+    }
+  });
+});

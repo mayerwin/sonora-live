@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { useComputed, type ReadonlySignal } from '@preact/signals';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import {
   CircleAlert,
@@ -50,13 +51,16 @@ export function Sheet(props: {
   children: ComponentChildren;
   label?: string;
 }) {
+  // the latest onClose, without reinstalling the listener at every render (callers pass a new arrow each time)
+  const close = useRef(props.onClose);
+  close.current = props.onClose;
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose();
+      if (e.key === 'Escape') close.current();
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
-  }, [props.onClose]);
+  }, []);
   return (
     <>
       <div class="scrim" onClick={props.onClose} />
@@ -172,14 +176,31 @@ export function VideoView(props: {
 }
 
 /** Level bars (0..1). */
-export function LevelBars({ level, clipping, n = 5 }: { level: number; clipping?: boolean; n?: number }) {
-  const lit = Math.round(level * n * 1.15);
+/**
+ * Level bars (0..1). The level changes at every frame: only this small component follows it, and only when the
+ * number of lit bars changes (the components around it do not re-render with the meter).
+ */
+export function LevelBars({
+  level,
+  clipping,
+  n = 5,
+  on = true,
+}: {
+  level: ReadonlySignal<number>;
+  clipping?: ReadonlySignal<boolean>;
+  n?: number;
+  on?: boolean;
+}) {
+  const litSig = useComputed(() => (on ? Math.round(level.value * n * 1.15) : 0));
+  const clipSig = useComputed(() => !!clipping?.value);
+  const lit = litSig.value;
+  const clip = clipSig.value;
   return (
     <span class="bars" aria-hidden="true">
       {Array.from({ length: n }, (_, i) => (
         <i
           style={{ height: `${30 + (i * 70) / (n - 1)}%` }}
-          class={i < lit ? (clipping && i >= n - 2 ? 'clip' : i >= n - 1 ? 'hot' : 'on') : ''}
+          class={i < lit ? (clip && i >= n - 2 ? 'clip' : i >= n - 1 ? 'hot' : 'on') : ''}
         />
       ))}
     </span>

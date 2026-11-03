@@ -89,7 +89,6 @@ export function Lobby() {
   const [showQr, setShowQr] = useState(false);
   const videoTrack = media.video.value;
   const stream = useMemo(() => (videoTrack ? new MediaStream([videoTrack]) : null), [videoTrack]);
-  const level = session.meter.level.value;
   const clipping = session.meter.clipping.value;
   const typedCode = useComputed(() => normalizeRoomCode(typed.value));
 
@@ -267,7 +266,7 @@ export function Lobby() {
                 title={clipping ? t('Too loud: lower the microphone level') : t('Microphone level')}
               >
                 <Mic />
-                <LevelBars level={media.micOn.value ? level : 0} clipping={clipping} />
+                <LevelBars level={session.meter.level} clipping={session.meter.clipping} on={media.micOn.value} />
                 {clipping ? t('Too loud') : t('Mic')}
               </div>
             )}

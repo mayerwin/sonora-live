@@ -1,3 +1,4 @@
+import { computed } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import {
   AudioWaveform,
@@ -58,16 +59,23 @@ function MidiLed({ on }: { on: boolean }) {
 
 const REACTIONS = ['👏', '👍', '❤️', '🎵', '😂', '🔥', '🙌', '🤔'];
 
+/** the microphone level in the control bar, bound to its element: no re-render at every frame */
+const micLevelStyle = computed(() => `transform:scaleY(${session.meter.level.value.toFixed(2)})`);
+
+/** an instrument or someone's notes are in play (true from the first note: not one change per note) */
+const midiActive = computed(
+  () =>
+    session.midi.devices.connected.value ||
+    session.peers.value.some((p) => p.remote?.midi.sending) ||
+    session.midi.lastLocal.value > 0,
+);
+
 export function Room() {
   const peers = session.peers.value;
   const rp = session.roomPhase.value;
   const denied = session.denied.value;
   const s = settings.value;
-  const midiActive =
-    session.midi.devices.connected.value ||
-    peers.some((p) => p.remote?.midi.sending) ||
-    session.midi.lastLocal.value > 0;
-  const showKeys = keyboardOpen.value || (s.midi.keyboard && midiActive);
+  const showKeys = keyboardOpen.value || (s.midi.keyboard && midiActive.value);
 
   useEffect(() => {
     chatOpenTracker();
@@ -336,7 +344,6 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
   const media = session.media;
   const mic = media.micOn.value;
   const cam = media.camOn.value;
-  const level = session.meter.level.value;
   const mode = session.soundMode.value;
   const setting = settings.value.sound;
   const unread = session.chat.unread.value;
@@ -395,7 +402,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <span>{mic ? t('Mute') : t('Unmute')}</span>
           {mic && (
             <span class="mic-level">
-              <i style={{ transform: `scaleY(${level})` }} />
+              <i style={micLevelStyle} />
             </span>
           )}
         </button>

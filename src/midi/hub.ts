@@ -36,6 +36,8 @@ export class MidiHub {
   private echo = new EchoFilter();
   private sender: MidiSender;
   private receivers = new Map<string, MidiReceiver>();
+  /** what the instrument sounds of the others' playing, as sent to it (output channel applied) */
+  private sounding = new NoteState();
   private raf = 0;
 
   constructor() {
@@ -43,8 +45,29 @@ export class MidiHub {
     this.devices.onMessage = (m) => this.fromInstrument(m);
     this.devices.onGone = () => {
       this.releaseLocal();
+      // the others' notes it was sounding: released while it is still wired (a switch), forgotten if it is gone
+      this.releaseInstrument();
       this.echo.reset();
     };
+  }
+
+  /**
+   * Release what the instrument is sounding of the others' playing, exactly as it was sent (on the output channel
+   * chosen then): before the output changes (another channel, another instrument, the built-in piano instead).
+   */
+  releaseInstrument(): void {
+    for (const m of this.sounding.releaseAll()) {
+      this.sounding.apply(m);
+      this.echo.sent(m);
+      this.devices.send(m);
+    }
+  }
+
+  /** Send the others' notes on another channel (the ones sounding are released first). */
+  setOutChannel(ch: number): void {
+    if (ch === this.outChannel.peek()) return;
+    this.releaseInstrument();
+    this.outChannel.value = ch;
   }
 
   /** The instrument went away mid-phrase: its key and pedal releases will never come, so send them now. */
@@ -120,6 +143,7 @@ export class MidiHub {
       const out = m.slice();
       const ch = this.outChannel.peek();
       if (ch >= 1 && ch <= 16) out[0] = (out[0] & 0xf0) | (ch - 1);
+      this.sounding.apply(out);
       this.echo.sent(out);
       this.devices.send(out);
     }
@@ -147,13 +171,8 @@ export class MidiHub {
 
   /** The sound moves elsewhere (instrument <-> built-in piano): silence the old place. */
   silenceRemote(): void {
-    for (const [id, st] of this.remote) {
-      for (const m of st.releaseAll()) {
-        this.echo.sent(m);
-        this.devices.send(m);
-      }
-      this.piano.allOff(id);
-    }
+    this.releaseInstrument();
+    for (const id of this.remote.keys()) this.piano.allOff(id);
   }
 
   /** A short C–E–G–C on the instrument, to check that it plays what it receives. */
@@ -166,11 +185,14 @@ export class MidiHub {
         this.echo.sent(on);
         this.devices.send(on);
       }, i * 160);
-      setTimeout(() => {
-        const off = [0x80 | ch, n, 64];
-        this.echo.sent(off);
-        this.devices.send(off);
-      }, i * 160 + (i === notes.length - 1 ? 700 : 150));
+      setTimeout(
+        () => {
+          const off = [0x80 | ch, n, 64];
+          this.echo.sent(off);
+          this.devices.send(off);
+        },
+        i * 160 + (i === notes.length - 1 ? 700 : 150),
+      );
     });
   }
 

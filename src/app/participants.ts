@@ -67,6 +67,9 @@ export interface LinkLike {
   readonly id: string;
   readonly everConnected: boolean;
   readonly remoteFingerprint: string | null;
+  /** this connection's id, and the other side's (from its first signal) */
+  readonly cid: string;
+  readonly remoteCid: string | null;
   /** connected and its control channel open */
   healthy(): boolean;
   receiveSignal(d: SignalData): Promise<void>;
@@ -256,10 +259,18 @@ export class Participants<L extends LinkLike> {
     if (!d || typeof d !== 'object' || from === this.selfId()) return;
     const p = this.people.get(from);
     let link = p?.link ?? (p?.creating ? await p.creating : null);
+    // meant for an older connection of ours (their old link still talking to the one we replaced): not for this one
+    if (link && typeof d.to === 'string' && d.to !== link.cid) {
+      this.host.log('signal for an old connection dropped', from.slice(0, 4));
+      return;
+    }
     // an offer from a new connection of theirs (they reloaded, or gave up on the old one): the old one is dead
-    if (link && p && d.description?.type === 'offer' && link.remoteFingerprint) {
+    if (link && p && d.description?.type === 'offer') {
       const fp = fingerprintOf(d.description.sdp);
-      if (fp && fp !== link.remoteFingerprint) {
+      const newer =
+        (typeof d.cid === 'string' && !!link.remoteCid && d.cid !== link.remoteCid) ||
+        (!!fp && !!link.remoteFingerprint && fp !== link.remoteFingerprint);
+      if (newer) {
         this.host.log('new connection from', from.slice(0, 4), '(old one replaced)');
         this.replace(p, false);
         link = await this.open(p.info, false);

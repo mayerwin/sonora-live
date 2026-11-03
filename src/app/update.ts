@@ -12,10 +12,13 @@ import { effect } from '@preact/signals';
 
 const CHECK_MS = 5 * 60_000;
 const TRIED_KEY = 'sonora.update.tried';
+const RETRY_SAME_BUILD_MS = 10 * 60_000;
 /** in the lobby, an update waits until nobody has touched the page for this long */
 const IDLE_MS = 20_000;
 
 let ready = false;
+/** loads the waiting build (and remembers it was tried) */
+let installer: () => Promise<void> = installUpdate;
 let checking = false;
 let lastTouch = 0;
 
@@ -57,18 +60,27 @@ async function check(startup: boolean, inLesson: () => boolean): Promise<void> {
   const online = await onlineBuild();
   checking = false;
   if (!online || online === buildId()) return;
-  if (startup && !inLesson()) {
-    // once per new build: if something between us and the server still hands out the old page, carry on
-    let tried = '';
-    try {
-      tried = sessionStorage.getItem(TRIED_KEY) ?? '';
-      sessionStorage.setItem(TRIED_KEY, online);
-    } catch {
-      // no storage: try once anyway
-    }
-    if (tried !== online) return installUpdate();
+  // once per new build: a reload that still brings the old page (something between us and the server, a cache
+  // that has not expired) is not tried again for that build in this tab: no reload loop
+  // (GitHub Pages' cache lasts 10 minutes: after that, the same build is worth another try)
+  let tried: { build?: string; at?: number } = {};
+  try {
+    tried = JSON.parse(sessionStorage.getItem(TRIED_KEY) ?? '{}') ?? {};
+  } catch {
+    // no storage, or an old value: one try per page load
   }
+  if (tried.build === online && Date.now() - (tried.at ?? 0) < RETRY_SAME_BUILD_MS) return;
+  const attempt = () => {
+    try {
+      sessionStorage.setItem(TRIED_KEY, JSON.stringify({ build: online, at: Date.now() }));
+    } catch {
+      // no storage
+    }
+    return installUpdate();
+  };
+  if (startup && !inLesson()) return attempt();
   ready = true;
+  installer = attempt;
   tryInstall(inLesson);
 }
 
@@ -78,7 +90,7 @@ function tryInstall(inLesson: () => boolean): void {
     setTimeout(() => tryInstall(inLesson), IDLE_MS);
     return;
   }
-  void installUpdate();
+  void installer();
 }
 
 /** The service worker: offline copy of the app, the piano and the emoji names. */
