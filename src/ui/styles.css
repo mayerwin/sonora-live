@@ -2694,6 +2694,12 @@ emoji-picker {
     0 3px 4px rgba(0, 0, 0, 0.5);
 }
 
+.wkey.on,
+.bkey.on {
+  /* the colour of whoever plays it (data-role) */
+  --kc: var(--rc, var(--gold));
+}
+
 .wkey.on {
   background: linear-gradient(180deg, color-mix(in oklab, var(--kc) 60%, #fff), var(--kc));
   box-shadow: 0 0 18px color-mix(in oklab, var(--kc) 70%, transparent) inset;

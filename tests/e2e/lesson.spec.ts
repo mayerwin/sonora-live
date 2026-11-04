@@ -171,6 +171,11 @@ test('MIDI played on the on-screen keys lights up and sounds on the other side',
       ),
     )
     .not.toBeNull();
+  // lit in the other musician's colour (jade) on b, in one's own (gold) on a: never left dark
+  const lit = (p: typeof a) =>
+    p.locator('[data-note="60"]').evaluate((el) => getComputedStyle(el).backgroundImage);
+  await expect.poll(() => lit(b)).toContain('rgb(82, 214, 180)');
+  await expect.poll(() => lit(a)).toContain('rgb(245, 181, 68)');
   await a.mouse.up();
   await expect(b.locator('[data-note="60"]')).not.toHaveAttribute('data-on', 'true');
 

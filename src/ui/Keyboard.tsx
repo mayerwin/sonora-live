@@ -254,7 +254,8 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
               key={k.note}
               data-note={k.note}
               class={`${k.black ? 'bkey' : 'wkey'} ${on ? 'on' : ''} ${k.note === 60 ? 'middle-c' : ''}`}
-              style={{ left: `${k.left}%`, width: `${k.width}%`, '--kc': on ? `var(--${role})` : undefined }}
+              style={{ left: `${k.left}%`, width: `${k.width}%` }}
+              data-role={on ? role : undefined}
               aria-label={name}
               data-on={on || undefined}
             >
