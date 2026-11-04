@@ -26,6 +26,13 @@ export class LocalMedia {
   readonly camOn = signal(true);
   /** sound mode of the current microphone track */
   readonly mode = signal<SoundMode>('pure');
+  /** the current microphone track cancels the speakers' echo */
+  readonly echo = signal(false);
+  /** the sound plays on headphones, as far as the output's name tells (no echo to cancel then) */
+  readonly headphones = signal(false);
+  /** cancel echo in pure mode (voice mode always does) */
+  private wantEcho = true;
+  private speakerId = '';
   readonly audioProblem = signal<MediaProblem | null>(null);
   readonly videoProblem = signal<MediaProblem | null>(null);
   /** the microphone delivers stereo */
@@ -82,7 +89,9 @@ export class LocalMedia {
       this.micId = opts.micId;
       this.camId = opts.camId;
       this.quality = opts.quality;
-      const audio = audioConstraints(opts.mode, opts.micId || undefined);
+      // headphones or speakers decide the echo cancelling (names are known when permission was given before)
+      await this.checkOutput();
+      const audio = audioConstraints(opts.mode, opts.micId || undefined, this.wantEcho);
       const video = opts.wantVideo ? videoConstraints(opts.quality, opts.camId || undefined, this.facing.value) : false;
       let stream: MediaStream | null = null;
       this.asking.value = true;
@@ -93,7 +102,9 @@ export class LocalMedia {
         // one of them refused (a blocked camera, a missing microphone) must not cost the other: ask separately
         stream = new MediaStream();
         try {
-          const a = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(opts.mode) });
+          const a = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints(opts.mode, undefined, this.wantEcho),
+          });
           a.getAudioTracks().forEach((t) => stream!.addTrack(t));
         } catch (ea) {
           this.audioProblem.value = problemOf(ea);
@@ -115,6 +126,8 @@ export class LocalMedia {
       if (a) this.setAudioTrack(a, opts.mode);
       if (v) this.setVideoTrack(v);
       if (!opts.wantVideo) this.camOn.value = false;
+      // device names are known once permission is given
+      void this.checkOutput();
     });
   }
 
@@ -122,8 +135,12 @@ export class LocalMedia {
     const old = this.audio.value;
     t.contentHint = mode === 'pure' ? 'music' : 'speech';
     t.enabled = this.micOn.value;
-    this.stereo.value = (t.getSettings().channelCount ?? 1) >= 2;
+    const st = t.getSettings();
+    this.stereo.value = (st.channelCount ?? 1) >= 2;
     this.mode.value = mode;
+    // what the browser applied (newer ones say 'all' or 'remote-only' instead of true)
+    const ec = st.echoCancellation as boolean | string | undefined;
+    this.echo.value = ec === undefined ? this.wantsEcho(mode) : ec !== false;
     this.audioProblem.value = null;
     t.addEventListener('ended', () => {
       // unplugged: fall back to the default microphone
@@ -153,13 +170,21 @@ export class LocalMedia {
   restartAudio(mode: SoundMode, micId = this.micId): Promise<void> {
     return this.run(async () => {
       this.micId = micId;
+      // Other processing: close the microphone first. While it is open, a browser may hand the new request
+      // the same capture, with the old processing (no echo cancelling), and phones capture once at a time.
+      const old = this.audio.peek();
+      if (old && (mode !== this.mode.peek() || this.wantsEcho(mode) !== this.echo.peek())) old.stop();
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(mode, micId || undefined) });
+        const s = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints(mode, micId || undefined, this.wantEcho),
+        });
         this.setAudioTrack(s.getAudioTracks()[0], mode);
       } catch (e) {
         if (micId) {
           try {
-            const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(mode) });
+            const s = await navigator.mediaDevices.getUserMedia({
+              audio: audioConstraints(mode, undefined, this.wantEcho),
+            });
             this.setAudioTrack(s.getAudioTracks()[0], mode);
             return;
           } catch {
@@ -171,9 +196,40 @@ export class LocalMedia {
     });
   }
 
+  private wantsEcho(mode: SoundMode): boolean {
+    return mode === 'voice' || this.wantEcho;
+  }
+
   setSoundMode(mode: SoundMode): Promise<void> {
-    if (mode === this.mode.value && this.audio.value?.readyState === 'live') return Promise.resolve();
+    const t = this.audio.value;
+    if (mode === this.mode.value && this.wantsEcho(mode) === this.echo.value && t?.readyState === 'live')
+      return Promise.resolve();
     return this.restartAudio(mode);
+  }
+
+  /** Echo cancelling in pure mode on or off: the microphone reopens if it changes what it does now. */
+  setEcho(on: boolean): Promise<void> {
+    this.wantEcho = on;
+    const t = this.audio.peek();
+    if (!t || t.readyState !== 'live' || this.wantsEcho(this.mode.peek()) === this.echo.peek())
+      return Promise.resolve();
+    return this.restartAudio(this.mode.peek());
+  }
+
+  /** The output in use ('' = the system's default): are those headphones? */
+  setSpeaker(id: string): Promise<void> {
+    this.speakerId = id;
+    return this.checkOutput();
+  }
+
+  /** Read the output's name again (after permission, a device plugged in or out). */
+  async checkOutput(): Promise<void> {
+    const { speakers } = await listDevices();
+    const out =
+      speakers.find((d) => d.deviceId === this.speakerId) ??
+      speakers.find((d) => d.deviceId === 'default') ??
+      speakers[0];
+    this.headphones.value = !!out && looksLikeHeadphones(out.label);
   }
 
   restartVideo(camId = this.camId, quality = this.quality): Promise<void> {
@@ -351,7 +407,13 @@ export async function listDevices(): Promise<DeviceLists> {
 /** Can audio elements be sent to another output device (Chromium, Firefox)? */
 export const canPickSpeaker = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 
-/** Labels that suggest the output is headphones (pure sound needs them to avoid echo). */
+/**
+ * Names that say the output is headphones. Strict: a speaker taken for headphones would turn echo cancelling
+ * off, while headphones taken for a speaker only keep it on (it does little harm there). A Bluetooth name
+ * alone does not tell (speakers have them too).
+ */
 export function looksLikeHeadphones(label: string): boolean {
-  return /head|ear|airpods|buds|casque|kopfh|auricular|cuffie|bluetooth|bt|wh-|wf-|bose|sony|jabra|beats/i.test(label);
+  return /head ?phone|headset|ear ?phone|earbud|in-ear|airpods|buds\d*\b|casque|[ée]couteur|kopfh[öo]rer|auricular|cuffie/i.test(
+    label,
+  );
 }

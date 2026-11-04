@@ -329,7 +329,7 @@ const soundOptions = (): { value: SoundSetting; title: string; sub: string; icon
   {
     value: 'pure',
     title: t('Pure instrument'),
-    sub: t('No noise suppression, no echo cancelling, stereo. Use headphones.'),
+    sub: t('No noise suppression, no automatic volume, stereo. Echo cancelled unless you use headphones.'),
     icon: AudioWaveform,
   },
   {

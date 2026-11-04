@@ -85,7 +85,8 @@ test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({
     ).sonora.media.audio.value.getSettings();
     return { ec: s.echoCancellation, ns: s.noiseSuppression, agc: s.autoGainControl };
   });
-  expect(settings).toEqual({ ec: false, ns: false, agc: false });
+  // pure: no noise suppression, no automatic volume; echo cancelled, as no headphones are in sight
+  expect(settings).toEqual({ ec: true, ns: false, agc: false });
 
   // stereo Opus, ~192 kbps, 100 packets per second (10 ms frames), direct path
   await expect
@@ -172,8 +173,7 @@ test('MIDI played on the on-screen keys lights up and sounds on the other side',
     )
     .not.toBeNull();
   // lit in the other musician's colour (jade) on b, in one's own (gold) on a: never left dark
-  const lit = (p: typeof a) =>
-    p.locator('[data-note="60"]').evaluate((el) => getComputedStyle(el).backgroundImage);
+  const lit = (p: typeof a) => p.locator('[data-note="60"]').evaluate((el) => getComputedStyle(el).backgroundImage);
   await expect.poll(() => lit(b)).toContain('rgb(82, 214, 180)');
   await expect.poll(() => lit(a)).toContain('rgb(245, 181, 68)');
   await a.mouse.up();
@@ -254,7 +254,7 @@ test('auto sound switches the microphone to voice while MIDI carries the instrum
       () =>
         (
           window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }
-        ).sonora.media.audio.value.getSettings().echoCancellation,
+        ).sonora.media.audio.value.getSettings().noiseSuppression,
     );
   expect(await ec()).toBe(false);
   // pretend an instrument is plugged in (no MIDI hardware in CI)
@@ -667,6 +667,44 @@ test('steady-noise reduction: switched on in Settings, the sound still reaches t
     )
     .toBe(true);
   expect(errors).toEqual([]);
+  await a.context().close();
+  await b.context().close();
+});
+
+test('echo cancelling: on in pure sound on speakers, off by choice, and the sound still reaches the other side', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  type M = { sonora: { media: { audio: { value: MediaStreamTrack | null }; mode: { value: string } } } };
+  const mic = () =>
+    a.evaluate(() => {
+      const m = (window as unknown as M).sonora.media;
+      const t = m.audio.value;
+      const ec = t?.getSettings().echoCancellation as boolean | string | undefined;
+      return { mode: m.mode.value, live: t?.readyState === 'live', echo: ec !== undefined && ec !== false };
+    });
+  // pure sound (no MIDI), and no headphones in sight: the microphone cancels the speakers' echo
+  expect(await mic()).toEqual({ mode: 'pure', live: true, echo: true });
+  // the musician says they wear headphones: the microphone reopens without it
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
+  await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: false });
+  await expect(a.getByText('Echo cancelling is off: wear headphones')).toBeVisible();
+  // and back on
+  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'On', exact: true }).click();
+  await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: true });
+  // the other side still hears it
+  const audioIn = () =>
+    b.evaluate(
+      () =>
+        (window as unknown as { sonora: { peers: { value: { stats: { audioInKbps: number } | null }[] } } }).sonora
+          .peers.value[0]?.stats?.audioInKbps ?? 0,
+    );
+  await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
   await a.context().close();
   await b.context().close();
 });

@@ -95,8 +95,8 @@ export const FR: Record<string, string> = spaced({
   'Pure sound for your instrument; voice mode while MIDI carries your piano.':
     'Son pur pour votre instrument ; mode voix pendant que le MIDI transmet votre piano.',
   'Pure instrument': 'Instrument pur',
-  'No noise suppression, no echo cancelling, stereo. Use headphones.':
-    'Sans réduction de bruit ni annulation d’écho, en stéréo. Utilisez un casque.',
+  'No noise suppression, no automatic volume, stereo. Echo cancelled unless you use headphones.':
+    'Sans réduction de bruit ni volume automatique, en stéréo. L’écho est annulé, sauf avec un casque.',
   Voice: 'Voix',
   'Speech processing: removes noise and echo (and some of the music).':
     'Traitement de la parole : supprime le bruit et l’écho (et un peu de la musique).',
@@ -211,8 +211,8 @@ export const FR: Record<string, string> = spaced({
   'Your name': 'Votre nom',
   'e.g. Clara': 'ex. Clara',
   'Enter the room': 'Entrer dans la salle',
-  'Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.':
-    'Utilisez un casque, filaire si possible : le son pur n’a pas d’annulation d’écho, et le Bluetooth ajoute du retard.',
+  'Headphones give the purest sound, wired if you can (Bluetooth adds delay). On speakers, the echo is cancelled.':
+    'Un casque donne le son le plus pur, filaire si possible (le Bluetooth ajoute du retard). Sur haut-parleurs, l’écho est annulé.',
   Use: 'OK',
   'Have a code? Join another room': 'Vous avez un code ? Rejoindre une autre salle',
   'No account. No server sees your lesson.': 'Sans compte. Aucun serveur ne voit votre cours.',
@@ -369,12 +369,23 @@ export const FR: Record<string, string> = spaced({
     'Actuellement : <b>son pur</b>. Votre micro transmet votre instrument tel quel ; quand votre piano transite en MIDI, il passe au traitement de la voix pour que la parole reste claire.',
   'Now: <b>voice</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.':
     'Actuellement : <b>voix</b>. Votre micro transmet votre instrument tel quel ; quand votre piano transite en MIDI, il passe au traitement de la voix pour que la parole reste claire.',
-  'No noise suppression, no echo cancellation, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.':
-    'Ni réduction de bruit, ni annulation d’écho, ni volume automatique, et la stéréo si votre micro la permet : chaque tenue, chaque pédale et chaque pianissimo arrive tel que joué.',
+  'No noise suppression, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.':
+    'Ni réduction de bruit, ni volume automatique, et la stéréo si votre micro la permet : chaque tenue, chaque pédale et chaque pianissimo arrive tel que joué.',
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
-  'Pure sound has no echo cancelling: use headphones (wired ones add no delay), or the others will hear themselves.':
-    'Le son pur n’a pas d’annulation d’écho : utilisez un casque (filaire, il n’ajoute aucun retard), sinon les autres s’entendront eux-mêmes.',
+  'Echo cancelling': 'Annulation d’écho',
+  On: 'Activée',
+  'Off (headphones)': 'Désactivée (casque)',
+  'Now: <b>off</b>, headphones detected ({name}).': 'Actuellement : <b>désactivée</b>, casque détecté ({name}).',
+  'Now: <b>on</b>, no headphones detected. Choose Off if you wear some.':
+    'Actuellement : <b>activée</b>, aucun casque détecté. Choisissez Désactivée si vous en portez un.',
+  'The speakers’ sound is removed from your microphone, so the others never hear themselves.':
+    'Le son des haut-parleurs est retiré de votre micro : les autres ne s’entendent jamais eux-mêmes.',
+  'Nothing is removed: only with headphones, or the others hear themselves and it can howl.':
+    'Rien n’est retiré : seulement avec un casque, sinon les autres s’entendent eux-mêmes et un larsen peut se produire.',
+  'Voice mode always cancels echo.': 'Le mode voix annule toujours l’écho.',
+  'Echo cancelling is off: wear headphones, or the others will hear themselves.':
+    'L’annulation d’écho est désactivée : portez un casque, sinon les autres s’entendront eux-mêmes.',
   Quality: 'Qualité',
   'Audio quality': 'Qualité audio',
   '{quality}. Opus codec, 10 ms frames, no silence suppression.':

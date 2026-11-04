@@ -446,7 +446,9 @@ export function Lobby() {
           <div class="hint">
             <Headphones />
             <span>
-              {t('Use headphones, wired if you can: pure sound has no echo cancelling, and Bluetooth adds delay.')}
+              {t(
+                'Headphones give the purest sound, wired if you can (Bluetooth adds delay). On speakers, the echo is cancelled.',
+              )}
             </span>
           </div>
 

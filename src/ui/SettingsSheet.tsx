@@ -17,12 +17,12 @@ import {
 } from 'lucide-preact';
 import { browserLang, LANGUAGES, t, type LanguageSetting } from '../app/i18n.ts';
 import { session } from '../app/session.ts';
-import { settings, update, type SoundSetting } from '../app/settings.ts';
+import { settings, update, type EchoSetting, type SoundSetting } from '../app/settings.ts';
 import { askNotifications, chime, notifyPermission, unlockChimes } from '../app/notify.ts';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { REPO_URL, isMobile } from '../app/platform.ts';
 import { AUDIO_QUALITY, VIDEO_QUALITY, type AudioQuality, type VideoQuality } from '../media/constraints.ts';
-import { canPickSpeaker, listDevices, looksLikeHeadphones, type DeviceLists } from '../media/local.ts';
+import { canPickSpeaker, listDevices, type DeviceLists } from '../media/local.ts';
 import { hasBuiltInTurn } from '../net/ice.ts';
 import { LevelBars, Rich, Seg, Sheet, ToggleRow } from './common.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
@@ -151,21 +151,47 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
           {s.sound === 'pure' && (
             <>
               {t(
-                'No noise suppression, no echo cancellation, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.',
+                'No noise suppression, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.',
               )}
             </>
           )}
           {s.sound === 'voice' &&
             t("The browser's speech processing: removes background noise and echo, and part of the music with it.")}
         </p>
-        {mode === 'pure' && !looksLikeHeadphones(speakerLabel) && (
+      </div>
+
+      <div class="section">
+        <h3>{t('Echo cancelling')}</h3>
+        <Seg<EchoSetting>
+          label={t('Echo cancelling')}
+          value={s.echo}
+          onChange={(v) => update({ echo: v })}
+          options={[
+            { value: 'auto', label: t('Auto') },
+            { value: 'on', label: t('On') },
+            { value: 'off', label: t('Off (headphones)') },
+          ]}
+        />
+        <p class="lead">
+          {s.echo === 'auto' && (
+            <Rich
+              text={
+                media.headphones.value
+                  ? t('Now: <b>off</b>, headphones detected ({name}).', { name: speakerLabel })
+                  : t('Now: <b>on</b>, no headphones detected. Choose Off if you wear some.')
+              }
+            />
+          )}
+          {s.echo === 'on' &&
+            t('The speakers’ sound is removed from your microphone, so the others never hear themselves.')}
+          {s.echo === 'off' &&
+            t('Nothing is removed: only with headphones, or the others hear themselves and it can howl.')}{' '}
+          {mode === 'voice' && t('Voice mode always cancels echo.')}
+        </p>
+        {mode === 'pure' && !session.pureEcho.value && !media.headphones.value && (
           <div class="hint hint-warn">
             <Headphones />
-            <span>
-              {t(
-                'Pure sound has no echo cancelling: use headphones (wired ones add no delay), or the others will hear themselves.',
-              )}
-            </span>
+            <span>{t('Echo cancelling is off: wear headphones, or the others will hear themselves.')}</span>
           </div>
         )}
       </div>

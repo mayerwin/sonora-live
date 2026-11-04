@@ -50,9 +50,10 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 
 ### Sound that is the instrument
 
-- **Pure sound by default**: no noise suppression, no echo cancellation, no automatic gain, stereo when your
-  microphone or interface has it. Every pedal, pianissimo and long decay arrives as played, the way
-  [Cleanfeed](https://cleanfeed.net) treats broadcast audio.
+- **Pure sound by default**: no noise suppression, no automatic gain, stereo when your microphone or interface has
+  it. Every pedal, pianissimo and long decay arrives as played, the way [Cleanfeed](https://cleanfeed.net) treats
+  broadcast audio. Echo cancelling stays on while you play on speakers (otherwise the others hear themselves, and
+  it can howl) and turns off when headphones are detected, or by choice in *Settings → Sound*.
 - **Opus tuned for music**: 192 kbps stereo by default (96 to 320 kbps), full band, **10 ms frames** instead of
   20 (one frame less delay at each end), no silence suppression that would cut a quiet sustained note, and
   in-band error correction against packet loss.
@@ -155,8 +156,10 @@ depends on what the browser allows:
 
 ## Tips for a great lesson
 
-- **Wear headphones**, wired if you can. Pure sound has no echo cancelling (that is the point), and Bluetooth headphones
-  add 100–200 ms of delay. On *Voice* mode, speakers are fine.
+- **Wear headphones**, wired if you can (Bluetooth headphones add 100–200 ms of delay): the sound is then
+  untouched, with no echo cancelling needed. On speakers, echo cancelling is on.
+- **Testing with two devices in the same room?** Each microphone hears the other device's speakers directly, and
+  no echo cancelling can remove that: it howls. Use headphones on at least one, or separate rooms.
 - **Cable or 5 GHz Wi-Fi** beats a crowded 2.4 GHz network; the connection panel shows what you get.
 - **Point a second camera at the keys**: a webcam above the keyboard (*Settings → Video → Second camera*), or a phone
   that joins by scanning the observer's QR code (share sheet).

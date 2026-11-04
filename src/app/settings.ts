@@ -6,12 +6,15 @@ import type { PlayOn } from '../midi/hub.ts';
 import type { TurnConfig } from '../net/ice.ts';
 
 export type SoundSetting = 'auto' | 'pure' | 'voice';
+/** echo cancelling in pure sound: 'auto' unless headphones are detected */
+export type EchoSetting = 'auto' | 'on' | 'off';
 
 export interface Settings {
   /** 'auto': the browser's language */
   language: 'auto' | 'en' | 'fr';
   name: string;
   sound: SoundSetting;
+  echo: EchoSetting;
   audioQuality: AudioQuality;
   videoQuality: VideoQuality;
   micId: string;
@@ -45,6 +48,7 @@ export const DEFAULTS: Settings = {
   language: 'auto',
   name: '',
   sound: 'auto',
+  echo: 'auto',
   audioQuality: 'high',
   videoQuality: 'hd',
   micId: '',

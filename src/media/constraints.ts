@@ -2,16 +2,18 @@
 //
 // Pure (default): what the microphone hears, untouched. Browsers process microphones for speech by default:
 // echo cancellation, noise suppression and automatic gain. To a speech processor, a sustained piano chord is
-// "noise" to remove and a crescendo is "gain" to undo. Pure turns all of that off and keeps stereo, like
-// Cleanfeed or Zoom's "Original sound for musicians". Use headphones: nothing removes the echo of the
-// speakers then.
+// "noise" to remove and a crescendo is "gain" to undo. Pure turns those off and keeps stereo, like Zoom's
+// "Original sound for musicians". Echo cancelling is the exception, as in Zoom: it stays on unless headphones
+// are in use (`echo`), because without it the others hear themselves come back from the speakers, and two
+// open loops make feedback (larsen). It only acts while the others' sound is playing.
 //
 // Voice: the browser's speech processing, on. Chosen automatically while MIDI carries the instrument (the
 // microphone then only needs to carry speech), or by hand when there is no headphone.
 
 export type SoundMode = 'pure' | 'voice';
 
-export function audioConstraints(mode: SoundMode, deviceId?: string): MediaTrackConstraints {
+/** `echo`: cancel the speakers' echo in pure mode (voice mode always does). */
+export function audioConstraints(mode: SoundMode, deviceId?: string, echo = true): MediaTrackConstraints {
   const device = deviceId ? { deviceId: { exact: deviceId } } : {};
   if (mode === 'voice') {
     return {
@@ -24,7 +26,7 @@ export function audioConstraints(mode: SoundMode, deviceId?: string): MediaTrack
   }
   return {
     ...device,
-    echoCancellation: false,
+    echoCancellation: echo,
     noiseSuppression: false,
     autoGainControl: false,
     channelCount: { ideal: 2 },

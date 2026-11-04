@@ -105,6 +105,11 @@ export class Session {
     if (s === 'pure' || s === 'voice') return s;
     return this.midiCarriesInstrument.value ? 'voice' : 'pure';
   });
+  /** cancel the speakers' echo in pure sound: on unless headphones are in use (voice mode always does) */
+  readonly pureEcho = computed(() => {
+    const e = settings.value.echo;
+    return e === 'on' || (e === 'auto' && !this.media.headphones.value);
+  });
 
   private relay: Relay;
   private room: Room;
@@ -759,6 +764,12 @@ export class Session {
         }, wait);
       }),
     );
+    // echo cancelling in pure sound follows its setting and the output (headphones or not)
+    this.disposers.push(effect(() => void this.media.setEcho(this.pureEcho.value)));
+    this.disposers.push(effect(() => void this.media.setSpeaker(settings.value.speakerId)));
+    const outputs = () => void this.media.checkOutput();
+    navigator.mediaDevices?.addEventListener?.('devicechange', outputs);
+    this.disposers.push(() => navigator.mediaDevices?.removeEventListener?.('devicechange', outputs));
     // the noise reduction follows its setting (and the sound mode: pure only)
     this.disposers.push(
       effect(() => {
