@@ -85,8 +85,8 @@ test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({
     ).sonora.media.audio.value.getSettings();
     return { ec: s.echoCancellation, ns: s.noiseSuppression, agc: s.autoGainControl };
   });
-  // pure: no noise suppression, no automatic volume; echo cancelled, as no headphones are in sight
-  expect(settings).toEqual({ ec: true, ns: false, agc: false });
+  // pure: the capture is untouched (the speakers' echo is cancelled afterwards by the app's engine)
+  expect(settings).toEqual({ ec: false, ns: false, agc: false });
 
   // stereo Opus, ~192 kbps, 100 packets per second (10 ms frames), direct path
   await expect
@@ -636,14 +636,25 @@ test('steady-noise reduction: switched on in Settings, the sound still reaches t
   await a.getByTestId('btn-settings').click();
   await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
   type M = {
-    sonora: { media: { audio: { value: MediaStreamTrack | null }; sentAudio: { value: MediaStreamTrack | null } } };
+    sonora: {
+      media: {
+        audio: { value: MediaStreamTrack | null };
+        sentAudio: { value: MediaStreamTrack | null };
+        denoising: { value: boolean };
+      };
+    };
   };
-  // what is sent is now the processed track, not the microphone itself
+  // what is sent is now the processed track (noise reduction running), not the microphone itself
   await expect
     .poll(() =>
       a.evaluate(() => {
         const m = (window as unknown as M).sonora.media;
-        return !!m.sentAudio.value && m.sentAudio.value !== m.audio.value && m.sentAudio.value.readyState === 'live';
+        return (
+          m.denoising.value &&
+          !!m.sentAudio.value &&
+          m.sentAudio.value !== m.audio.value &&
+          m.sentAudio.value.readyState === 'live'
+        );
       }),
     )
     .toBe(true);
@@ -656,16 +667,17 @@ test('steady-noise reduction: switched on in Settings, the sound still reaches t
     );
   await b.waitForTimeout(3000);
   await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
-  // off again: back to the microphone itself
+  // off again (echo cancelling still processes what is sent, on speakers)
   await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
   await expect
     .poll(() =>
       a.evaluate(() => {
         const m = (window as unknown as M).sonora.media;
-        return m.sentAudio.value === m.audio.value;
+        return m.denoising.value === false && m.sentAudio.value?.readyState === 'live';
       }),
     )
     .toBe(true);
+  await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
   expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();
@@ -679,17 +691,20 @@ test('echo cancelling: on in pure sound on speakers, off by choice, and the soun
   const b = await person(browser, 'Leo', 'student', await codeOf(a));
   await enter(b);
   await connected(a, 1);
-  type M = { sonora: { media: { audio: { value: MediaStreamTrack | null }; mode: { value: string } } } };
+  type M = {
+    sonora: {
+      media: { audio: { value: MediaStreamTrack | null }; mode: { value: string }; echo: { value: boolean } };
+    };
+  };
   const mic = () =>
     a.evaluate(() => {
       const m = (window as unknown as M).sonora.media;
       const t = m.audio.value;
-      const ec = t?.getSettings().echoCancellation as boolean | string | undefined;
-      return { mode: m.mode.value, live: t?.readyState === 'live', echo: ec !== undefined && ec !== false };
+      return { mode: m.mode.value, live: t?.readyState === 'live', echo: m.echo.value };
     });
-  // pure sound (no MIDI), and no headphones in sight: the microphone cancels the speakers' echo
-  expect(await mic()).toEqual({ mode: 'pure', live: true, echo: true });
-  // the musician says they wear headphones: the microphone reopens without it
+  // pure sound (no MIDI), and no headphones in sight: the speakers' echo is cancelled
+  await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: true });
+  // the musician says they wear headphones: no cancelling
   await a.getByTestId('btn-settings').click();
   await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
   await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: false });

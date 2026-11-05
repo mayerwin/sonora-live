@@ -374,14 +374,30 @@ export const FR: Record<string, string> = spaced({
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
   'Echo cancelling': 'Annulation d’écho',
+  'Now: <b>on</b>, no headphones detected. Made for music: your own playing is never turned down. Choose Off if you wear headphones.':
+    'Actuellement : <b>activée</b>, aucun casque détecté. Faite pour la musique : votre jeu n’est jamais atténué. Choisissez Désactivée si vous portez un casque.',
+  'Made for music: the sound of your speakers is subtracted from your microphone, and your own playing is never turned down. It learns your room in the first seconds the others play.':
+    'Faite pour la musique : le son de vos haut-parleurs est soustrait de votre micro, et votre propre jeu n’est jamais atténué. Elle apprend votre pièce dès les premières secondes où les autres jouent.',
+  off: 'désactivé',
+  on: 'activé',
+  'Browser processing': 'Traitement du navigateur',
+  echo: 'écho',
+  noise: 'bruit',
+  volume: 'volume',
+  'Echo cancelling (music)': 'Annulation d’écho (musique)',
+  'not available in this browser': 'non disponible dans ce navigateur',
+  running: 'en marche',
+  '{db} dB removed': '{db} dB retirés',
+  'Noise reduction': 'Réduction du bruit',
+  waiting: 'en attente',
+  Output: 'Sortie',
+  'Sound check': 'Vérification du son',
+  'Report copied': 'Rapport copié',
+  'Copy report': 'Copier le rapport',
   'Starting… if it does not, tap anywhere on the page.': 'Démarrage… sinon, touchez la page n’importe où.',
   On: 'Activée',
   'Off (headphones)': 'Désactivée (casque)',
   'Now: <b>off</b>, headphones detected ({name}).': 'Actuellement : <b>désactivée</b>, casque détecté ({name}).',
-  'Now: <b>on</b>, no headphones detected. Choose Off if you wear some.':
-    'Actuellement : <b>activée</b>, aucun casque détecté. Choisissez Désactivée si vous en portez un.',
-  'The speakers’ sound is removed from your microphone, so the others never hear themselves.':
-    'Le son des haut-parleurs est retiré de votre micro : les autres ne s’entendent jamais eux-mêmes.',
   'Nothing is removed: only with headphones, or the others hear themselves and it can howl.':
     'Rien n’est retiré : seulement avec un casque, sinon les autres s’entendent eux-mêmes et un larsen peut se produire.',
   'Voice mode always cancels echo.': 'Le mode voix annule toujours l’écho.',

@@ -52,8 +52,14 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 
 - **Pure sound by default**: no noise suppression, no automatic gain, stereo when your microphone or interface has
   it. Every pedal, pianissimo and long decay arrives as played, the way [Cleanfeed](https://cleanfeed.net) treats
-  broadcast audio. Echo cancelling stays on while you play on speakers (otherwise the others hear themselves, and
-  it can howl) and turns off when headphones are detected, or by choice in *Settings → Sound*.
+  broadcast audio.
+- **Echo cancelling made for music**: on speakers, the app subtracts what its own speakers play from the
+  microphone (a linear echo canceller, [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s MDF compiled to
+  WebAssembly, full band at 48 kHz, in an AudioWorklet, no added delay). Browsers' echo cancelling is made for
+  speech: it turns the near end down whenever the others play, and dulls everything above 8 kHz; this one never
+  turns your playing down. It learns the room in the first seconds the others play (measured on piano
+  recordings: about 12 dB of echo removed at first, 20 to 30 dB within a minute, `node tools/aec-eval.mjs`).
+  With headphones (detected, or chosen in *Settings → Sound*), nothing is processed at all.
 - **Opus tuned for music**: 192 kbps stereo by default (96 to 320 kbps), full band, **10 ms frames** instead of
   20 (one frame less delay at each end), no silence suppression that would cut a quiet sustained note, and
   in-band error correction against packet loss.
@@ -157,7 +163,7 @@ depends on what the browser allows:
 ## Tips for a great lesson
 
 - **Wear headphones**, wired if you can (Bluetooth headphones add 100–200 ms of delay): the sound is then
-  untouched, with no echo cancelling needed. On speakers, echo cancelling is on.
+  untouched, with no echo cancelling needed. On speakers, the app's echo cancelling (made for music) is on.
 - **Testing with two devices in the same room?** Each microphone hears the other device's speakers directly, and
   no echo cancelling can remove that: it howls. Use headphones on at least one, or separate rooms.
 - **Cable or 5 GHz Wi-Fi** beats a crowded 2.4 GHz network; the connection panel shows what you get.
@@ -362,6 +368,9 @@ expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
   under the SIL Open Font License.
 - Emoji picker: [emoji-picker-element](https://github.com/nolanlawson/emoji-picker-element) by Nolan Lawson
   (Apache-2.0), with data from [Emojibase](https://emojibase.dev).
+- Echo cancelling: [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s MDF echo canceller (BSD licence, Xiph.Org and
+  Jean-Marc Valin), in `third_party/speexdsp` with its licence and the small changes marked `Sonora Live`;
+  `tools/build-aec.sh` rebuilds `src/media/aec.wasm`.
 - Icons: [Lucide](https://lucide.dev) (ISC).
 - Rendezvous design: [Boom Buds](https://github.com/mayerwin/Boom-Buds).
 - Bluetooth MIDI on Windows: [Perfect Bluetooth MIDI for Windows](https://github.com/mayerwin/Perfect-Bluetooth-MIDI-For-Windows).

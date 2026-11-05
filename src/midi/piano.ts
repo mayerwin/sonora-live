@@ -18,6 +18,7 @@
 
 import { signal } from '@preact/signals';
 import versions from 'virtual:sonora-assets';
+import { engine } from '../media/engine.ts';
 
 /** Sampled notes per layer (MIDI numbers), from public/piano. */
 const SAMPLES: Record<LayerName, number[]> = {
@@ -193,20 +194,21 @@ export class Piano {
     this.base = base;
   }
 
-  /** Create (or resume) the audio context. Call from a click or key press the first time (autoplay rules). */
+  /**
+   * The audio engine's context (src/media/engine.ts: the piano is part of what the echo canceller knows the
+   * speakers play). Call from a click or key press the first time (autoplay rules).
+   */
   context(): AudioContext | null {
-    if (!this.ctx) {
-      const AC =
-        window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AC) return null;
-      this.ctx = new AC({ latencyHint: 'interactive' });
-      this.build(this.ctx);
+    const ctx = engine.ensure();
+    if (!ctx || !engine.out) return null;
+    if (this.ctx !== ctx) {
+      this.ctx = ctx;
+      this.build(ctx, engine.out);
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
-    return this.ctx;
+    return ctx;
   }
 
-  private build(ctx: AudioContext): void {
+  private build(ctx: AudioContext, out: AudioNode): void {
     this.bus = ctx.createGain();
     this.bus.gain.value = 0.6;
     const limiter = ctx.createDynamicsCompressor();
@@ -226,7 +228,7 @@ export class Piano {
     this.reverbSend.connect(conv);
     conv.connect(limiter);
     limiter.connect(this.master);
-    this.master.connect(ctx.destination);
+    this.master.connect(out);
     // a piano-like tone for the seconds before the samples are in (or if they cannot load)
     const n = 24;
     const re = new Float32Array(n);
@@ -328,8 +330,7 @@ export class Piano {
 
   /** Send the sound to another output device (Chromium). */
   async setSink(id: string): Promise<void> {
-    const c = this.ctx as (AudioContext & { setSinkId?: (id: string) => Promise<void> }) | null;
-    if (c?.setSinkId) await c.setSinkId(id).catch(() => {});
+    await engine.setSink(id);
   }
 
   /** Play a MIDI message from `player` (a peer id, or 'local' for the on-screen keys). */

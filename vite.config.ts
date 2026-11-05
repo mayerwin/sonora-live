@@ -84,7 +84,7 @@ export default defineConfig({
       },
       workbox: {
         // the app's code is precached for offline use; pages are not (they come from the network first, below)
-        globPatterns: ['**/*.{js,css,svg,woff2,webmanifest}', 'icons/*.png'],
+        globPatterns: ['**/*.{js,css,svg,woff2,webmanifest,wasm}', 'icons/*.png'],
         globIgnores: ['piano/**', 'social/**', 'emoji/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: null,

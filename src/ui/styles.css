@@ -1796,6 +1796,8 @@ a:hover {
   max-height: min(86dvh, 820px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  /* one column as wide as the sheet (otherwise the widest content, such as the row of tabs, sets it) */
+  grid-template-columns: minmax(0, 1fr);
   border-radius: var(--r-xl);
   background: var(--surface);
   border: 1px solid var(--line-2);
@@ -2940,4 +2942,29 @@ emoji-picker {
   .ctl.show-sm {
     display: none;
   }
+}
+
+/* Settings → Sound → Sound check */
+.soundcheck {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.soundcheck > div {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.soundcheck dt {
+  color: var(--text-2);
+}
+
+.soundcheck dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

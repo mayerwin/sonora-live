@@ -1,9 +1,9 @@
 // The local camera, microphone and screen. Every change produces a new track that the session sends with
 // RTCRtpSender.replaceTrack, so switching devices or sound modes is seamless for the other side.
 
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { PictureWatch } from './picture.ts';
-import { Denoise } from './denoise.ts';
+import { engine } from './engine.ts';
 import { audioConstraints, videoConstraints, type SoundMode, type VideoQuality } from './constraints.ts';
 import type { Slot } from '../net/peer.ts';
 
@@ -26,8 +26,11 @@ export class LocalMedia {
   readonly camOn = signal(true);
   /** sound mode of the current microphone track */
   readonly mode = signal<SoundMode>('pure');
-  /** the current microphone track cancels the speakers' echo */
+  /** the speakers' echo is cancelled in what is sent (by the engine, or by the browser where it cannot run) */
   readonly echo = signal(false);
+  /** the browser's own echo cancelling is on in the current track (voice mode; pure mode where the engine
+   * cannot run) */
+  private trackEcho = false;
   /** the sound plays on headphones, as far as the output's name tells (no echo to cancel then) */
   readonly headphones = signal(false);
   /** cancel echo in pure mode (voice mode always does) */
@@ -43,7 +46,6 @@ export class LocalMedia {
   /** the microphone as sent: through the steady-noise reduction when it is on (pure mode only) */
   readonly sentAudio = signal<MediaStreamTrack | null>(null);
   private denoiseOn = false;
-  private denoise = new Denoise();
   /** the steady-noise reduction really processes what is sent (not only switched on) */
   readonly denoising = signal(false);
   private emitting = 0;
@@ -51,9 +53,14 @@ export class LocalMedia {
   readonly picture = new PictureWatch();
   constructor() {
     // the noise reduction's context started (a tap): process what is sent if it is wanted and not yet done
-    this.denoise.onRunning = () => {
-      if (this.denoiseOn && this.mode.peek() === 'pure' && !this.denoising.peek()) void this.emitAudio();
-    };
+    // the engine's audio context started (a tap): process what is sent, if anything should be
+    effect(() => {
+      if (engine.running.value) void this.emitAudio();
+    });
+    // the engine cannot cancel echo here: the browser's echo cancelling instead (the microphone reopens)
+    effect(() => {
+      if (engine.aecUnavailable.value && this.mode.peek() === 'pure' && this.wantEcho) void this.restartAudio('pure');
+    });
   }
 
   /** a track the peers should send now changed */
@@ -100,7 +107,7 @@ export class LocalMedia {
       this.quality = opts.quality;
       // headphones or speakers decide the echo cancelling (names are known when permission was given before)
       await this.checkOutput();
-      const audio = audioConstraints(opts.mode, opts.micId || undefined, this.wantEcho);
+      const audio = audioConstraints(opts.mode, opts.micId || undefined, this.browserEcho(opts.mode));
       const video = opts.wantVideo ? videoConstraints(opts.quality, opts.camId || undefined, this.facing.value) : false;
       let stream: MediaStream | null = null;
       this.asking.value = true;
@@ -112,7 +119,7 @@ export class LocalMedia {
         stream = new MediaStream();
         try {
           const a = await navigator.mediaDevices.getUserMedia({
-            audio: audioConstraints(opts.mode, undefined, this.wantEcho),
+            audio: audioConstraints(opts.mode, undefined, this.browserEcho(opts.mode)),
           });
           a.getAudioTracks().forEach((t) => stream!.addTrack(t));
         } catch (ea) {
@@ -149,7 +156,8 @@ export class LocalMedia {
     this.mode.value = mode;
     // what the browser applied (newer ones say 'all' or 'remote-only' instead of true)
     const ec = st.echoCancellation as boolean | string | undefined;
-    this.echo.value = ec === undefined ? this.wantsEcho(mode) : ec !== false;
+    this.trackEcho = ec === undefined ? this.browserEcho(mode) : ec !== false;
+    this.echo.value = this.trackEcho;
     this.audioProblem.value = null;
     t.addEventListener('ended', () => {
       // unplugged: fall back to the default microphone
@@ -182,17 +190,17 @@ export class LocalMedia {
       // Other processing: close the microphone first. While it is open, a browser may hand the new request
       // the same capture, with the old processing (no echo cancelling), and phones capture once at a time.
       const old = this.audio.peek();
-      if (old && (mode !== this.mode.peek() || this.wantsEcho(mode) !== this.echo.peek())) old.stop();
+      if (old && (mode !== this.mode.peek() || this.browserEcho(mode) !== this.trackEcho)) old.stop();
       try {
         const s = await navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints(mode, micId || undefined, this.wantEcho),
+          audio: audioConstraints(mode, micId || undefined, this.browserEcho(mode)),
         });
         this.setAudioTrack(s.getAudioTracks()[0], mode);
       } catch (e) {
         if (micId) {
           try {
             const s = await navigator.mediaDevices.getUserMedia({
-              audio: audioConstraints(mode, undefined, this.wantEcho),
+              audio: audioConstraints(mode, undefined, this.browserEcho(mode)),
             });
             this.setAudioTrack(s.getAudioTracks()[0], mode);
             return;
@@ -205,24 +213,34 @@ export class LocalMedia {
     });
   }
 
-  private wantsEcho(mode: SoundMode): boolean {
-    return mode === 'voice' || this.wantEcho;
+  /**
+   * The browser's own echo cancelling in the capture: always in voice mode (with its noise suppression and
+   * automatic volume: made for speech); in pure mode only where the engine cannot cancel echo itself.
+   */
+  private browserEcho(mode: SoundMode): boolean {
+    return mode === 'voice' || (this.wantEcho && engine.aecUnavailable.peek());
+  }
+
+  /** The engine's echo cancelling on what is sent (pure mode: the capture is untouched). */
+  private engineEcho(): boolean {
+    return this.mode.peek() === 'pure' && this.wantEcho && !this.trackEcho && !engine.aecUnavailable.peek();
   }
 
   setSoundMode(mode: SoundMode): Promise<void> {
     const t = this.audio.value;
-    if (mode === this.mode.value && this.wantsEcho(mode) === this.echo.value && t?.readyState === 'live')
+    if (mode === this.mode.value && this.browserEcho(mode) === this.trackEcho && t?.readyState === 'live')
       return Promise.resolve();
     return this.restartAudio(mode);
   }
 
-  /** Echo cancelling in pure mode on or off: the microphone reopens if it changes what it does now. */
+  /** Echo cancelling in pure mode on or off: the engine's chain changes (the microphone reopens only where the
+   * browser's echo cancelling stands in). */
   setEcho(on: boolean): Promise<void> {
     this.wantEcho = on;
     const t = this.audio.peek();
-    if (!t || t.readyState !== 'live' || this.wantsEcho(this.mode.peek()) === this.echo.peek())
-      return Promise.resolve();
-    return this.restartAudio(this.mode.peek());
+    if (!t || t.readyState !== 'live') return Promise.resolve();
+    if (this.browserEcho(this.mode.peek()) !== this.trackEcho) return this.restartAudio(this.mode.peek());
+    return this.emitAudio();
   }
 
   /** The output in use ('' = the system's default): are those headphones? */
@@ -268,21 +286,22 @@ export class LocalMedia {
     const n = ++this.emitting;
     const raw = this.audio.peek();
     let out = raw;
-    if (raw && this.denoiseOn && this.mode.peek() === 'pure') out = await this.denoise.process(raw);
-    else this.denoise.stop();
+    const pure = this.mode.peek() === 'pure';
+    const want = { aec: !!raw && this.engineEcho(), denoise: !!raw && this.denoiseOn && pure };
+    if (raw) out = await engine.process(raw, want);
     if (n !== this.emitting) return; // a newer change won
-    this.denoising.value = !!raw && out !== raw;
+    this.denoising.value = want.denoise && out !== raw;
+    this.echo.value = this.trackEcho || (want.aec && out !== raw && engine.cancelling);
     this.sentAudio.value = out;
     this.onTrack('audio', out);
   }
 
   /**
-   * From any tap: wake the noise reduction's audio context. When it was on but could not start (no tap yet,
-   * Safari), it starts processing now.
+   * From any tap: wake the audio engine. When echo cancelling or noise reduction was on but could not start (no
+   * tap yet, Safari), it starts processing now.
    */
   unlockAudio(): void {
-    if (!this.denoiseOn || this.mode.peek() !== 'pure') return;
-    this.denoise.wake();
+    if (engine.ctx || this.engineEcho() || (this.denoiseOn && this.mode.peek() === 'pure')) engine.ensure();
   }
 
   /** Steady background noise reduction on or off (applies in pure mode). Call it from a click the first time. */
@@ -394,6 +413,7 @@ export class LocalMedia {
   }
 
   stopAll(): void {
+    engine.release();
     for (const t of [this.audio.value, this.video.value, this.extra.value]) t?.stop();
     this.audio.value = null;
     this.video.value = null;

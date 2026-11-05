@@ -4,6 +4,7 @@
 import { computed, effect, signal } from '@preact/signals';
 import { AUDIO_QUALITY, VIDEO_QUALITY, type SoundMode } from '../media/constraints.ts';
 import { LocalMedia } from '../media/local.ts';
+import { engine } from '../media/engine.ts';
 import { Meter, resumeMeters } from '../media/meter.ts';
 import { MidiHub } from '../midi/hub.ts';
 import { newRoomCode, normalizeRoomCode } from '../net/code.ts';
@@ -68,6 +69,8 @@ export class Session {
   private readonly id = signal(tabId(newPeerId));
   private tabs: BroadcastChannel | null = null;
   readonly media = new LocalMedia();
+  /** the audio engine (src/media/engine.ts), for tests and diagnostics */
+  readonly engine = engine;
   readonly meter = new Meter();
   readonly midi = new MidiHub();
   readonly chat = new Chat();
@@ -618,6 +621,7 @@ export class Session {
     const f = this.fileIn.get(id);
     if (f) this.chat.updateFile(f.id, { progress: 1, failed: true });
     this.fileIn.delete(id);
+    engine.playRemote(id, null);
     const el = this.audioEls.get(id);
     if (el) {
       el.srcObject = null;
@@ -666,6 +670,9 @@ export class Session {
       this.audioEls.set(id, el);
     }
     el.srcObject = stream;
+    // while echo cancelling runs, their sound plays through the audio engine (so the canceller knows it); the
+    // element keeps playing it, muted (Chrome delivers a remote stream to an audio context only then)
+    el.muted = engine.aecOn.peek() && engine.playRemote(id, stream);
     const sink = settings.peek().speakerId;
     if (sink && 'setSinkId' in el)
       void (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(sink).catch(() => {});
@@ -677,6 +684,7 @@ export class Session {
 
   /** After a tap: start every sound the browser held back. */
   resumeSound(): void {
+    engine.ensure();
     unlockChimes();
     resumeMeters();
     this.midi.piano.context();
@@ -816,6 +824,17 @@ export class Session {
       effect(() => {
         const f = this.media.facing.value;
         if (f !== settings.peek().facing) update({ facing: f });
+      }),
+    );
+    // the others' sound through the audio engine while echo cancelling runs, from plain elements otherwise
+    this.disposers.push(
+      effect(() => {
+        const on = engine.aecOn.value && engine.running.value;
+        for (const [id, el] of this.audioEls) {
+          const stream = el.srcObject as MediaStream | null;
+          el.muted = on && engine.playRemote(id, stream);
+          if (!el.muted) engine.playRemote(id, null);
+        }
       }),
     );
     // echo cancelling in pure sound follows its setting and the output (headphones or not)

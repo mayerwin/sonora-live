@@ -25,6 +25,7 @@ import { AUDIO_QUALITY, VIDEO_QUALITY, type AudioQuality, type VideoQuality } fr
 import { canPickSpeaker, listDevices, type DeviceLists } from '../media/local.ts';
 import { hasBuiltInTurn } from '../net/ice.ts';
 import { LevelBars, Rich, Seg, Sheet, ToggleRow } from './common.tsx';
+import { SoundCheck } from './SoundCheck.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
 
@@ -178,12 +179,16 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
               text={
                 media.headphones.value
                   ? t('Now: <b>off</b>, headphones detected ({name}).', { name: speakerLabel })
-                  : t('Now: <b>on</b>, no headphones detected. Choose Off if you wear some.')
+                  : t(
+                      'Now: <b>on</b>, no headphones detected. Made for music: your own playing is never turned down. Choose Off if you wear headphones.',
+                    )
               }
             />
           )}
           {s.echo === 'on' &&
-            t('The speakers’ sound is removed from your microphone, so the others never hear themselves.')}
+            t(
+              'Made for music: the sound of your speakers is subtracted from your microphone, and your own playing is never turned down. It learns your room in the first seconds the others play.',
+            )}
           {s.echo === 'off' &&
             t('Nothing is removed: only with headphones, or the others hear themselves and it can howl.')}{' '}
           {mode === 'voice' && t('Voice mode always cancels echo.')}
@@ -289,6 +294,8 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
           </div>
         </div>
       )}
+
+      <SoundCheck />
 
       <div class="section">
         <ToggleRow
