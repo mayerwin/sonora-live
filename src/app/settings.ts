@@ -22,6 +22,8 @@ export interface Settings {
   speakerId: string;
   /** start with the camera off */
   camOff: boolean;
+  /** front or back camera (phones and tablets) */
+  facing: 'user' | 'environment';
   mirror: boolean;
   lockRooms: boolean;
   roomLimit: number;
@@ -38,7 +40,10 @@ export interface Settings {
     outChannel: number;
     pianoVolume: number;
     reverb: boolean;
+    /** show the on-screen keys while MIDI plays */
     keyboard: boolean;
+    /** the on-screen keys were left open */
+    keysOpen: boolean;
     qwerty: boolean;
   };
   turn: TurnConfig;
@@ -55,6 +60,7 @@ export const DEFAULTS: Settings = {
   camId: '',
   speakerId: '',
   camOff: false,
+  facing: 'user',
   mirror: true,
   lockRooms: true,
   roomLimit: 2,
@@ -70,6 +76,7 @@ export const DEFAULTS: Settings = {
     pianoVolume: 0.8,
     reverb: true,
     keyboard: true,
+    keysOpen: false,
     qwerty: false,
   },
   turn: { urls: '', username: '', credential: '' },

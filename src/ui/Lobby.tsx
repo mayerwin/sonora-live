@@ -112,6 +112,8 @@ export function Lobby() {
       });
     // back from a reload in the middle of a lesson: straight back in
     const resume = session.wasInLesson();
+    // muted when this lesson was left muted (a new lesson starts unmuted)
+    session.restoreMute();
     if (!media.audio.peek() && !media.video.peek())
       void startMedia().then(() => {
         refresh();

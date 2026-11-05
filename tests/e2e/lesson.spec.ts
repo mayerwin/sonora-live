@@ -772,3 +772,58 @@ test('on a phone, the sound menu opens once (from More)', async ({ browser }) =>
   await expect(a.locator('.menu')).toHaveCount(1);
   await ctx.close();
 });
+
+test('settings are kept on this device: a rejoin finds the lesson as it was left, a new lesson starts unmuted', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const a = await ctx.newPage();
+  await a.goto(urlFor('teacher'));
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await enter(a);
+  const code = await codeOf(a);
+  type W = { sonora: { media: { micOn: { value: boolean }; mode: { value: string }; echo: { value: boolean } } } };
+  const state = () =>
+    a.evaluate(() => {
+      const m = (window as unknown as W).sonora.media;
+      return { mic: m.micOn.value, mode: m.mode.value, echo: m.echo.value };
+    });
+  // voice mode, echo cancelling off for pure, noise reduction on, muted, keys open
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
+  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
+  await a.getByRole('group', { name: 'Sound mode' }).getByRole('button', { name: 'Voice' }).click();
+  await a.keyboard.press('Escape');
+  await a.getByTestId('btn-mic').click();
+  await a.getByTestId('btn-keys').click();
+  await expect.poll(state).toEqual({ mic: false, mode: 'voice', echo: true });
+
+  // leave, then come back to the same lesson (a new page load, as after closing the tab)
+  await a.getByTestId('btn-leave').click(); // alone: no confirmation
+  await expect(a.getByText('You left the lesson')).toBeVisible();
+  await a.goto(urlFor('teacher', code));
+  await a.reload();
+  await enter(a);
+  await expect.poll(state).toEqual({ mic: false, mode: 'voice', echo: true });
+  await expect(a.getByTestId('keyboard')).toBeVisible();
+  await a.getByTestId('btn-settings').click();
+  await expect(a.getByRole('switch', { name: 'Remove steady background noise' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(
+    a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await a.keyboard.press('Escape');
+
+  // a new lesson: same settings, but unmuted
+  await a.getByTestId('btn-leave').click(); // alone: no confirmation
+  await expect(a.getByText('You left the lesson')).toBeVisible();
+  await a.goto(urlFor('teacher'));
+  await a.reload();
+  await enter(a);
+  expect(await codeOf(a)).not.toBe(code);
+  await expect.poll(state).toEqual({ mic: true, mode: 'voice', echo: true });
+  await expect(a.getByTestId('keyboard')).toBeVisible();
+  await ctx.close();
+});

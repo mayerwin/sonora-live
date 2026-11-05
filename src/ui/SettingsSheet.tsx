@@ -200,11 +200,13 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
         <ToggleRow
           title={t('Remove steady background noise')}
           sub={
-            mode === 'pure'
-              ? t(
-                  'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.',
-                )
-              : t('In pure sound only (voice mode already removes noise).')
+            mode !== 'pure'
+              ? t('In pure sound only (voice mode already removes noise).')
+              : s.denoise && !media.denoising.value
+                ? t('Starting… if it does not, tap anywhere on the page.')
+                : t(
+                    'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.',
+                  )
           }
           checked={s.denoise}
           onChange={(v) => update({ denoise: v })}

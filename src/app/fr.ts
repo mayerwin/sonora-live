@@ -374,6 +374,7 @@ export const FR: Record<string, string> = spaced({
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
   'Echo cancelling': 'Annulation d’écho',
+  'Starting… if it does not, tap anywhere on the page.': 'Démarrage… sinon, touchez la page n’importe où.',
   On: 'Activée',
   'Off (headphones)': 'Désactivée (casque)',
   'Now: <b>off</b>, headphones detected ({name}).': 'Actuellement : <b>désactivée</b>, casque détecté ({name}).',

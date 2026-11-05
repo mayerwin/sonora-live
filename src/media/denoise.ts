@@ -12,23 +12,47 @@ export class Denoise {
   private dest: MediaStreamAudioDestinationNode | null = null;
   private input: MediaStreamTrack | null = null;
   private output: MediaStreamTrack | null = null;
+  /** its audio context started running (after a tap): the caller can ask for the processed track again */
+  onRunning: () => void = () => {};
 
   private load(): Promise<boolean> {
     if (!this.ready) {
-      this.ready = (async () => {
-        try {
-          const AC = window.AudioContext;
-          if (!AC || typeof AudioWorkletNode === 'undefined') return false;
-          this.ctx = new AC({ sampleRate: 48_000, latencyHint: 'interactive' });
-          await this.ctx.audioWorklet.addModule(workletUrl);
-          return true;
-        } catch (e) {
-          console.warn('[sonora] noise reduction unavailable', e);
-          return false;
+      try {
+        const AC = window.AudioContext;
+        if (!AC || typeof AudioWorkletNode === 'undefined') {
+          this.ready = Promise.resolve(false);
+          return this.ready;
         }
-      })();
+        // created at once (in the tap that asked for it, when there is one: Safari starts it only then)
+        const ctx = new AC({ sampleRate: 48_000, latencyHint: 'interactive' });
+        this.ctx = ctx;
+        ctx.addEventListener('statechange', () => {
+          if (ctx.state === 'running') this.onRunning();
+        });
+        this.ready = ctx.audioWorklet.addModule(workletUrl).then(
+          () => true,
+          (e) => {
+            console.warn('[sonora] noise reduction unavailable', e);
+            return false;
+          },
+        );
+      } catch (e) {
+        console.warn('[sonora] noise reduction unavailable', e);
+        this.ready = Promise.resolve(false);
+      }
     }
     return this.ready;
+  }
+
+  /** From a tap: create or wake the audio context (browsers start audio only from one). */
+  wake(): void {
+    void this.load();
+    if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
+  }
+
+  /** the processing runs (its context runs and a processed track is out) */
+  get active(): boolean {
+    return !!this.output && this.ctx?.state === 'running';
   }
 
   /**

@@ -44,9 +44,18 @@ export class LocalMedia {
   readonly sentAudio = signal<MediaStreamTrack | null>(null);
   private denoiseOn = false;
   private denoise = new Denoise();
+  /** the steady-noise reduction really processes what is sent (not only switched on) */
+  readonly denoising = signal(false);
   private emitting = 0;
   /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
   readonly picture = new PictureWatch();
+  constructor() {
+    // the noise reduction's context started (a tap): process what is sent if it is wanted and not yet done
+    this.denoise.onRunning = () => {
+      if (this.denoiseOn && this.mode.peek() === 'pure' && !this.denoising.peek()) void this.emitAudio();
+    };
+  }
+
   /** a track the peers should send now changed */
   onTrack: (slot: Slot, track: MediaStreamTrack | null) => void = () => {};
 
@@ -262,8 +271,18 @@ export class LocalMedia {
     if (raw && this.denoiseOn && this.mode.peek() === 'pure') out = await this.denoise.process(raw);
     else this.denoise.stop();
     if (n !== this.emitting) return; // a newer change won
+    this.denoising.value = !!raw && out !== raw;
     this.sentAudio.value = out;
     this.onTrack('audio', out);
+  }
+
+  /**
+   * From any tap: wake the noise reduction's audio context. When it was on but could not start (no tap yet,
+   * Safari), it starts processing now.
+   */
+  unlockAudio(): void {
+    if (!this.denoiseOn || this.mode.peek() !== 'pure') return;
+    this.denoise.wake();
   }
 
   /** Steady background noise reduction on or off (applies in pure mode). Call it from a click the first time. */

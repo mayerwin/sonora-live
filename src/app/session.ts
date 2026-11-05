@@ -25,7 +25,7 @@ import {
 import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
-import { settings, tabId, updateMidi } from './settings.ts';
+import { settings, tabId, update, updateMidi } from './settings.ts';
 import { log } from './log.ts';
 import {
   Participants,
@@ -37,6 +37,10 @@ import {
 import { t } from './i18n.ts';
 
 const LESSON_KEY = 'sonora.lesson';
+/** the last lesson on this device and whether the microphone was muted there (localStorage) */
+const LAST_KEY = 'sonora.last';
+/** back in the same lesson within this time: muted again if it was */
+const SAME_LESSON_MS = 3 * 3600_000;
 
 export const roleLabel = (r: Role): string => (r === 'observer' ? t('Observer') : t('Musician'));
 
@@ -248,6 +252,10 @@ export class Session {
       if (!document.hidden && this.phase.peek() === 'room') void this.lockScreen();
     });
     void this.warmIce();
+    // any tap may be the one a browser waits for to start audio processing (Safari)
+    const tap = () => this.media.unlockAudio();
+    window.addEventListener('pointerdown', tap, { capture: true, passive: true });
+    window.addEventListener('keydown', tap, { capture: true, passive: true });
     this.startEffects();
     // a duplicated tab inherits this tab's id: tell it so it takes its own
     if (typeof BroadcastChannel !== 'undefined') {
@@ -334,7 +342,37 @@ export class Session {
     }
   }
 
+  /** Remember this lesson and the microphone's state in it (a rejoin finds it muted again if it was). */
+  private noteLesson(): void {
+    try {
+      const v = { code: this.code.peek(), micOff: !this.media.micOn.peek(), at: Date.now() };
+      localStorage.setItem(LAST_KEY, JSON.stringify(v));
+    } catch {
+      // private mode
+    }
+  }
+
+  /**
+   * In the lobby: back to the lesson left last (within a few hours), the microphone is as it was then (muted
+   * stays muted); any other lesson starts unmuted, so no one starts a new lesson talking unheard.
+   */
+  restoreMute(): void {
+    let off = false;
+    try {
+      const v = JSON.parse(localStorage.getItem(LAST_KEY) ?? 'null') as {
+        code?: string;
+        micOff?: boolean;
+        at?: number;
+      } | null;
+      off = !!v && v.code === this.code.peek() && Date.now() - (v.at ?? 0) < SAME_LESSON_MS && v.micOff === true;
+    } catch {
+      // nothing remembered
+    }
+    this.media.setMicOn(!off);
+  }
+
   private markInLesson(on: boolean): void {
+    if (this.phase.peek() === 'room') this.noteLesson();
     try {
       if (on) sessionStorage.setItem(LESSON_KEY, JSON.stringify({ code: this.code.peek(), at: Date.now() }));
       else sessionStorage.removeItem(LESSON_KEY);
@@ -397,6 +435,7 @@ export class Session {
 
   /** Leave the lesson (camera and microphone are released). */
   leave(): void {
+    this.noteLesson();
     this.markInLesson(false);
     this.sayBye();
     this.parts.clear();
@@ -642,6 +681,7 @@ export class Session {
     resumeMeters();
     this.midi.piano.context();
     for (const el of this.audioEls.values()) void el.play().catch(() => {});
+    this.media.unlockAudio();
     this.needsTap.value = false;
   }
 
@@ -762,6 +802,20 @@ export class Session {
             });
           }
         }, wait);
+      }),
+    );
+    // the microphone's mute is remembered for this lesson; the camera side (front, back) for every lesson
+    this.disposers.push(
+      effect(() => {
+        void this.media.micOn.value;
+        if (this.phase.value === 'room') this.noteLesson();
+      }),
+    );
+    this.media.facing.value = settings.peek().facing;
+    this.disposers.push(
+      effect(() => {
+        const f = this.media.facing.value;
+        if (f !== settings.peek().facing) update({ facing: f });
       }),
     );
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
