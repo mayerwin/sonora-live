@@ -91,12 +91,6 @@ export const FR: Record<string, string> = spaced({
   'Waiting to be let in…': 'En attente d’admission…',
   'Start a new room instead': 'Créer plutôt une nouvelle salle',
   You: 'Vous',
-  'Auto (recommended)': 'Auto (recommandé)',
-  'Pure sound for your instrument; voice mode while MIDI carries your piano.':
-    'Son pur pour votre instrument ; mode voix pendant que le MIDI transmet votre piano.',
-  'Pure instrument': 'Instrument pur',
-  'No noise suppression, no automatic volume, stereo. Echo cancelled unless you use headphones.':
-    'Sans réduction de bruit ni volume automatique, en stéréo. L’écho est annulé, sauf avec un casque.',
   Voice: 'Voix',
   'Speech processing: removes noise and echo (and some of the music).':
     'Traitement de la parole : supprime le bruit et l’écho (et un peu de la musique).',
@@ -121,7 +115,6 @@ export const FR: Record<string, string> = spaced({
   Chat: 'Discussion',
   Settings: 'Réglages',
   More: 'Plus',
-  'Sound: {mode}': 'Son : {mode}',
   'Auto · tap to change': 'Auto · touchez pour changer',
   'Manual · tap to change': 'Manuel · touchez pour changer',
   'Hide piano keys': 'Masquer le clavier',
@@ -145,10 +138,6 @@ export const FR: Record<string, string> = spaced({
     'Le même lien permet de revenir ; la connexion se rétablit d’elle-même.',
   '{name} left the lesson': '{name} a quitté le cours',
   'Connection to {name} was lost': 'La connexion avec {name} a été perdue',
-  'Microphone: voice mode': 'Micro : mode voix',
-  'Microphone: pure sound': 'Micro : son pur',
-  'Your piano now travels as MIDI, so your microphone is tuned for speech.':
-    'Votre piano passe désormais en MIDI : votre micro est donc réglé pour la parole.',
   'MIDI is off, so your microphone sends your instrument untouched again.':
     'Le MIDI est coupé : votre micro transmet de nouveau votre instrument tel quel.',
   '{name} connected': '{name} connecté',
@@ -221,8 +210,6 @@ export const FR: Record<string, string> = spaced({
   'Camera off': 'Caméra coupée',
   'Connecting…': 'Connexion…',
   '{name} plays over MIDI': '{name} joue en MIDI',
-  'Unprocessed sound (no noise suppression)': 'Son brut (sans réduction de bruit)',
-  'Speech processing on': 'Traitement de la parole activé',
   'Pure · stereo': 'Pur · stéréo',
   'Estimated delay of the sound from {name}': 'Retard estimé du son de {name}',
   'second camera': 'deuxième caméra',
@@ -365,15 +352,78 @@ export const FR: Record<string, string> = spaced({
   'HD · 720p': 'HD · 720p',
   'Full HD · 1080p': 'Full HD · 1080p',
   Auto: 'Auto',
-  'Now: <b>pure</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.':
-    'Actuellement : <b>son pur</b>. Votre micro transmet votre instrument tel quel ; quand votre piano transite en MIDI, il passe au traitement de la voix pour que la parole reste claire.',
-  'Now: <b>voice</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.':
-    'Actuellement : <b>voix</b>. Votre micro transmet votre instrument tel quel ; quand votre piano transite en MIDI, il passe au traitement de la voix pour que la parole reste claire.',
   'No noise suppression, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.':
     'Ni réduction de bruit, ni volume automatique, et la stéréo si votre micro la permet : chaque tenue, chaque pédale et chaque pianissimo arrive tel que joué.',
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
   'Echo cancelling': 'Annulation d’écho',
+  'Microphone: voice only': 'Micro : voix seulement',
+  'Microphone: instrument and voice': 'Micro : instrument et voix',
+  'Your piano now reaches the others as MIDI, so your microphone carries your voice only. To send your piano’s sound through it too: MIDI panel, “Voice only on my microphone while I play through MIDI”.':
+    'Votre piano arrive maintenant aux autres en MIDI : votre micro ne transmet plus que votre voix. Pour y faire aussi passer le son de votre piano : panneau MIDI, « Voix seulement sur mon micro quand je joue en MIDI ».',
+  '{name} set your microphone to voice only': '{name} a réglé votre micro sur voix seulement',
+  '{name} set your microphone to voice only while your piano plays through MIDI':
+    '{name} a réglé votre micro sur voix seulement quand votre piano passe en MIDI',
+  '{name} set your microphone to instrument and voice': '{name} a réglé votre micro sur instrument et voix',
+  '{name} turned off echo cancelling on your microphone': '{name} a désactivé l’annulation d’écho de votre micro',
+  '{name} turned on echo cancelling on your microphone': '{name} a activé l’annulation d’écho de votre micro',
+  'They hear the result. You can change it back in Settings → Sound.':
+    'C’est ce qu’on entend de vous. Vous pouvez le changer dans Réglages → Son.',
+  'Voice only on my microphone while I play through MIDI': 'Voix seulement sur mon micro quand je joue en MIDI',
+  'Your piano reaches the others as MIDI, so your microphone is tuned for speech. Turn off to also send your piano’s sound through the microphone.':
+    'Votre piano arrive aux autres en MIDI : votre micro est réglé pour la parole. Désactivez pour faire aussi passer le son de votre piano par le micro.',
+  'Your piano’s sound also goes through your microphone, as well as through MIDI.':
+    'Le son de votre piano passe aussi par votre micro, en plus du MIDI.',
+  'Sound from {name}': 'Le son de {name}',
+  'You hear it, so you can tell what it needs. Changes to their microphone are made on their device, and they are told.':
+    'C’est vous qui l’entendez : vous savez ce qu’il lui faut. Les changements de son micro se font sur son appareil, et il en est informé.',
+  'Their microphone': 'Son micro',
+  'Instrument and voice': 'Instrument et voix',
+  'Voice only': 'Voix seulement',
+  'Voice only while their piano plays through MIDI': 'Voix seulement quand son piano passe en MIDI',
+  'Now: their piano reaches you as MIDI, their microphone carries their voice only.':
+    'Actuellement : son piano vous arrive en MIDI, son micro ne transmet que sa voix.',
+  'Now: their piano reaches you as MIDI and through their microphone.':
+    'Actuellement : son piano vous arrive en MIDI et par son micro.',
+  'Their piano does not play through MIDI now.': 'Son piano ne passe pas en MIDI en ce moment.',
+  'Echo cancelling on their side': 'Annulation d’écho de son côté',
+  'Now: on. You do not hear yourself back from their speakers.':
+    'Actuellement : activée. Vous ne vous entendez pas revenir par ses haut-parleurs.',
+  'Now: off, they wear headphones.': 'Actuellement : désactivée, il porte un casque.',
+  'Now: off. If you hear yourself back, turn it on.':
+    'Actuellement : désactivée. Si vous vous entendez en retour, activez-la.',
+  'For what you hear only: hiss, a fan, air conditioning are taken out; their instrument and voice stay as they are. Adds 8 ms.':
+    'Pour ce que vous entendez seulement : souffle, ventilateur, climatisation sont retirés ; son instrument et sa voix restent intacts. Ajoute 8 ms.',
+  'As an observer, you can only change what you hear.':
+    'En tant qu’observateur, vous ne pouvez changer que ce que vous entendez.',
+  '{name} uses an older version: reload it to change their microphone from here.':
+    '{name} utilise une ancienne version : qu’il recharge la page pour que vous puissiez régler son micro d’ici.',
+  'Instrument and voice (recommended)': 'Instrument et voix (recommandé)',
+  'Untouched sound; voice only while your piano plays through MIDI.':
+    'Son intact ; voix seulement quand votre piano passe en MIDI.',
+  'Instrument and voice, always': 'Instrument et voix, toujours',
+  'Your piano’s sound through the microphone too, even while it plays through MIDI.':
+    'Le son de votre piano passe aussi par le micro, même quand il passe en MIDI.',
+  'Microphone: {mode}': 'Micro : {mode}',
+  'instrument and voice': 'instrument et voix',
+  'voice only': 'voix seulement',
+  'Your microphone': 'Votre micro',
+  'What the others hear from you. They can change it too, since they hear it.':
+    'Ce que les autres entendent de vous. Ils peuvent le changer aussi, puisque ce sont eux qui l’entendent.',
+  'Voice only while my piano plays through MIDI': 'Voix seulement quand mon piano passe en MIDI',
+  'Now: your piano reaches the others as MIDI, so your microphone carries your voice only. Turn off to also send your piano’s sound through the microphone.':
+    'Actuellement : votre piano arrive aux autres en MIDI, votre micro ne transmet que votre voix. Désactivez pour faire aussi passer le son de votre piano par le micro.',
+  'Now: your piano reaches the others as MIDI and through your microphone.':
+    'Actuellement : votre piano arrive aux autres en MIDI et par votre micro.',
+  'When your piano reaches the others as MIDI, your microphone is tuned for speech. Turn off to keep sending your piano’s sound through the microphone too.':
+    'Quand votre piano arrive aux autres en MIDI, votre micro est réglé pour la parole. Désactivez pour continuer à faire passer le son de votre piano par le micro.',
+  'Background noise': 'Bruit de fond',
+  'Whoever hears it removes it: tap the sound label on someone’s picture to clean the steady noise (hiss, a fan) from what you hear from them.':
+    'C’est celui qui l’entend qui le retire : touchez l’étiquette du son sur l’image de quelqu’un pour retirer le bruit constant (souffle, ventilateur) de ce que vous entendez de lui.',
+  'Noise reduction (what you hear)': 'Réduction du bruit (ce que vous entendez)',
+  'Sound from {name}: what you hear, and how to clean it':
+    'Le son de {name} : ce que vous entendez, et comment le nettoyer',
+  'Echo cancelled': 'Écho annulé',
   'Now: <b>on</b>, no headphones detected. Made for music: your own playing is never turned down. Choose Off if you wear headphones.':
     'Actuellement : <b>activée</b>, aucun casque détecté. Faite pour la musique : votre jeu n’est jamais atténué. Choisissez Désactivée si vous portez un casque.',
   'Made for music: the sound of your speakers is subtracted from your microphone, and your own playing is never turned down. It learns your room in the first seconds the others play.':
@@ -388,13 +438,10 @@ export const FR: Record<string, string> = spaced({
   'not available in this browser': 'non disponible dans ce navigateur',
   running: 'en marche',
   '{db} dB removed': '{db} dB retirés',
-  'Noise reduction': 'Réduction du bruit',
-  waiting: 'en attente',
   Output: 'Sortie',
   'Sound check': 'Vérification du son',
   'Report copied': 'Rapport copié',
   'Copy report': 'Copier le rapport',
-  'Starting… if it does not, tap anywhere on the page.': 'Démarrage… sinon, touchez la page n’importe où.',
   On: 'Activée',
   'Off (headphones)': 'Désactivée (casque)',
   'Now: <b>off</b>, headphones detected ({name}).': 'Actuellement : <b>désactivée</b>, casque détecté ({name}).',
@@ -518,9 +565,6 @@ export const FR: Record<string, string> = spaced({
   'Through a relay server (no direct path)': 'Par un serveur relais (pas de chemin direct)',
   relay: 'relais',
   'Remove steady background noise': 'Retirer le bruit de fond constant',
-  'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.':
-    'Souffle, ventilateur, climatisation : retirés, tandis que votre instrument et votre voix restent tels quels. Ajoute 8 ms.',
-  'In pure sound only (voice mode already removes noise).': 'En son pur seulement (le mode voix retire déjà le bruit).',
   Musician: 'Musicien',
   'Scan with a phone or tablet to join this room.':
     'Scannez avec un téléphone ou une tablette pour rejoindre cette salle.',

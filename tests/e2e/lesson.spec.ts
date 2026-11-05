@@ -625,7 +625,9 @@ test('back from a long time in the background (a phone switching apps), the less
   await b.context().close();
 });
 
-test('steady-noise reduction: switched on in Settings, the sound still reaches the other side', async ({ browser }) => {
+test('noise reduction is the listener’s: the student cleans what they hear from the teacher, the teacher can change the student’s microphone', async ({
+  browser,
+}) => {
   const a = await person(browser, 'Clara', 'teacher');
   const errors: string[] = [];
   a.on('pageerror', (e) => errors.push(e.message));
@@ -633,54 +635,63 @@ test('steady-noise reduction: switched on in Settings, the sound still reaches t
   const b = await person(browser, 'Leo', 'student', await codeOf(a));
   await enter(b);
   await connected(a, 1);
-  await a.getByTestId('btn-settings').click();
-  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
-  type M = {
+  await connected(b, 1);
+  type S = {
     sonora: {
-      media: {
-        audio: { value: MediaStreamTrack | null };
-        sentAudio: { value: MediaStreamTrack | null };
-        denoising: { value: boolean };
-      };
+      engine: { remoteRoute(id: string): { engine: boolean; denoise: boolean } };
+      peers: { value: { id: string; stats: { audioInKbps: number } | null }[] };
+      media: { mode: { value: string } };
     };
   };
-  // what is sent is now the processed track (noise reduction running), not the microphone itself
-  await expect
-    .poll(() =>
-      a.evaluate(() => {
-        const m = (window as unknown as M).sonora.media;
-        return (
-          m.denoising.value &&
-          !!m.sentAudio.value &&
-          m.sentAudio.value !== m.audio.value &&
-          m.sentAudio.value.readyState === 'live'
-        );
-      }),
-    )
-    .toBe(true);
-  // and it carries sound: the student keeps receiving audio
-  const audioIn = () =>
-    b.evaluate(
-      () =>
-        (window as unknown as { sonora: { peers: { value: { stats: { audioInKbps: number } | null }[] } } }).sonora
-          .peers.value[0]?.stats?.audioInKbps ?? 0,
-    );
-  await b.waitForTimeout(3000);
+  const route = (p: typeof a) =>
+    p.evaluate(() => {
+      const s = (window as unknown as S).sonora;
+      return s.engine.remoteRoute(s.peers.value[0].id).denoise;
+    });
+  // the student opens the teacher's sound (the label on her picture) and removes the steady noise
+  await b.getByTestId('peer-sound').click();
+  await expect(b.getByRole('dialog')).toContainText('Sound from Clara');
+  await b.getByRole('switch', { name: 'Remove steady background noise' }).click();
+  await expect.poll(() => route(b)).toBe(true);
+  // for the student only: the teacher's own hearing is untouched
+  expect(await route(a)).toBe(false);
+  // and the student still hears her
+  const audioIn = () => b.evaluate(() => (window as unknown as S).sonora.peers.value[0]?.stats?.audioInKbps ?? 0);
   await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
-  // off again (echo cancelling still processes what is sent, on speakers)
-  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
-  await expect
-    .poll(() =>
-      a.evaluate(() => {
-        const m = (window as unknown as M).sonora.media;
-        return m.denoising.value === false && m.sentAudio.value?.readyState === 'live';
-      }),
-    )
-    .toBe(true);
-  await expect.poll(audioIn, { timeout: 10_000 }).toBeGreaterThan(20);
+
+  // the teacher sets the student's microphone to voice only: applied on his side, and he is told
+  await a.getByTestId('peer-sound').click();
+  await a.getByRole('group', { name: 'Their microphone' }).getByRole('button', { name: 'Voice only' }).click();
+  await expect.poll(() => b.evaluate(() => (window as unknown as S).sonora.media.mode.value)).toBe('voice');
+  await expect(b.locator('.toast', { hasText: 'Clara set your microphone to voice only' })).toBeVisible();
+  // her sheet shows his new state
+  await expect(
+    a.getByRole('group', { name: 'Their microphone' }).getByRole('button', { name: 'Voice only' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // and back
+  await a
+    .getByRole('group', { name: 'Their microphone' })
+    .getByRole('button', { name: 'Instrument and voice' })
+    .click();
+  await expect.poll(() => b.evaluate(() => (window as unknown as S).sonora.media.mode.value)).toBe('pure');
   expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();
+});
+
+test('an observer only changes what they hear', async ({ browser }) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const o = await person(browser, 'Mum', 'observer', await codeOf(a));
+  await enter(o);
+  await connected(o, 1);
+  await o.getByTestId('peer-sound').first().click();
+  await expect(
+    o.getByRole('group', { name: 'Their microphone' }).getByRole('button', { name: 'Voice only' }),
+  ).toBeDisabled();
+  await expect(o.getByRole('switch', { name: 'Remove steady background noise' })).toBeEnabled();
+  await a.context().close();
+  await o.context().close();
 });
 
 test('echo cancelling: on in pure sound on speakers, off by choice, and the sound still reaches the other side', async ({
@@ -782,8 +793,8 @@ test('on a phone, the sound menu opens once (from More)', async ({ browser }) =>
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
   await enter(a);
   await a.getByTestId('btn-more').click();
-  await a.locator('.menu-item', { hasText: 'Sound:' }).click();
-  await expect(a.getByRole('menuitemradio', { name: /Pure instrument/ })).toHaveCount(1);
+  await a.locator('.menu-item', { hasText: 'Microphone:' }).click();
+  await expect(a.getByRole('menuitemradio', { name: /Voice only/ })).toHaveCount(1);
   await expect(a.locator('.menu')).toHaveCount(1);
   await ctx.close();
 });
@@ -803,11 +814,10 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
       const m = (window as unknown as W).sonora.media;
       return { mic: m.micOn.value, mode: m.mode.value, echo: m.echo.value };
     });
-  // voice mode, echo cancelling off for pure, noise reduction on, muted, keys open
+  // voice only, echo cancelling off for pure sound, muted, keys open
   await a.getByTestId('btn-settings').click();
   await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
-  await a.getByRole('switch', { name: 'Remove steady background noise' }).click();
-  await a.getByRole('group', { name: 'Sound mode' }).getByRole('button', { name: 'Voice' }).click();
+  await a.getByRole('group', { name: 'Your microphone' }).getByRole('button', { name: 'Voice only' }).click();
   await a.keyboard.press('Escape');
   await a.getByTestId('btn-mic').click();
   await a.getByTestId('btn-keys').click();
@@ -822,10 +832,6 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
   await expect.poll(state).toEqual({ mic: false, mode: 'voice', echo: true });
   await expect(a.getByTestId('keyboard')).toBeVisible();
   await a.getByTestId('btn-settings').click();
-  await expect(a.getByRole('switch', { name: 'Remove steady background noise' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
   await expect(
     a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }),
   ).toHaveAttribute('aria-pressed', 'true');

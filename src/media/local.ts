@@ -43,16 +43,12 @@ export class LocalMedia {
   readonly facing = signal<'user' | 'environment'>('user');
   /** waiting for the browser's permission prompt (or the devices) to answer */
   readonly asking = signal(false);
-  /** the microphone as sent: through the steady-noise reduction when it is on (pure mode only) */
+  /** the microphone as sent: through the engine's echo canceller when it runs */
   readonly sentAudio = signal<MediaStreamTrack | null>(null);
-  private denoiseOn = false;
-  /** the steady-noise reduction really processes what is sent (not only switched on) */
-  readonly denoising = signal(false);
   private emitting = 0;
   /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
   readonly picture = new PictureWatch();
   constructor() {
-    // the noise reduction's context started (a tap): process what is sent if it is wanted and not yet done
     // the engine's audio context started (a tap): process what is sent, if anything should be
     effect(() => {
       if (engine.running.value) void this.emitAudio();
@@ -281,33 +277,23 @@ export class LocalMedia {
     });
   }
 
-  /** Hand the peers the microphone as it should be sent (raw, or through the noise reduction). */
+  /** Hand the peers the microphone as it should be sent (as captured, or through the echo canceller). */
   private async emitAudio(): Promise<void> {
     const n = ++this.emitting;
     const raw = this.audio.peek();
     let out = raw;
-    const pure = this.mode.peek() === 'pure';
-    const want = { aec: !!raw && this.engineEcho(), denoise: !!raw && this.denoiseOn && pure };
+    const want = { aec: !!raw && this.engineEcho() };
     if (raw) out = await engine.process(raw, want);
     if (n !== this.emitting) return; // a newer change won
-    this.denoising.value = want.denoise && out !== raw;
     this.echo.value = this.trackEcho || (want.aec && out !== raw && engine.cancelling);
     this.sentAudio.value = out;
     this.onTrack('audio', out);
   }
 
-  /**
-   * From any tap: wake the audio engine. When echo cancelling or noise reduction was on but could not start (no
-   * tap yet, Safari), it starts processing now.
-   */
+  /** From any tap: wake the audio engine. When echo cancelling was on but could not start (no tap yet), it starts
+   * now. */
   unlockAudio(): void {
-    if (engine.ctx || this.engineEcho() || (this.denoiseOn && this.mode.peek() === 'pure')) engine.ensure();
-  }
-
-  /** Steady background noise reduction on or off (applies in pure mode). Call it from a click the first time. */
-  setDenoise(on: boolean): Promise<void> {
-    this.denoiseOn = on;
-    return this.emitAudio();
+    if (engine.ctx || this.engineEcho()) engine.ensure();
   }
 
   setMicOn(on: boolean): void {

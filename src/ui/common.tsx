@@ -129,6 +129,7 @@ export function Seg<T extends string | number>(props: {
   options: { value: T; label: ComponentChildren; title?: string }[];
   onChange: (v: T) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <div class="seg" role="group" aria-label={props.label}>
@@ -137,6 +138,7 @@ export function Seg<T extends string | number>(props: {
           type="button"
           aria-pressed={o.value === props.value}
           title={o.title}
+          disabled={props.disabled}
           onClick={() => props.onChange(o.value)}
         >
           {o.label}

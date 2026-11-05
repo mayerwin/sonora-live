@@ -28,8 +28,9 @@ export interface Settings {
   lockRooms: boolean;
   roomLimit: number;
   joinSound: boolean;
-  /** steady background noise reduction (pure mode) */
-  denoise: boolean;
+  /** whose sound this listener cleans of steady background noise (by name: names last from one lesson to the
+   * next, ids do not) */
+  cleanNoise: string[];
   notifyJoin: boolean;
   chatOpen: boolean;
   midi: {
@@ -65,7 +66,7 @@ export const DEFAULTS: Settings = {
   lockRooms: true,
   roomLimit: 2,
   joinSound: true,
-  denoise: false,
+  cleanNoise: [],
   notifyJoin: true,
   chatOpen: true,
   midi: {

@@ -67,10 +67,15 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   until the slower video has been decoded; here the sound plays the instant it arrives.
 - **Sound and MIDI before video**: when the connection starts to queue (a slow upload, busy Wi-Fi), the video gives
   way at once, and comes back once the queue is gone, so a note never waits behind a picture.
-- **Steady background noise removal** (optional): takes out what does not change, hiss, a fan, air conditioning, and
-  keeps the instrument and voices as they are, unlike speech noise suppression; 8 ms.
-- **Smart voice mode**: on *Auto*, while your piano travels as MIDI, your microphone switches to speech processing,
-  so talking stays clear and the piano is not sent twice. It switches back by itself.
+- **Whoever hears it decides**: tap the sound label on someone's picture to see what you hear from them and fix it:
+  their microphone (instrument and voice, or voice only) and their echo cancelling are changed on their device, and
+  they are told who changed what; the steady background noise removal (hiss, a fan, air conditioning taken out, the
+  instrument and voices kept as they are, unlike speech noise suppression; 8 ms) cleans what you hear only. Observers
+  can only change what they hear.
+- **Voice only while MIDI plays**: while your piano reaches the others as MIDI, your microphone switches to speech
+  processing, so talking stays clear and the piano is not sent twice; it switches back by itself. One switch keeps
+  your piano in the microphone too (*Settings → Sound*, or the MIDI panel). It only ever applies on the side whose
+  instrument plays through MIDI.
 - **Clip warning**: with automatic gain off, the meter tells you when a forte passage overloads your microphone.
 
 ### Play together over MIDI
@@ -170,7 +175,7 @@ depends on what the browser allows:
 - **Point a second camera at the keys**: a webcam above the keyboard (*Settings → Video → Second camera*), or a phone
   that joins by scanning the observer's QR code (share sheet).
 - **Teaching on a digital piano?** Connect it on both sides: you play to each other's instruments, and the microphones
-  switch to voice mode so you can talk over the music.
+  switch to voice only so you can talk over the music (one switch in the MIDI panel keeps the piano in the microphone).
 - **Microphone too loud?** If the meter says *Too loud* on forte passages, lower the input level in the system's sound
   settings: with automatic gain off, nothing does it for you.
 

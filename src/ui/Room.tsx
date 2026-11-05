@@ -1,4 +1,5 @@
 import { computed } from '@preact/signals';
+import { PeerSoundSheet } from './PeerSoundSheet.tsx';
 import { useEffect, useState } from 'preact/hooks';
 import {
   AudioWaveform,
@@ -113,6 +114,7 @@ export function Room() {
       {sheet.value === 'settings' && <SettingsSheet />}
       {sheet.value === 'share' && <ShareSheet />}
       {sheet.value === 'lock' && <LockSheet />}
+      {sheet.value === 'peer-sound' && <PeerSoundSheet />}
     </div>
   );
 }
@@ -322,19 +324,19 @@ function Reactions() {
 const soundOptions = (): { value: SoundSetting; title: string; sub: string; icon: typeof AudioWaveform }[] => [
   {
     value: 'auto',
-    title: t('Auto (recommended)'),
-    sub: t('Pure sound for your instrument; voice mode while MIDI carries your piano.'),
+    title: t('Instrument and voice (recommended)'),
+    sub: t('Untouched sound; voice only while your piano plays through MIDI.'),
     icon: Sparkles,
   },
   {
     value: 'pure',
-    title: t('Pure instrument'),
-    sub: t('No noise suppression, no automatic volume, stereo. Echo cancelled unless you use headphones.'),
+    title: t('Instrument and voice, always'),
+    sub: t('Your piano’s sound through the microphone too, even while it plays through MIDI.'),
     icon: AudioWaveform,
   },
   {
     value: 'voice',
-    title: t('Voice'),
+    title: t('Voice only'),
     sub: t('Speech processing: removes noise and echo (and some of the music).'),
     icon: Speech,
   },
@@ -550,7 +552,9 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
               <button class="menu-item" onClick={() => toggleMenu('sound-more')}>
                 {mode === 'pure' ? <AudioWaveform /> : <Speech />}
                 <span>
-                  <b>{t('Sound: {mode}', { mode: mode === 'pure' ? t('Pure instrument') : t('Voice') })}</b>
+                  <b>
+                    {t('Microphone: {mode}', { mode: mode === 'pure' ? t('instrument and voice') : t('voice only') })}
+                  </b>
                   <small>{setting === 'auto' ? t('Auto · tap to change') : t('Manual · tap to change')}</small>
                 </span>
               </button>

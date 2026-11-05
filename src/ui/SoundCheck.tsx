@@ -46,11 +46,12 @@ function snapshot() {
       echoRemovedDb: echo?.reductionDb != null ? Math.round(echo.reductionDb * 10) / 10 : null,
       speakersPlaying: echo ? Math.round(echo.playing * 100) : null,
       delayMs: echo ? Math.round(echo.delayMs) : null,
-      denoising: media.denoising.peek(),
-      denoiseSetting: s.denoise,
     },
     sent: media.sentAudio.peek() === mic ? 'microphone as captured' : 'processed by the engine',
     peers: session.peers.peek().map((p) => ({
+      route: engine.remoteRoute(p.id),
+      theirEcho: p.remote?.echo ?? null,
+      theirEchoSetting: p.remote?.echoSetting ?? null,
       rttMs: p.stats?.rtt ?? null,
       via: p.stats?.via ?? null,
       audioInKbps: p.stats?.audioInKbps ?? null,
@@ -100,7 +101,16 @@ export function SoundCheck() {
               .join(' · ')
           : t('off'),
     ],
-    [t('Noise reduction'), e.denoising ? t('running') : e.denoiseSetting ? t('waiting') : t('off')],
+    [
+      t('Noise reduction (what you hear)'),
+      snap.peers.some((p) => p.route.denoise)
+        ? session.peers
+            .peek()
+            .filter((p) => engine.remoteRoute(p.id).denoise)
+            .map((p) => p.info.name)
+            .join(', ')
+        : t('off'),
+    ],
     [t('Output'), e.outputMs != null ? `${e.outputMs} ms · ${e.state}` : '—'],
   ];
   return (

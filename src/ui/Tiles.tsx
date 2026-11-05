@@ -5,6 +5,7 @@ import { settings } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { LevelBars, Qr, SignalBars, VideoView } from './common.tsx';
+import { peerSound, sheet } from './state.ts';
 import { initials, RoleIcon } from './icons.tsx';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
 import { t } from '../app/i18n.ts';
@@ -69,12 +70,19 @@ export function PeerTile({
             </span>
           )}
           {r && (
-            <span
-              class="chip"
-              title={r.sound === 'pure' ? t('Unprocessed sound (no noise suppression)') : t('Speech processing on')}
+            <button
+              class="chip chip-btn"
+              data-testid="peer-sound"
+              aria-label={t('Sound from {name}', { name: peer.info.name })}
+              title={t('Sound from {name}: what you hear, and how to clean it', { name: peer.info.name })}
+              onClick={() => {
+                peerSound.value = peer.id;
+                sheet.value = 'peer-sound';
+              }}
             >
               <AudioWaveform /> {r.sound === 'pure' ? (r.stereo ? t('Pure · stereo') : t('Pure')) : t('Voice')}
-            </span>
+              {r.echo ? <span class="chip-dot" title={t('Echo cancelled')} /> : null}
+            </button>
           )}
           {st?.latencyMs != null && (
             <span

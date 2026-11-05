@@ -19,6 +19,7 @@
 // tested with a fake clock and fake links (tests/unit/participants.test.ts).
 
 import type { SoundMode } from '../media/constraints.ts';
+import type { EchoSetting, SoundSetting } from './settings.ts';
 import type { LinkState, LinkStats, SignalData } from '../net/peer.ts';
 import { fingerprintOf } from '../net/peer.ts';
 import type { MemberInfo } from '../net/room.ts';
@@ -41,6 +42,13 @@ export interface RemoteState {
   extra: 'screen' | 'camera' | null;
   sound: SoundMode;
   stereo: boolean;
+  /** their microphone's settings, which the others can change too (older versions: absent) */
+  soundSetting?: SoundSetting;
+  echoSetting?: EchoSetting;
+  /** the echo of their speakers is cancelled in what they send */
+  echo?: boolean;
+  /** their output looks like headphones */
+  headphones?: boolean;
   midi: { device: string; sending: boolean; receiving: boolean };
   away: boolean;
 }

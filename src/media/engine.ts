@@ -6,14 +6,14 @@
 // whenever the others play; this one is linear (it only subtracts the echo it has learned), so the piano played
 // here keeps every note.
 //
-//   others' sound ──┐
-//   built-in piano ─┴─► out ─► speakers
-//                        └──► (reference) ─┐
-//   microphone ───────────────────────────► echo canceller ─► steady-noise reduction ─► sent
+//   someone's sound ─► (steady-noise reduction, if this listener wants it for them) ─┐
+//   built-in piano ─────────────────────────────────────────────────────────────────┴─► out ─► speakers
+//                                                                                        └──► (reference) ─┐
+//   microphone ───────────────────────────────────────────────────────────────────────► echo canceller ─► sent
 //
-// The others' sound goes through the engine only while echo cancelling runs; otherwise it plays from plain audio
-// elements, the shortest path. Each stage of the microphone's chain is there only when it is on: with nothing on,
-// the microphone is sent as it comes.
+// Noise reduction is the listener's: whoever hears a sound decides how it is cleaned, for themselves only. The
+// others' sound goes through the engine only while echo cancelling runs or noise is reduced for them; otherwise it
+// plays from plain audio elements, the shortest path. Without echo cancelling, the microphone is sent as it comes.
 
 import { signal } from '@preact/signals';
 import aecWorkletUrl from './aec.worklet.ts?worker&url';
@@ -23,8 +23,6 @@ import aecWasmUrl from './aec.wasm?url';
 export interface MicChain {
   /** cancel the speakers' echo */
   aec: boolean;
-  /** steady background noise reduction */
-  denoise: boolean;
 }
 
 export interface EchoStats {
@@ -53,6 +51,8 @@ class AudioEngine {
   readonly aecOn = signal(false);
   /** the echo canceller cannot run here (no AudioWorklet or WebAssembly): fall back to the browser's */
   readonly aecUnavailable = signal(false);
+  /** the worklets are loaded (noise reduction for someone's sound can be set up) */
+  readonly loaded = signal(false);
 
   private chain: {
     track: MediaStreamTrack;
@@ -62,7 +62,10 @@ class AudioEngine {
     aec: AudioWorkletNode | null;
     output: MediaStreamTrack;
   } | null = null;
-  private remote = new Map<string, { src: MediaStreamAudioSourceNode; gain: GainNode }>();
+  private remote = new Map<
+    string,
+    { stream: MediaStream; src: MediaStreamAudioSourceNode; nodes: AudioNode[]; denoise: boolean }
+  >();
   private sinkId = '';
 
   /** Create the context (in a tap the first time: Safari starts audio only then) and wake it. */
@@ -88,7 +91,7 @@ class AudioEngine {
     return this.ctx;
   }
 
-  private load(): Promise<boolean> {
+  load(): Promise<boolean> {
     if (!this.ready) {
       const ctx = this.ensure();
       this.ready = (async () => {
@@ -108,6 +111,7 @@ class AudioEngine {
           // checked here, so a browser that cannot compile it falls back at once
           new WebAssembly.Module(bytes);
           this.wasm = bytes;
+          this.loaded.value = true;
           return true;
         } catch (e) {
           console.warn('[sonora] audio processing unavailable', e);
@@ -129,7 +133,7 @@ class AudioEngine {
    * the engine cannot run yet (no tap so far: call again once `running`), or at all.
    */
   async process(track: MediaStreamTrack, want: MicChain): Promise<MediaStreamTrack> {
-    if (!want.aec && !want.denoise) {
+    if (!want.aec) {
       this.dropChain();
       return track;
     }
@@ -138,7 +142,7 @@ class AudioEngine {
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
     if (ctx.state !== 'running') return track;
     const c = this.chain;
-    if (c && c.track === track && c.want.aec === want.aec && c.want.denoise === want.denoise) return c.output;
+    if (c && c.track === track && c.want.aec === want.aec) return c.output;
     this.dropChain();
 
     const channels = Math.min(2, Math.max(1, track.getSettings().channelCount ?? 1));
@@ -173,18 +177,6 @@ class AudioEngine {
       mono.connect(aec, 0, 1);
       nodes.push(mono, aec);
       head = aec;
-    }
-    if (want.denoise) {
-      const dn = new AudioWorkletNode(ctx, 'sonora-denoise', {
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        outputChannelCount: [channels],
-        channelCount: channels,
-        channelCountMode: 'explicit',
-      });
-      head.connect(dn);
-      nodes.push(dn);
-      head = dn;
     }
     const dest = ctx.createMediaStreamDestination();
     dest.channelCount = channels;
@@ -234,28 +226,56 @@ class AudioEngine {
   }
 
   /**
-   * Play `stream` (someone's sound) through the engine, or stop (null). Its audio element keeps playing it,
-   * muted by the caller: Chrome delivers a remote stream to an audio context only while an element plays it.
+   * Play `stream` (someone's sound) through the engine, with steady-noise reduction when `denoise`; or stop
+   * (null). True when it plays through the engine: its audio element keeps playing it, muted by the caller (Chrome
+   * delivers a remote stream to an audio context only while an element plays it). False: play it from the element
+   * (not possible yet: no tap so far, or the noise reduction still loading; call again on `running`, `loaded`).
    */
-  playRemote(id: string, stream: MediaStream | null): boolean {
-    const old = this.remote.get(id);
-    if (old) {
-      try {
-        old.src.disconnect();
-        old.gain.disconnect();
-      } catch {
-        // already
+  playRemote(id: string, stream: MediaStream | null, denoise = false): boolean {
+    const cur = this.remote.get(id);
+    if (cur && stream && cur.stream === stream && cur.denoise === denoise) return true;
+    if (cur) {
+      for (const n of [cur.src, ...cur.nodes]) {
+        try {
+          n.disconnect();
+        } catch {
+          // already
+        }
       }
       this.remote.delete(id);
     }
     if (!stream || !stream.getAudioTracks().length) return false;
     const ctx = this.ensure();
     if (!ctx || !this.out || ctx.state !== 'running') return false;
+    if (denoise && !this.loaded.peek()) {
+      void this.load();
+      return false;
+    }
     const src = ctx.createMediaStreamSource(stream);
-    const gain = ctx.createGain();
-    src.connect(gain).connect(this.out);
-    this.remote.set(id, { src, gain });
+    const nodes: AudioNode[] = [];
+    let head: AudioNode = src;
+    if (denoise) {
+      const channels = Math.min(2, Math.max(1, stream.getAudioTracks()[0].getSettings().channelCount ?? 2));
+      const dn = new AudioWorkletNode(ctx, 'sonora-denoise', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [channels],
+        channelCount: channels,
+        channelCountMode: 'explicit',
+      });
+      head.connect(dn);
+      nodes.push(dn);
+      head = dn;
+    }
+    head.connect(this.out);
+    this.remote.set(id, { stream, src, nodes, denoise });
     return true;
+  }
+
+  /** How someone's sound plays: through the engine (and cleaned) or not at all here. */
+  remoteRoute(id: string): { engine: boolean; denoise: boolean } {
+    const r = this.remote.get(id);
+    return { engine: !!r, denoise: !!r?.denoise };
   }
 
   /** Output device for everything played through the engine (Chromium). */

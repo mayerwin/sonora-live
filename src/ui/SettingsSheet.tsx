@@ -10,14 +10,13 @@ import {
   Settings,
   ShieldCheck,
   Speech,
-  Sparkles,
   TriangleAlert,
   Video,
   Volume2,
 } from 'lucide-preact';
 import { browserLang, LANGUAGES, t, type LanguageSetting } from '../app/i18n.ts';
 import { session } from '../app/session.ts';
-import { settings, update, type EchoSetting, type SoundSetting } from '../app/settings.ts';
+import { settings, update, type EchoSetting } from '../app/settings.ts';
 import { askNotifications, chime, notifyPermission, unlockChimes } from '../app/notify.ts';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { REPO_URL, isMobile } from '../app/platform.ts';
@@ -103,25 +102,20 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
   return (
     <>
       <div class="section">
-        <h3>{t('Sound mode')}</h3>
-        <Seg<SoundSetting>
-          label={t('Sound mode')}
-          value={s.sound}
-          onChange={(v) => update({ sound: v })}
+        <h3>{t('Your microphone')}</h3>
+        <p class="lead" style="margin-top:0">
+          {t('What the others hear from you. They can change it too, since they hear it.')}
+        </p>
+        <Seg<'pure' | 'voice'>
+          label={t('Your microphone')}
+          value={s.sound === 'voice' ? 'voice' : 'pure'}
+          onChange={(v) => update({ sound: v === 'voice' ? 'voice' : 'auto' })}
           options={[
-            {
-              value: 'auto',
-              label: (
-                <>
-                  <Sparkles /> {t('Auto')}
-                </>
-              ),
-            },
             {
               value: 'pure',
               label: (
                 <>
-                  <AudioWaveform /> {t('Pure')}
+                  <AudioWaveform /> {t('Instrument and voice')}
                 </>
               ),
             },
@@ -129,36 +123,37 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
               value: 'voice',
               label: (
                 <>
-                  <Speech /> {t('Voice')}
+                  <Speech /> {t('Voice only')}
                 </>
               ),
             },
           ]}
         />
         <p class="lead">
-          {s.sound === 'auto' && (
-            <Rich
-              text={
-                mode === 'pure'
-                  ? t(
-                      'Now: <b>pure</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.',
-                    )
-                  : t(
-                      'Now: <b>voice</b>. Your microphone sends your instrument untouched; while your piano travels as MIDI, it switches to voice processing so speech stays clear.',
-                    )
-              }
-            />
-          )}
-          {s.sound === 'pure' && (
-            <>
-              {t(
+          {s.sound === 'voice'
+            ? t("The browser's speech processing: removes background noise and echo, and part of the music with it.")
+            : t(
                 'No noise suppression, no automatic volume, stereo when your microphone has it: every sustain, pedal and pianissimo arrives as played.',
               )}
-            </>
-          )}
-          {s.sound === 'voice' &&
-            t("The browser's speech processing: removes background noise and echo, and part of the music with it.")}
         </p>
+        {s.sound !== 'voice' && (
+          <ToggleRow
+            title={t('Voice only while my piano plays through MIDI')}
+            sub={
+              session.midiCarriesInstrument.value
+                ? mode === 'voice'
+                  ? t(
+                      'Now: your piano reaches the others as MIDI, so your microphone carries your voice only. Turn off to also send your piano’s sound through the microphone.',
+                    )
+                  : t('Now: your piano reaches the others as MIDI and through your microphone.')
+                : t(
+                    'When your piano reaches the others as MIDI, your microphone is tuned for speech. Turn off to keep sending your piano’s sound through the microphone too.',
+                  )
+            }
+            checked={s.sound === 'auto'}
+            onChange={(v) => update({ sound: v ? 'auto' : 'pure' })}
+          />
+        )}
       </div>
 
       <div class="section">
@@ -202,20 +197,12 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
       </div>
 
       <div class="section">
-        <ToggleRow
-          title={t('Remove steady background noise')}
-          sub={
-            mode !== 'pure'
-              ? t('In pure sound only (voice mode already removes noise).')
-              : s.denoise && !media.denoising.value
-                ? t('Starting… if it does not, tap anywhere on the page.')
-                : t(
-                    'Hiss, a fan, air conditioning: taken out, while your instrument and voice stay as they are. Adds 8 ms.',
-                  )
-          }
-          checked={s.denoise}
-          onChange={(v) => update({ denoise: v })}
-        />
+        <h3>{t('Background noise')}</h3>
+        <p class="lead" style="margin-top:0">
+          {t(
+            'Whoever hears it removes it: tap the sound label on someone’s picture to clean the steady noise (hiss, a fan) from what you hear from them.',
+          )}
+        </p>
       </div>
 
       <div class="section">

@@ -3,7 +3,9 @@
 import { effect, signal } from '@preact/signals';
 import { settings, updateMidi } from '../app/settings.ts';
 
-export type SheetName = 'midi' | 'settings' | 'share' | 'lock' | null;
+export type SheetName = 'midi' | 'settings' | 'share' | 'lock' | 'peer-sound' | null;
+/** whose sound the 'peer-sound' sheet is about */
+export const peerSound = signal<string | null>(null);
 export type SettingsTab = 'audio' | 'video' | 'room' | 'connection' | 'about';
 
 export const sheet = signal<SheetName>(null);

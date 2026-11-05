@@ -26,7 +26,7 @@ import {
 import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
-import { settings, tabId, update, updateMidi } from './settings.ts';
+import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
 import { log } from './log.ts';
 import {
   Participants,
@@ -391,8 +391,8 @@ export class Session {
     resumeMeters();
     this.midi.piano.context();
     this.setAudioSession('play-and-record');
-    // steady-noise reduction, if chosen: started from this click (its audio context needs one)
-    void this.media.setDenoise(settings.peek().denoise);
+    // the audio engine, started from this click (echo cancelling, noise reduction: it needs one)
+    engine.ensure();
     await this.uniqueTab();
     this.since = Date.now();
     this.room.setSelf(this.self.peek());
@@ -654,7 +654,38 @@ export class Session {
     if (slot === 'audio') this.playAudio(id, stream);
   }
 
-  /** Remote sound plays from a plain audio element: no extra processing, no added delay. */
+  /**
+   * Where someone's sound plays: through the audio engine while echo cancelling runs (so the canceller knows what
+   * the speakers play) or while this listener reduces their noise; from its plain element otherwise (no added
+   * delay). Through the engine, the element keeps playing it, muted (Chrome delivers a remote stream to an audio
+   * context only then).
+   */
+  private routeAudio(id: string): void {
+    const el = this.audioEls.get(id);
+    if (!el) return;
+    const stream = el.srcObject as MediaStream | null;
+    const denoise = this.cleansNoise(id);
+    const through = (engine.aecOn.peek() && engine.running.peek()) || denoise;
+    el.muted = through && engine.playRemote(id, stream, denoise);
+    if (!el.muted) engine.playRemote(id, null);
+  }
+
+  /** This listener reduces the steady background noise in `id`'s sound. */
+  cleansNoise(id: string): boolean {
+    const name = this.peers.peek().find((p) => p.id === id)?.info.name;
+    return !!name && settings.peek().cleanNoise.includes(name);
+  }
+
+  /** Reduce (or not) the steady background noise in `id`'s sound, for this listener only. Remembered by name. */
+  setCleanNoise(id: string, on: boolean): void {
+    const name = this.peers.peek().find((p) => p.id === id)?.info.name;
+    if (!name) return;
+    engine.ensure();
+    const list = settings.peek().cleanNoise.filter((n) => n !== name);
+    update({ cleanNoise: on ? [...list, name].slice(-50) : list });
+  }
+
+  /** Remote sound plays from a plain audio element unless the engine needs it (routeAudio). */
   private playAudio(id: string, stream: MediaStream): void {
     if (!this.audioHost) {
       this.audioHost = document.createElement('div');
@@ -670,9 +701,7 @@ export class Session {
       this.audioEls.set(id, el);
     }
     el.srcObject = stream;
-    // while echo cancelling runs, their sound plays through the audio engine (so the canceller knows it); the
-    // element keeps playing it, muted (Chrome delivers a remote stream to an audio context only then)
-    el.muted = engine.aecOn.peek() && engine.playRemote(id, stream);
+    this.routeAudio(id);
     const sink = settings.peek().speakerId;
     if (sink && 'setSinkId' in el)
       void (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(sink).catch(() => {});
@@ -747,6 +776,10 @@ export class Session {
       extra: m.extra.peek() ? m.extraKind.peek() : null,
       sound: m.mode.peek(),
       stereo: m.stereo.peek(),
+      soundSetting: settings.peek().sound,
+      echoSetting: settings.peek().echo,
+      echo: m.echo.peek(),
+      headphones: m.headphones.peek(),
       midi: {
         device: d.connected.peek() ? d.currentName.peek() : '',
         sending: d.connected.peek() && this.midi.sending.peek(),
@@ -772,6 +805,10 @@ export class Session {
         void this.media.camOn.value;
         void this.media.extra.value;
         void this.media.mode.value;
+        void this.media.echo.value;
+        void this.media.headphones.value;
+        void settings.value.sound;
+        void settings.value.echo;
         void this.midi.devices.connected.value;
         void this.midi.devices.currentName.value;
         void this.midi.sending.value;
@@ -802,10 +839,12 @@ export class Session {
           if (settings.peek().sound === 'auto') {
             toast({
               kind: 'info',
-              title: mode === 'voice' ? t('Microphone: voice mode') : t('Microphone: pure sound'),
+              title: mode === 'voice' ? t('Microphone: voice only') : t('Microphone: instrument and voice'),
               body:
                 mode === 'voice'
-                  ? t('Your piano now travels as MIDI, so your microphone is tuned for speech.')
+                  ? t(
+                      'Your piano now reaches the others as MIDI, so your microphone carries your voice only. To send your piano’s sound through it too: MIDI panel, “Voice only on my microphone while I play through MIDI”.',
+                    )
                   : t('MIDI is off, so your microphone sends your instrument untouched again.'),
             });
           }
@@ -826,15 +865,16 @@ export class Session {
         if (f !== settings.peek().facing) update({ facing: f });
       }),
     );
-    // the others' sound through the audio engine while echo cancelling runs, from plain elements otherwise
+    // the others' sound through the audio engine while echo cancelling runs or their noise is reduced, from
+    // plain elements otherwise
     this.disposers.push(
       effect(() => {
-        const on = engine.aecOn.value && engine.running.value;
-        for (const [id, el] of this.audioEls) {
-          const stream = el.srcObject as MediaStream | null;
-          el.muted = on && engine.playRemote(id, stream);
-          if (!el.muted) engine.playRemote(id, null);
-        }
+        void engine.aecOn.value;
+        void engine.running.value;
+        void engine.loaded.value;
+        void settings.value.cleanNoise;
+        void this.peers.value;
+        for (const id of this.audioEls.keys()) this.routeAudio(id);
       }),
     );
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
@@ -843,14 +883,6 @@ export class Session {
     const outputs = () => void this.media.checkOutput();
     navigator.mediaDevices?.addEventListener?.('devicechange', outputs);
     this.disposers.push(() => navigator.mediaDevices?.removeEventListener?.('devicechange', outputs));
-    // the noise reduction follows its setting (and the sound mode: pure only)
-    this.disposers.push(
-      effect(() => {
-        const on = settings.value.denoise;
-        void this.media.mode.value;
-        void this.media.setDenoise(on);
-      }),
-    );
     // quality changes apply at once
     this.disposers.push(
       effect(() => {
@@ -979,7 +1011,44 @@ export class Session {
       case 'roster':
         this.onRoster(msg.members);
         break;
+      case 'sound':
+        this.onSoundChange(id, msg);
+        break;
     }
+  }
+
+  /**
+   * Change someone else's microphone settings (what this side hears from them): applied on their device, which
+   * shows who changed it. Musicians only (an observer only listens).
+   */
+  setTheirSound(id: string, patch: { sound?: SoundSetting; echo?: EchoSetting }): void {
+    if (watching()) return;
+    const link = this.parts.link(id);
+    if (!link) return;
+    link.sendControl({ t: 'sound', ...patch });
+  }
+
+  /** Someone changed this side's microphone settings (they hear the result). */
+  private onSoundChange(id: string, msg: Record<string, unknown>): void {
+    const by = this.peers.peek().find((p) => p.id === id);
+    if (!by || by.info.role === 'observer') return;
+    const patch: { sound?: SoundSetting; echo?: EchoSetting } = {};
+    if (msg.sound === 'auto' || msg.sound === 'pure' || msg.sound === 'voice') patch.sound = msg.sound;
+    if (msg.echo === 'auto' || msg.echo === 'on' || msg.echo === 'off') patch.echo = msg.echo;
+    const cur = settings.peek();
+    if ((!patch.sound || patch.sound === cur.sound) && (!patch.echo || patch.echo === cur.echo)) return;
+    update(patch);
+    const name = by.info.name;
+    const what = patch.sound
+      ? patch.sound === 'voice'
+        ? t('{name} set your microphone to voice only', { name })
+        : patch.sound === 'auto'
+          ? t('{name} set your microphone to voice only while your piano plays through MIDI', { name })
+          : t('{name} set your microphone to instrument and voice', { name })
+      : patch.echo === 'off'
+        ? t('{name} turned off echo cancelling on your microphone', { name })
+        : t('{name} turned on echo cancelling on your microphone', { name });
+    toast({ kind: 'info', title: what, body: t('They hear the result. You can change it back in Settings → Sound.') });
   }
 
   /** Tell everyone who this browser is connected to. */

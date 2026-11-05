@@ -13,7 +13,7 @@ import {
 } from 'lucide-preact';
 import { capital, t } from '../app/i18n.ts';
 import { session, watching } from '../app/session.ts';
-import { settings, updateMidi } from '../app/settings.ts';
+import { settings, update, updateMidi } from '../app/settings.ts';
 import { BLUEFY_IOS, browser, browserName, os, PERFECT_BT_MIDI, WEB_MIDI_BROWSER_IOS } from '../app/platform.ts';
 import type { PlayOn } from '../midi/hub.ts';
 import { Rich, Seg, Sheet, ToggleRow } from './common.tsx';
@@ -365,6 +365,20 @@ export function MidiSheet() {
             checked={watching() ? session.observerPlays.value : s.send}
             onChange={(v) => (watching() ? (session.observerPlays.value = v) : updateMidi({ send: v }))}
           />
+          {!watching() && settings.value.sound !== 'voice' && (
+            <ToggleRow
+              title={t('Voice only on my microphone while I play through MIDI')}
+              sub={
+                settings.value.sound === 'auto'
+                  ? t(
+                      'Your piano reaches the others as MIDI, so your microphone is tuned for speech. Turn off to also send your piano’s sound through the microphone.',
+                    )
+                  : t('Your piano’s sound also goes through your microphone, as well as through MIDI.')
+              }
+              checked={settings.value.sound === 'auto'}
+              onChange={(v) => update({ sound: v ? 'auto' : 'pure' })}
+            />
+          )}
           <ToggleRow
             title={t('Show the piano keys')}
             sub={t("Everyone's notes light up in their colour; click or touch to play.")}

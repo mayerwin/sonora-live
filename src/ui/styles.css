@@ -2968,3 +2968,22 @@ emoji-picker {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* the sound chip on someone's picture opens what you hear from them */
+button.chip-btn {
+  cursor: pointer;
+  font-family: inherit;
+  border: 0;
+}
+
+button.chip-btn:hover {
+  color: var(--text);
+}
+
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-left: 2px;
+}
