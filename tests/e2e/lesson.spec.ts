@@ -754,3 +754,21 @@ test('both sides opening a connection at the same moment still carry picture and
   await a.context().close();
   await b.context().close();
 });
+
+test('on a phone, the sound menu opens once (from More)', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    permissions: ['camera', 'microphone'],
+    viewport: { width: 390, height: 844 },
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1',
+  });
+  const a = await ctx.newPage();
+  await a.goto(urlFor('teacher'));
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await enter(a);
+  await a.getByTestId('btn-more').click();
+  await a.locator('.menu-item', { hasText: 'Sound:' }).click();
+  await expect(a.getByRole('menuitemradio', { name: /Pure instrument/ })).toHaveCount(1);
+  await expect(a.locator('.menu')).toHaveCount(1);
+  await ctx.close();
+});

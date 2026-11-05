@@ -526,6 +526,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <button
             class="ctl show-sm"
             onClick={() => toggleMenu('more')}
+            data-testid="btn-more"
             aria-haspopup="menu"
             aria-expanded={open === 'more'}
           >
@@ -546,7 +547,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
                   </button>
                 ))}
               </div>
-              <button class="menu-item" onClick={() => toggleMenu('sound')}>
+              <button class="menu-item" onClick={() => toggleMenu('sound-more')}>
                 {mode === 'pure' ? <AudioWaveform /> : <Speech />}
                 <span>
                   <b>{t('Sound: {mode}', { mode: mode === 'pure' ? t('Pure instrument') : t('Voice') })}</b>
@@ -606,7 +607,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
               </button>
             </div>
           )}
-          {open === 'sound' && isMobile && soundMenu}
+          {open === 'sound-more' && soundMenu}
         </div>
       </div>
 
