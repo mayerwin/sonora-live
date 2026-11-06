@@ -85,8 +85,9 @@ test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({
     ).sonora.media.audio.value.getSettings();
     return { ec: s.echoCancellation, ns: s.noiseSuppression, agc: s.autoGainControl };
   });
-  // pure: the capture is untouched (the speakers' echo is cancelled afterwards by the app's engine)
-  expect(settings).toEqual({ ec: false, ns: false, agc: false });
+  // pure: no noise suppression, no automatic volume (the app's own, music-friendly level runs instead); on
+  // speakers, the browser's echo cancelling
+  expect(settings).toEqual({ ec: true, ns: false, agc: false });
 
   // stereo Opus, ~192 kbps, 100 packets per second (10 ms frames), direct path
   await expect

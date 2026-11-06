@@ -15,6 +15,11 @@ export interface Settings {
   name: string;
   sound: SoundSetting;
   echo: EchoSetting;
+  /** echo cancelling in pure sound: the music-safe one (linear, never ducks, may leave some echo) rather than the
+   * browser's (robust; ducks what is played here while the others play) */
+  musicEcho: boolean;
+  /** automatic level for music in pure sound (slow, keeps crescendos) */
+  autoLevel: boolean;
   audioQuality: AudioQuality;
   videoQuality: VideoQuality;
   micId: string;
@@ -55,6 +60,8 @@ export const DEFAULTS: Settings = {
   name: '',
   sound: 'auto',
   echo: 'auto',
+  musicEcho: false,
+  autoLevel: true,
   audioQuality: 'high',
   videoQuality: 'hd',
   micId: '',

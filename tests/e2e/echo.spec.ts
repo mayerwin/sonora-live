@@ -97,7 +97,7 @@ test('the echo of what the speakers play is taken out of the microphone', async 
   await a.context().close();
 });
 
-test('in a lesson on speakers: pure capture, cancelled by the engine, the others heard through it', async ({
+test('in a lesson on speakers: the browser’s echo cancelling by default, the music-safe one by choice', async ({
   browser,
 }) => {
   const a = await person(browser, 'Clara');
@@ -110,7 +110,7 @@ test('in a lesson on speakers: pure capture, cancelled by the engine, the others
   type S = {
     sonora: {
       media: { audio: { value: MediaStreamTrack }; sentAudio: { value: MediaStreamTrack }; echo: { value: boolean } };
-      engine: { cancelling: boolean; echo: { value: { delayMs: number } | null } };
+      engine: { cancelling: boolean; echo: { value: { delayMs: number } | null }; levelDb: { value: number | null } };
       peers: { value: { stats: { audioInKbps: number } | null }[] };
     };
   };
@@ -119,38 +119,43 @@ test('in a lesson on speakers: pure capture, cancelled by the engine, the others
       const s = (window as unknown as S).sonora;
       const el = document.querySelector('audio') as HTMLAudioElement | null;
       return {
-        // the capture itself is untouched (no browser echo cancelling, no noise suppression)
         captureEcho: s.media.audio.value.getSettings().echoCancellation,
-        // what is sent is the engine's output, with echo cancelling running
+        // what is sent goes through the engine (the automatic level, and the music-safe canceller when chosen)
         processed: s.media.sentAudio.value !== s.media.audio.value,
         cancelling: s.engine.cancelling,
         echo: s.media.echo.value,
-        // the other's sound plays through the engine (its element muted)
+        // the other's sound plays through the engine only for the music-safe canceller
         routed: !!el && el.muted,
       };
     });
+  // by default: the browser's echo cancelling in the capture, the automatic level on what is sent
+  await expect
+    .poll(state, { timeout: 15_000 })
+    .toEqual({ captureEcho: true, processed: true, cancelling: false, echo: true, routed: false });
+  await expect
+    .poll(() => a.evaluate(() => (window as unknown as S).sonora.engine.levelDb.value !== null), { timeout: 5000 })
+    .toBe(true);
+  // the music-safe one: the capture untouched, cancelled by the engine, the other's sound through it
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('switch', { name: 'Music-safe echo cancelling (experimental)' }).click();
   await expect
     .poll(state, { timeout: 15_000 })
     .toEqual({ captureEcho: false, processed: true, cancelling: true, echo: true, routed: true });
-  // the canceller reports
   await expect
     .poll(() => a.evaluate(() => (window as unknown as S).sonora.engine.echo.value !== null), { timeout: 5000 })
     .toBe(true);
+  await expect(a.getByTestId('soundcheck')).toContainText(/Echo cancelling\s*running/);
   // and the other side hears it
   await expect
     .poll(() => b.evaluate(() => (window as unknown as S).sonora.peers.value[0]?.stats?.audioInKbps ?? 0), {
       timeout: 15_000,
     })
     .toBeGreaterThan(20);
-  // the sound check shows it
-  await a.getByTestId('btn-settings').click();
-  await expect(a.getByTestId('soundcheck')).toContainText(/Echo cancelling \(music\)\s*running/);
-  await expect(a.getByTestId('soundcheck')).toContainText(/echo off · noise off · volume off/);
-  // headphones: no cancelling, the plain path again
+  // headphones: no cancelling at all
   await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
   await expect
     .poll(state)
-    .toEqual({ captureEcho: false, processed: false, cancelling: false, echo: false, routed: false });
+    .toEqual({ captureEcho: false, processed: true, cancelling: false, echo: false, routed: false });
   expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();

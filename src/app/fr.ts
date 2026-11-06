@@ -357,6 +357,22 @@ export const FR: Record<string, string> = spaced({
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
   'Echo cancelling': 'Annulation d’écho',
+  'Automatic level': 'Niveau automatique',
+  'Brings a quiet microphone up slowly, from your loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.':
+    'Remonte doucement un micro trop faible, d’après vos moments les plus forts, et empêche un forte de saturer : un crescendo reste un crescendo.',
+  'Now: {db} dB.': 'Actuellement : {db} dB.',
+  'Your microphone exactly as it comes: set its level in your system’s sound settings.':
+    'Votre micro tel quel : réglez son niveau dans les réglages son de votre système.',
+  'Now: <b>on</b>, no headphones detected. Choose Off if you wear headphones.':
+    'Actuellement : <b>activée</b>, aucun casque détecté. Choisissez Désactivée si vous portez un casque.',
+  'The sound of your speakers is taken out of your microphone: the others never hear themselves.':
+    'Le son de vos haut-parleurs est retiré de votre micro : les autres ne s’entendent jamais eux-mêmes.',
+  'Music-safe echo cancelling (experimental)': 'Annulation d’écho préservant la musique (expérimental)',
+  'Never turns your playing down while the others play, but may leave some echo, especially on phone speakers. It learns your room in the first seconds the others play.':
+    'N’atténue jamais votre jeu quand les autres jouent, mais peut laisser un peu d’écho, surtout sur les haut-parleurs d’un téléphone. Elle apprend votre pièce dès les premières secondes où les autres jouent.',
+  'Off: the browser’s echo cancelling, which removes echo reliably but turns your playing down a little while the others play.':
+    'Désactivé : l’annulation d’écho du navigateur, qui retire l’écho de façon fiable mais atténue un peu votre jeu quand les autres jouent.',
+  'the browser’s': 'celle du navigateur',
   'Microphone: voice only': 'Micro : voix seulement',
   'Microphone: instrument and voice': 'Micro : instrument et voix',
   'Your piano now reaches the others as MIDI, so your microphone carries your voice only. To send your piano’s sound through it too: MIDI panel, “Voice only on my microphone while I play through MIDI”.':
@@ -424,17 +440,12 @@ export const FR: Record<string, string> = spaced({
   'Sound from {name}: what you hear, and how to clean it':
     'Le son de {name} : ce que vous entendez, et comment le nettoyer',
   'Echo cancelled': 'Écho annulé',
-  'Now: <b>on</b>, no headphones detected. Made for music: your own playing is never turned down. Choose Off if you wear headphones.':
-    'Actuellement : <b>activée</b>, aucun casque détecté. Faite pour la musique : votre jeu n’est jamais atténué. Choisissez Désactivée si vous portez un casque.',
-  'Made for music: the sound of your speakers is subtracted from your microphone, and your own playing is never turned down. It learns your room in the first seconds the others play.':
-    'Faite pour la musique : le son de vos haut-parleurs est soustrait de votre micro, et votre propre jeu n’est jamais atténué. Elle apprend votre pièce dès les premières secondes où les autres jouent.',
   off: 'désactivé',
   on: 'activé',
   'Browser processing': 'Traitement du navigateur',
   echo: 'écho',
   noise: 'bruit',
   volume: 'volume',
-  'Echo cancelling (music)': 'Annulation d’écho (musique)',
   'not available in this browser': 'non disponible dans ce navigateur',
   running: 'en marche',
   '{db} dB removed': '{db} dB retirés',

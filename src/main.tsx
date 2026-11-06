@@ -7,13 +7,20 @@ import { session } from './app/session.ts';
 import { setupPwa } from './app/pwa.ts';
 import { watchForUpdates } from './app/update.ts';
 import { App } from './ui/App.tsx';
+import { Lab } from './lab/Lab.tsx';
 
-// a page served from a cache right after a release reloads before anything else
-watchForUpdates(() => session.phase.value);
-session.boot();
-render(<App />, document.getElementById('app')!);
-document.getElementById('boot')?.remove();
-setupPwa();
+if (new URLSearchParams(location.search).has('lab')) {
+  // the sound lab: measurements on this device, no lesson
+  render(<Lab />, document.getElementById('app')!);
+  document.getElementById('boot')?.remove();
+} else {
+  // a page served from a cache right after a release reloads before anything else
+  watchForUpdates(() => session.phase.value);
+  session.boot();
+  render(<App />, document.getElementById('app')!);
+  document.getElementById('boot')?.remove();
+  setupPwa();
+}
 
 // development and tests: reach the session from the console
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {

@@ -2987,3 +2987,74 @@ button.chip-btn:hover {
   background: var(--green);
   margin-left: 2px;
 }
+
+/* the sound lab (?lab) */
+.lab {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: grid;
+  gap: 14px;
+  color: var(--text);
+}
+
+.lab h1 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 34px;
+  margin: 0;
+}
+
+.lab p {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.lab-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 20px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.lab-left {
+  font-variant-numeric: tabular-nums;
+  font-size: 34px;
+  color: var(--gold);
+  margin-left: auto;
+}
+
+.lab-table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  overflow-x: auto;
+  display: block;
+}
+
+.lab-table th,
+.lab-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-table td:first-child,
+.lab-table th:first-child {
+  text-align: left;
+}
+
+.lab-json {
+  width: 100%;
+  min-height: 90px;
+  font: 12px ui-monospace, monospace;
+  background: var(--surface);
+  color: var(--text-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 8px;
+}

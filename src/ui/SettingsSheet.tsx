@@ -92,6 +92,8 @@ export function SettingsSheet() {
   );
 }
 
+const fmtDb = (db: number) => `${db >= 0 ? '+' : ''}${Math.round(db)}`;
+
 function AudioTab({ devices }: { devices: DeviceLists }) {
   const s = settings.value;
   const media = session.media;
@@ -154,6 +156,23 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
             onChange={(v) => update({ sound: v ? 'auto' : 'pure' })}
           />
         )}
+        {mode === 'pure' && (
+          <ToggleRow
+            title={t('Automatic level')}
+            sub={
+              s.autoLevel
+                ? t(
+                    'Brings a quiet microphone up slowly, from your loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.',
+                  ) +
+                  (session.engine.levelDb.value != null
+                    ? ` ${t('Now: {db} dB.', { db: fmtDb(session.engine.levelDb.value) })}`
+                    : '')
+                : t('Your microphone exactly as it comes: set its level in your system’s sound settings.')
+            }
+            checked={s.autoLevel}
+            onChange={(v) => update({ autoLevel: v })}
+          />
+        )}
       </div>
 
       <div class="section">
@@ -174,20 +193,32 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
               text={
                 media.headphones.value
                   ? t('Now: <b>off</b>, headphones detected ({name}).', { name: speakerLabel })
-                  : t(
-                      'Now: <b>on</b>, no headphones detected. Made for music: your own playing is never turned down. Choose Off if you wear headphones.',
-                    )
+                  : t('Now: <b>on</b>, no headphones detected. Choose Off if you wear headphones.')
               }
             />
           )}
           {s.echo === 'on' &&
-            t(
-              'Made for music: the sound of your speakers is subtracted from your microphone, and your own playing is never turned down. It learns your room in the first seconds the others play.',
-            )}
+            t('The sound of your speakers is taken out of your microphone: the others never hear themselves.')}
           {s.echo === 'off' &&
             t('Nothing is removed: only with headphones, or the others hear themselves and it can howl.')}{' '}
           {mode === 'voice' && t('Voice mode always cancels echo.')}
         </p>
+        {s.echo !== 'off' && mode === 'pure' && (
+          <ToggleRow
+            title={t('Music-safe echo cancelling (experimental)')}
+            sub={
+              s.musicEcho
+                ? t(
+                    'Never turns your playing down while the others play, but may leave some echo, especially on phone speakers. It learns your room in the first seconds the others play.',
+                  )
+                : t(
+                    'Off: the browser’s echo cancelling, which removes echo reliably but turns your playing down a little while the others play.',
+                  )
+            }
+            checked={s.musicEcho}
+            onChange={(v) => update({ musicEcho: v })}
+          />
+        )}
         {mode === 'pure' && !session.pureEcho.value && !media.headphones.value && (
           <div class="hint hint-warn">
             <Headphones />

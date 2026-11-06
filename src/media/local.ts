@@ -35,6 +35,11 @@ export class LocalMedia {
   readonly headphones = signal(false);
   /** cancel echo in pure mode (voice mode always does) */
   private wantEcho = true;
+  /** the music-safe echo canceller (the engine's, linear: never ducks, may leave some echo) rather than the
+   * browser's (robust, made for speech: ducks what is played here while the others play) */
+  private musicEcho = false;
+  /** the automatic level for music, in pure mode */
+  private autoLevel = true;
   private speakerId = '';
   readonly audioProblem = signal<MediaProblem | null>(null);
   readonly videoProblem = signal<MediaProblem | null>(null);
@@ -211,15 +216,30 @@ export class LocalMedia {
 
   /**
    * The browser's own echo cancelling in the capture: always in voice mode (with its noise suppression and
-   * automatic volume: made for speech); in pure mode only where the engine cannot cancel echo itself.
+   * automatic volume: made for speech); in pure mode when echo cancelling is wanted, unless the music-safe one
+   * runs instead (and can run here). Noise suppression and automatic volume stay off in pure mode either way.
    */
   private browserEcho(mode: SoundMode): boolean {
-    return mode === 'voice' || (this.wantEcho && engine.aecUnavailable.peek());
+    return mode === 'voice' || (this.wantEcho && (!this.musicEcho || engine.aecUnavailable.peek()));
   }
 
-  /** The engine's echo cancelling on what is sent (pure mode: the capture is untouched). */
+  /** The engine's music-safe echo cancelling on what is sent (pure mode: the capture is untouched). */
   private engineEcho(): boolean {
-    return this.mode.peek() === 'pure' && this.wantEcho && !this.trackEcho && !engine.aecUnavailable.peek();
+    return (
+      this.mode.peek() === 'pure' && this.wantEcho && this.musicEcho && !this.trackEcho && !engine.aecUnavailable.peek()
+    );
+  }
+
+  /** Which echo canceller in pure mode: the music-safe one (true) or the browser's. */
+  setMusicEcho(on: boolean): Promise<void> {
+    this.musicEcho = on;
+    return this.setEcho(this.wantEcho);
+  }
+
+  /** The automatic level for music, in pure mode. */
+  setAutoLevel(on: boolean): Promise<void> {
+    this.autoLevel = on;
+    return this.emitAudio();
   }
 
   setSoundMode(mode: SoundMode): Promise<void> {
@@ -282,7 +302,7 @@ export class LocalMedia {
     const n = ++this.emitting;
     const raw = this.audio.peek();
     let out = raw;
-    const want = { aec: !!raw && this.engineEcho() };
+    const want = { aec: !!raw && this.engineEcho(), level: !!raw && this.autoLevel && this.mode.peek() === 'pure' };
     if (raw) out = await engine.process(raw, want);
     if (n !== this.emitting) return; // a newer change won
     this.echo.value = this.trackEcho || (want.aec && out !== raw && engine.cancelling);
@@ -293,7 +313,7 @@ export class LocalMedia {
   /** From any tap: wake the audio engine. When echo cancelling was on but could not start (no tap yet), it starts
    * now. */
   unlockAudio(): void {
-    if (engine.ctx || this.engineEcho()) engine.ensure();
+    if (engine.ctx || this.engineEcho() || (this.autoLevel && this.mode.peek() === 'pure')) engine.ensure();
   }
 
   setMicOn(on: boolean): void {

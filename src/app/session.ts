@@ -877,6 +877,9 @@ export class Session {
         for (const id of this.audioEls.keys()) this.routeAudio(id);
       }),
     );
+    // which echo canceller, and the automatic level, follow their settings
+    this.disposers.push(effect(() => void this.media.setMusicEcho(settings.value.musicEcho)));
+    this.disposers.push(effect(() => void this.media.setAutoLevel(settings.value.autoLevel)));
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
     this.disposers.push(effect(() => void this.media.setEcho(this.pureEcho.value)));
     this.disposers.push(effect(() => void this.media.setSpeaker(settings.value.speakerId)));

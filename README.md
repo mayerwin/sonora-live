@@ -53,13 +53,17 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **Pure sound by default**: no noise suppression, no automatic gain, stereo when your microphone or interface has
   it. Every pedal, pianissimo and long decay arrives as played, the way [Cleanfeed](https://cleanfeed.net) treats
   broadcast audio.
-- **Echo cancelling made for music**: on speakers, the app subtracts what its own speakers play from the
-  microphone (a linear echo canceller, [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s MDF compiled to
-  WebAssembly, full band at 48 kHz, in an AudioWorklet, no added delay). Browsers' echo cancelling is made for
-  speech: it turns the near end down whenever the others play, and dulls everything above 8 kHz; this one never
-  turns your playing down. It learns the room in the first seconds the others play (measured on piano
-  recordings: about 12 dB of echo removed at first, 20 to 30 dB within a minute, `node tools/aec-eval.mjs`).
-  With headphones (detected, or chosen in *Settings → Sound*), nothing is processed at all.
+- **Echo cancelling on speakers**: the browser's own by default (it removes echo reliably, with its noise
+  suppression and automatic gain left off), or, as an experimental option, a music-safe one: the app subtracts what
+  its own speakers play from the microphone (a linear echo canceller, [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s
+  MDF compiled to WebAssembly, full band at 48 kHz, in an AudioWorklet, no added delay) and never turns your playing
+  down, but may leave some echo on small speakers. With headphones (detected, or chosen in *Settings → Sound*),
+  nothing is processed at all.
+- **Automatic level for music**: like a sound engineer setting the input gain once: slow, from the loudest moments
+  of the last seconds, with a soft limiter; a quiet microphone is brought up, a crescendo stays a crescendo.
+- **Sound lab** (`?lab`): put the laptop next to the piano and it measures, in your room, the room noise, the echo
+  each kind of processing removes, your piano's level and how much of it is kept while the other side plays; a
+  summary to copy and a recording to download.
 - **Opus tuned for music**: 192 kbps stereo by default (96 to 320 kbps), full band, **10 ms frames** instead of
   20 (one frame less delay at each end), no silence suppression that would cut a quiet sustained note, and
   in-band error correction against packet loss.

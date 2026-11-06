@@ -42,6 +42,8 @@ function snapshot() {
       rate: ctx?.sampleRate ?? null,
       outputMs: ctx ? Math.round(((ctx.baseLatency ?? 0) + (ctx.outputLatency ?? 0)) * 1000) : null,
       cancelling: engine.cancelling,
+      musicEcho: s.musicEcho,
+      levelDb: engine.levelDb.peek() != null ? Math.round(engine.levelDb.peek()! * 10) / 10 : null,
       unavailable: engine.aecUnavailable.peek(),
       echoRemovedDb: echo?.reductionDb != null ? Math.round(echo.reductionDb * 10) / 10 : null,
       speakersPlaying: echo ? Math.round(echo.playing * 100) : null,
@@ -88,18 +90,20 @@ export function SoundCheck() {
       `${t('echo')} ${yes(snap.mic.browserEcho)} · ${t('noise')} ${yes(snap.mic.browserNoise)} · ${t('volume')} ${yes(snap.mic.browserAgc)}`,
     ],
     [
-      t('Echo cancelling (music)'),
-      e.unavailable
-        ? t('not available in this browser')
-        : e.cancelling
-          ? [
-              t('running'),
-              e.echoRemovedDb != null ? t('{db} dB removed', { db: e.echoRemovedDb }) : '',
-              e.delayMs ? `${e.delayMs} ms` : '',
-            ]
-              .filter(Boolean)
-              .join(' · ')
-          : t('off'),
+      t('Echo cancelling'),
+      snap.mic.browserEcho === true || snap.mic.browserEcho === 'all' || snap.mic.browserEcho === 'remote-only'
+        ? t('the browser’s')
+        : e.unavailable && e.musicEcho
+          ? t('not available in this browser')
+          : e.cancelling
+            ? [
+                t('running'),
+                e.echoRemovedDb != null ? t('{db} dB removed', { db: e.echoRemovedDb }) : '',
+                e.delayMs ? `${e.delayMs} ms` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : t('off'),
     ],
     [
       t('Noise reduction (what you hear)'),
@@ -111,6 +115,7 @@ export function SoundCheck() {
             .join(', ')
         : t('off'),
     ],
+    [t('Automatic level'), e.levelDb != null ? `${e.levelDb >= 0 ? '+' : ''}${e.levelDb} dB` : t('off')],
     [t('Output'), e.outputMs != null ? `${e.outputMs} ms · ${e.state}` : '—'],
   ];
   return (

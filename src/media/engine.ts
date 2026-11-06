@@ -18,11 +18,14 @@
 import { signal } from '@preact/signals';
 import aecWorkletUrl from './aec.worklet.ts?worker&url';
 import denoiseWorkletUrl from './denoise.worklet.ts?worker&url';
+import levelWorkletUrl from './level.worklet.ts?worker&url';
 import aecWasmUrl from './aec.wasm?url';
 
 export interface MicChain {
-  /** cancel the speakers' echo */
+  /** cancel the speakers' echo (the music-safe canceller) */
   aec: boolean;
+  /** automatic level for music (src/media/level-core.ts) */
+  level: boolean;
 }
 
 export interface EchoStats {
@@ -47,6 +50,8 @@ class AudioEngine {
   /** the context started running (after a tap): the microphone chain can be built again */
   readonly running = signal(false);
   readonly echo = signal<EchoStats | null>(null);
+  /** the automatic level's gain now (dB), null when it does not run */
+  readonly levelDb = signal<number | null>(null);
   /** the echo canceller is in the microphone's chain: the others' sound must play through the engine */
   readonly aecOn = signal(false);
   /** the echo canceller cannot run here (no AudioWorklet or WebAssembly): fall back to the browser's */
@@ -100,9 +105,10 @@ class AudioEngine {
           return false;
         }
         try {
-          const [, , bytes] = await Promise.all([
+          const [, , , bytes] = await Promise.all([
             ctx.audioWorklet.addModule(aecWorkletUrl),
             ctx.audioWorklet.addModule(denoiseWorkletUrl),
+            ctx.audioWorklet.addModule(levelWorkletUrl),
             fetch(aecWasmUrl).then((r) => {
               if (!r.ok) throw new Error(`aec.wasm: ${r.status}`);
               return r.arrayBuffer();
@@ -133,7 +139,7 @@ class AudioEngine {
    * the engine cannot run yet (no tap so far: call again once `running`), or at all.
    */
   async process(track: MediaStreamTrack, want: MicChain): Promise<MediaStreamTrack> {
-    if (!want.aec) {
+    if (!want.aec && !want.level) {
       this.dropChain();
       return track;
     }
@@ -142,7 +148,7 @@ class AudioEngine {
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
     if (ctx.state !== 'running') return track;
     const c = this.chain;
-    if (c && c.track === track && c.want.aec === want.aec) return c.output;
+    if (c && c.track === track && c.want.aec === want.aec && c.want.level === want.level) return c.output;
     this.dropChain();
 
     const channels = Math.min(2, Math.max(1, track.getSettings().channelCount ?? 1));
@@ -178,6 +184,19 @@ class AudioEngine {
       nodes.push(mono, aec);
       head = aec;
     }
+    if (want.level) {
+      const lv = new AudioWorkletNode(ctx, 'sonora-level', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [channels],
+        channelCount: channels,
+        channelCountMode: 'explicit',
+      });
+      lv.port.onmessage = (e: MessageEvent<{ gainDb: number }>) => (this.levelDb.value = e.data.gainDb);
+      head.connect(lv);
+      nodes.push(lv);
+      head = lv;
+    }
     const dest = ctx.createMediaStreamDestination();
     dest.channelCount = channels;
     head.connect(dest);
@@ -212,6 +231,7 @@ class AudioEngine {
     }
     c.output.stop();
     this.echo.value = null;
+    this.levelDb.value = null;
     this.aecOn.value = false;
   }
 
