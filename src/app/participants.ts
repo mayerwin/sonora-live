@@ -20,6 +20,7 @@
 
 import type { SoundMode } from '../media/constraints.ts';
 import type { EchoSetting, SoundSetting } from './settings.ts';
+import type { PlayOn } from '../midi/hub.ts';
 import type { LinkState, LinkStats, SignalData } from '../net/peer.ts';
 import { fingerprintOf } from '../net/peer.ts';
 import type { MemberInfo } from '../net/room.ts';
@@ -49,6 +50,14 @@ export interface RemoteState {
   echo?: boolean;
   /** their output looks like headphones */
   headphones?: boolean;
+  /** how long their microphone's sound takes before it leaves (capture, processing, one audio frame), ms */
+  sendMs?: number;
+  /** more of their settings, which the others can see and change */
+  musicEcho?: boolean;
+  autoLevel?: boolean;
+  /** where they play the others' MIDI: their setting, and whether they send theirs */
+  midiPlayOn?: PlayOn;
+  midiSend?: boolean;
   midi: { device: string; sending: boolean; receiving: boolean };
   away: boolean;
 }

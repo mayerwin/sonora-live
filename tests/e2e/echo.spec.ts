@@ -29,8 +29,8 @@ test('the echo of what the speakers play is taken out of the microphone', async 
     type Engine = {
       ensure(): AudioContext;
       out: GainNode;
-      process(t: MediaStreamTrack, w: { aec: boolean; denoise: boolean }): Promise<MediaStreamTrack>;
-      cancelling: boolean;
+      load(): Promise<boolean>;
+      wasm: ArrayBuffer | null;
     };
     const eng = (window as unknown as { sonora: { engine: Engine } }).sonora.engine;
     const ac = eng.ensure();
@@ -48,7 +48,26 @@ test('the echo of what the speakers play is taken out of the microphone', async 
     eng.out.connect(d1).connect(g1).connect(dest);
     eng.out.connect(d2).connect(g2).connect(dest);
     const mic = dest.stream.getAudioTracks()[0];
-    const sent = await eng.process(mic, { aec: true, denoise: false });
+    // the canceller as the engine builds it (its own here: the app's microphone keeps the engine's chain)
+    await eng.load();
+    const aec = new AudioWorkletNode(ac, 'sonora-aec', {
+      numberOfInputs: 2,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      channelCount: 1,
+      channelCountMode: 'explicit',
+      processorOptions: { bytes: eng.wasm!.slice(0), tail: 0.3 },
+    });
+    let running = false;
+    aec.port.onmessage = () => (running = true);
+    ac.createMediaStreamSource(new MediaStream([mic])).connect(aec, 0, 0);
+    const ref = ac.createGain();
+    ref.channelCount = 1;
+    ref.channelCountMode = 'explicit';
+    eng.out.connect(ref).connect(aec, 0, 1);
+    const sentDest = ac.createMediaStreamDestination();
+    aec.connect(sentDest);
+    const sent = sentDest.stream.getAudioTracks()[0];
     const meter = (t: MediaStreamTrack) => {
       const an = ac.createAnalyser();
       an.fftSize = 2048;
@@ -88,7 +107,7 @@ test('the echo of what the speakers play is taken out of the microphone', async 
       mOut.take();
       await new Promise((r) => setTimeout(r, 20));
     }
-    return { reduction: 10 * Math.log10(mIn.get() / mOut.get()), cancelling: eng.cancelling };
+    return { reduction: 10 * Math.log10(mIn.get() / mOut.get()), cancelling: running };
   });
   console.log(`echo removed in the browser: ${result.reduction.toFixed(1)} dB`);
   expect(result.cancelling).toBe(true);
@@ -135,6 +154,17 @@ test('in a lesson on speakers: the browser’s echo cancelling by default, the m
   await expect
     .poll(() => a.evaluate(() => (window as unknown as S).sonora.engine.levelDb.value !== null), { timeout: 5000 })
     .toBe(true);
+  // the level runs on the microphone's own frames (Chromium): no audio context in the way, no added delay
+  expect(
+    await a.evaluate(
+      () => (window as unknown as { sonora: { engine: { path: { value: string } } } }).sonora.engine.path.value,
+    ),
+  ).toBe('frames');
+  await expect
+    .poll(() => b.evaluate(() => (window as unknown as S).sonora.peers.value[0]?.stats?.audioInKbps ?? 0), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
   // the music-safe one: the capture untouched, cancelled by the engine, the other's sound through it
   await a.getByTestId('btn-settings').click();
   await a.getByRole('switch', { name: 'Music-safe echo cancelling (experimental)' }).click();

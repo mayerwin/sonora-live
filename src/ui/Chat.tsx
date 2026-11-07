@@ -1,11 +1,10 @@
 import type { ComponentChildren } from 'preact';
+import { SideHead } from './SoundPanel.tsx';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { find as findLinks } from 'linkifyjs';
-import { Download, FileMusic, FileText, Lock, Paperclip, SendHorizontal, Smile, X } from 'lucide-preact';
+import { Download, FileMusic, FileText, Lock, Paperclip, SendHorizontal, Smile } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
-import { update } from '../app/settings.ts';
 import { emojiOnly, formatBytes, type ChatMessage } from '../app/chat.ts';
-import { chatOpen } from './state.ts';
 import frPicker from 'emoji-picker-element/i18n/fr';
 import versions from 'virtual:sonora-assets';
 import { clock, lang, t, tn } from '../app/i18n.ts';
@@ -207,20 +206,7 @@ export function ChatPanel() {
         files(e.dataTransfer?.files);
       }}
     >
-      <header class="chat-head">
-        <h2>{t('Chat')}</h2>
-        <span class="chip">{tn(people, '{n} person', '{n} people')}</span>
-        <button
-          class="icon-btn"
-          aria-label={t('Close chat')}
-          onClick={() => {
-            chatOpen.value = false;
-            update({ chatOpen: false });
-          }}
-        >
-          <X />
-        </button>
-      </header>
+      <SideHead extra={<span class="chip">{tn(people, '{n} person', '{n} people')}</span>} />
       <div
         class="chat-list"
         ref={list}

@@ -27,6 +27,17 @@ import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
+import type { PlayOn } from '../midi/hub.ts';
+
+/** what one musician may change of another's sound settings */
+export interface TheirSettings {
+  sound?: SoundSetting;
+  echo?: EchoSetting;
+  musicEcho?: boolean;
+  autoLevel?: boolean;
+  playOn?: PlayOn;
+  send?: boolean;
+}
 import { log } from './log.ts';
 import {
   Participants,
@@ -780,6 +791,11 @@ export class Session {
       echoSetting: settings.peek().echo,
       echo: m.echo.peek(),
       headphones: m.headphones.peek(),
+      sendMs: this.sendMs(),
+      musicEcho: settings.peek().musicEcho,
+      autoLevel: settings.peek().autoLevel,
+      midiPlayOn: settings.peek().midi.playOn,
+      midiSend: settings.peek().midi.send,
       midi: {
         device: d.connected.peek() ? d.currentName.peek() : '',
         sending: d.connected.peek() && this.midi.sending.peek(),
@@ -788,6 +804,22 @@ export class Session {
       away: document.hidden,
     };
     return { t: 'state', info: { ...this.self.peek(), since: this.since }, state };
+  }
+
+  /**
+   * How long this side's microphone sound takes before it leaves: the capture (as the browser says), the
+   * processing (the browser's echo cancelling, the app's level on frames or in the audio context), one 10 ms frame.
+   */
+  private sendMs(): number {
+    const t = this.media.audio.peek();
+    const st = (t?.getSettings() ?? {}) as MediaTrackSettings & { latency?: number };
+    let ms = (st.latency ?? 0.01) * 1000 + 10;
+    const ec = st.echoCancellation as boolean | string | undefined;
+    if (ec !== undefined && ec !== false) ms += 10;
+    const path = engine.path.peek();
+    if (path === 'frames') ms += 2;
+    else if (path === 'context') ms += (engine.ctx?.baseLatency ?? 0.01) * 1000 + 10;
+    return Math.round(ms);
   }
 
   broadcastState(): void {
@@ -809,6 +841,10 @@ export class Session {
         void this.media.headphones.value;
         void settings.value.sound;
         void settings.value.echo;
+        void settings.value.musicEcho;
+        void settings.value.autoLevel;
+        void settings.value.midi;
+        void engine.path.value;
         void this.midi.devices.connected.value;
         void this.midi.devices.currentName.value;
         void this.midi.sending.value;
@@ -875,6 +911,13 @@ export class Session {
         void settings.value.cleanNoise;
         void this.peers.value;
         for (const id of this.audioEls.keys()) this.routeAudio(id);
+      }),
+    );
+    // the others' MIDI in time with their sound, at once when switched
+    this.disposers.push(
+      effect(() => {
+        void settings.value.midiSync;
+        this.syncMidi();
       }),
     );
     // which echo canceller, and the automatic level, follow their settings
@@ -1021,37 +1064,82 @@ export class Session {
   }
 
   /**
-   * Change someone else's microphone settings (what this side hears from them): applied on their device, which
-   * shows who changed it. Musicians only (an observer only listens).
+   * Change someone else's sound settings (what this side hears from them, or how their side plays the others'
+   * MIDI): applied on their device, which shows who changed what. Musicians only (an observer only listens).
    */
-  setTheirSound(id: string, patch: { sound?: SoundSetting; echo?: EchoSetting }): void {
+  setTheirSound(id: string, patch: TheirSettings): void {
     if (watching()) return;
     const link = this.parts.link(id);
     if (!link) return;
     link.sendControl({ t: 'sound', ...patch });
   }
 
-  /** Someone changed this side's microphone settings (they hear the result). */
+  /** Someone changed this side's sound settings. */
   private onSoundChange(id: string, msg: Record<string, unknown>): void {
     const by = this.peers.peek().find((p) => p.id === id);
     if (!by || by.info.role === 'observer') return;
-    const patch: { sound?: SoundSetting; echo?: EchoSetting } = {};
-    if (msg.sound === 'auto' || msg.sound === 'pure' || msg.sound === 'voice') patch.sound = msg.sound;
-    if (msg.echo === 'auto' || msg.echo === 'on' || msg.echo === 'off') patch.echo = msg.echo;
     const cur = settings.peek();
-    if ((!patch.sound || patch.sound === cur.sound) && (!patch.echo || patch.echo === cur.echo)) return;
-    update(patch);
     const name = by.info.name;
-    const what = patch.sound
-      ? patch.sound === 'voice'
-        ? t('{name} set your microphone to voice only', { name })
-        : patch.sound === 'auto'
-          ? t('{name} set your microphone to voice only while your piano plays through MIDI', { name })
-          : t('{name} set your microphone to instrument and voice', { name })
-      : patch.echo === 'off'
-        ? t('{name} turned off echo cancelling on your microphone', { name })
-        : t('{name} turned on echo cancelling on your microphone', { name });
-    toast({ kind: 'info', title: what, body: t('They hear the result. You can change it back in Settings → Sound.') });
+    const said: string[] = [];
+    const patch: Partial<typeof cur> = {};
+    if ((msg.sound === 'auto' || msg.sound === 'pure' || msg.sound === 'voice') && msg.sound !== cur.sound) {
+      patch.sound = msg.sound;
+      said.push(
+        msg.sound === 'voice'
+          ? t('{name} set your microphone to voice only', { name })
+          : msg.sound === 'auto'
+            ? t('{name} set your microphone to voice only while your piano plays through MIDI', { name })
+            : t('{name} set your microphone to instrument and voice', { name }),
+      );
+    }
+    if ((msg.echo === 'auto' || msg.echo === 'on' || msg.echo === 'off') && msg.echo !== cur.echo) {
+      patch.echo = msg.echo;
+      said.push(
+        msg.echo === 'off'
+          ? t('{name} turned off echo cancelling on your microphone', { name })
+          : t('{name} turned on echo cancelling on your microphone', { name }),
+      );
+    }
+    if (typeof msg.musicEcho === 'boolean' && msg.musicEcho !== cur.musicEcho) {
+      patch.musicEcho = msg.musicEcho;
+      said.push(
+        msg.musicEcho
+          ? t('{name} turned on music-safe echo cancelling on your microphone', { name })
+          : t('{name} turned off music-safe echo cancelling on your microphone', { name }),
+      );
+    }
+    if (typeof msg.autoLevel === 'boolean' && msg.autoLevel !== cur.autoLevel) {
+      patch.autoLevel = msg.autoLevel;
+      said.push(
+        msg.autoLevel
+          ? t('{name} turned on the automatic level of your microphone', { name })
+          : t('{name} turned off the automatic level of your microphone', { name }),
+      );
+    }
+    const midi: Partial<typeof cur.midi> = {};
+    if (
+      (msg.playOn === 'auto' || msg.playOn === 'instrument' || msg.playOn === 'piano' || msg.playOn === 'off') &&
+      msg.playOn !== cur.midi.playOn
+    ) {
+      midi.playOn = msg.playOn;
+      said.push(
+        msg.playOn === 'off'
+          ? t('{name} turned off the others’ MIDI notes on your side', { name })
+          : t('{name} turned on the others’ MIDI notes on your side', { name }),
+      );
+    }
+    if (typeof msg.send === 'boolean' && msg.send !== cur.midi.send) {
+      midi.send = msg.send;
+      said.push(
+        msg.send
+          ? t('{name} turned on sending your MIDI', { name })
+          : t('{name} turned off sending your MIDI', { name }),
+      );
+    }
+    if (!said.length) return;
+    if (Object.keys(patch).length) update(patch);
+    if (Object.keys(midi).length) updateMidi(midi);
+    toast({ kind: 'info', title: said.join(' · '), body: t('You can change it back in the Sound tab.') });
   }
 
   /** Tell everyone who this browser is connected to. */
@@ -1239,6 +1327,20 @@ export class Session {
       this.parts.links().map(async (l) => [l.id, await l.stats()] as [string, Awaited<ReturnType<PeerLink['stats']>>]),
     );
     this.parts.patchStats(updates);
+    this.syncMidi();
+  }
+
+  /**
+   * Each peer's MIDI waits for their sound: their send time plus this side's jitter buffer for them (the network
+   * part is the same for both). Changed only when it moves by more than a few ms (no wobble).
+   */
+  private syncMidi(): void {
+    const on = settings.peek().midiSync;
+    for (const p of this.peers.peek()) {
+      const want = on && p.remote && p.stats ? (p.remote.sendMs ?? 30) + p.stats.bufferMs : 0;
+      if (Math.abs(want - this.midi.delayOf(p.id)) > 8 || (want === 0 && this.midi.delayOf(p.id) !== 0))
+        this.midi.setDelay(p.id, want);
+    }
   }
 
   /** The connection settings changed (TURN server): new connections use them. */

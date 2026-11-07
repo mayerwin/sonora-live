@@ -20,6 +20,8 @@ export interface Settings {
   musicEcho: boolean;
   /** automatic level for music in pure sound (slow, keeps crescendos) */
   autoLevel: boolean;
+  /** the others' MIDI waits for their sound (keys, notes, voice and microphone in time) */
+  midiSync: boolean;
   audioQuality: AudioQuality;
   videoQuality: VideoQuality;
   micId: string;
@@ -62,6 +64,7 @@ export const DEFAULTS: Settings = {
   echo: 'auto',
   musicEcho: false,
   autoLevel: true,
+  midiSync: true,
   audioQuality: 'high',
   videoQuality: 'hd',
   micId: '',

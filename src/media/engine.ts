@@ -19,6 +19,18 @@ import { signal } from '@preact/signals';
 import aecWorkletUrl from './aec.worklet.ts?worker&url';
 import denoiseWorkletUrl from './denoise.worklet.ts?worker&url';
 import levelWorkletUrl from './level.worklet.ts?worker&url';
+import LevelWorker from './level.worker.ts?worker';
+
+/** Chrome's frame path for a track (MediaStreamTrackProcessor / MediaStreamTrackGenerator): processing at the
+ * microphone's own pace, with no audio context (and its sound card buffers) in between. */
+type TrackProcessorCtor = new (o: { track: MediaStreamTrack }) => { readable: ReadableStream };
+type TrackGeneratorCtor = new (o: { kind: 'audio' }) => MediaStreamTrack & { writable: WritableStream };
+const g = globalThis as unknown as {
+  MediaStreamTrackProcessor?: TrackProcessorCtor;
+  MediaStreamTrackGenerator?: TrackGeneratorCtor;
+};
+export const framePath = (): boolean =>
+  !!g.MediaStreamTrackProcessor && !!g.MediaStreamTrackGenerator && typeof Worker !== 'undefined';
 import aecWasmUrl from './aec.wasm?url';
 
 export interface MicChain {
@@ -62,11 +74,15 @@ class AudioEngine {
   private chain: {
     track: MediaStreamTrack;
     want: MicChain;
-    src: MediaStreamAudioSourceNode;
+    src: MediaStreamAudioSourceNode | null;
     nodes: AudioNode[];
     aec: AudioWorkletNode | null;
     output: MediaStreamTrack;
+    /** the frame path: its worker and the copy of the microphone it reads */
+    frames?: { worker: Worker; input: MediaStreamTrack };
   } | null = null;
+  /** how the microphone is processed now: not at all, on its frames (no added delay), or in the audio context */
+  readonly path = signal<'none' | 'frames' | 'context'>('none');
   private remote = new Map<
     string,
     { stream: MediaStream; src: MediaStreamAudioSourceNode; nodes: AudioNode[]; denoise: boolean }
@@ -143,6 +159,17 @@ class AudioEngine {
       this.dropChain();
       return track;
     }
+    // the level alone: on the microphone's frames where the browser allows it (no audio context, no tap needed)
+    if (!want.aec && framePath()) {
+      const c = this.chain;
+      if (c?.frames && c.track === track) return c.output;
+      this.dropChain();
+      try {
+        return this.frameChain(track, want);
+      } catch (e) {
+        console.warn('[sonora] frame path unavailable', e);
+      }
+    }
     if (!(await this.load()) || !this.ctx) return track;
     const ctx = this.ctx;
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
@@ -205,7 +232,26 @@ class AudioEngine {
     output.contentHint = 'music';
     this.chain = { track, want: { ...want }, src, nodes, aec, output };
     this.aecOn.value = !!aec;
+    this.path.value = 'context';
     return output;
+  }
+
+  /** The automatic level on the microphone's frames, in a worker. */
+  private frameChain(track: MediaStreamTrack, want: MicChain): MediaStreamTrack {
+    const input = track.clone();
+    const proc = new g.MediaStreamTrackProcessor!({ track: input });
+    const gen = new g.MediaStreamTrackGenerator!({ kind: 'audio' });
+    const worker = new LevelWorker();
+    worker.onmessage = (e: MessageEvent<{ gainDb: number }>) => (this.levelDb.value = e.data.gainDb);
+    worker.postMessage({ readable: proc.readable, writable: gen.writable }, [
+      proc.readable as unknown as Transferable,
+      gen.writable as unknown as Transferable,
+    ]);
+    gen.contentHint = 'music';
+    this.chain = { track, want: { ...want }, src: null, nodes: [], aec: null, output: gen, frames: { worker, input } };
+    this.aecOn.value = false;
+    this.path.value = 'frames';
+    return gen;
   }
 
   /** Stop processing the microphone (it was released). */
@@ -217,7 +263,12 @@ class AudioEngine {
     const c = this.chain;
     if (!c) return;
     this.chain = null;
+    if (c.frames) {
+      c.frames.worker.terminate();
+      c.frames.input.stop();
+    }
     for (const n of [c.src, ...c.nodes]) {
+      if (!n) continue;
       try {
         n.disconnect();
       } catch {
@@ -233,11 +284,12 @@ class AudioEngine {
     this.echo.value = null;
     this.levelDb.value = null;
     this.aecOn.value = false;
+    this.path.value = 'none';
   }
 
   /** the microphone chain runs (what is sent is processed) */
   get processing(): boolean {
-    return !!this.chain && this.ctx?.state === 'running';
+    return !!this.chain && (!!this.chain.frames || this.ctx?.state === 'running');
   }
 
   /** the echo canceller runs on what is sent */

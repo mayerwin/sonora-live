@@ -223,7 +223,6 @@ export const FR: Record<string, string> = spaced({
   sent: 'envoyé',
   'tap to open': 'touchez pour ouvrir',
   incomplete: 'incomplet',
-  'Close chat': 'Fermer la discussion',
   '{n} person': '{n} personne',
   '{n} people': '{n} personnes',
   'Messages and files go straight to the others and disappear when the lesson ends.':
@@ -357,6 +356,53 @@ export const FR: Record<string, string> = spaced({
   "The browser's speech processing: removes background noise and echo, and part of the music with it.":
     'Le traitement de la parole du navigateur : il supprime le bruit de fond et l’écho, et une partie de la musique avec.',
   'Echo cancelling': 'Annulation d’écho',
+  '{name} turned on music-safe echo cancelling on your microphone':
+    '{name} a activé l’annulation d’écho préservant la musique sur votre micro',
+  '{name} turned off music-safe echo cancelling on your microphone':
+    '{name} a désactivé l’annulation d’écho préservant la musique sur votre micro',
+  '{name} turned on the automatic level of your microphone': '{name} a activé le niveau automatique de votre micro',
+  '{name} turned off the automatic level of your microphone': '{name} a désactivé le niveau automatique de votre micro',
+  '{name} turned off the others’ MIDI notes on your side': '{name} a coupé les notes MIDI des autres chez vous',
+  '{name} turned on the others’ MIDI notes on your side': '{name} a activé les notes MIDI des autres chez vous',
+  '{name} turned on sending your MIDI': '{name} a activé l’envoi de votre MIDI',
+  '{name} turned off sending your MIDI': '{name} a coupé l’envoi de votre MIDI',
+  'You can change it back in the Sound tab.': 'Vous pouvez revenir en arrière dans l’onglet Son.',
+  muted: 'micro coupé',
+  headphones: 'casque',
+  'Instrument and voice: untouched sound, for an acoustic instrument. Voice only: the browser’s speech processing (removes noise and echo, and part of the music).':
+    'Instrument et voix : son intact, pour un instrument acoustique. Voix seulement : le traitement de la parole du navigateur (retire le bruit et l’écho, et une partie de la musique).',
+  Instrument: 'Instrument',
+  'Voice only with MIDI': 'Voix seule avec le MIDI',
+  'While the piano plays through MIDI, the microphone carries the voice only (the piano is not heard twice).':
+    'Quand le piano passe en MIDI, le micro ne transmet que la voix (le piano n’est pas entendu deux fois).',
+  'Takes the sound of the speakers out of the microphone, so the others do not hear themselves. Auto: on unless headphones are detected. ● it runs now.':
+    'Retire le son des haut-parleurs du micro, pour que les autres ne s’entendent pas eux-mêmes. Auto : activée sauf si un casque est détecté. ● : elle fonctionne en ce moment.',
+  'Music-safe': 'Préserve la musique',
+  'Experimental echo cancelling that never turns the playing down while the others play, but may leave some echo on small speakers.':
+    'Annulation d’écho expérimentale qui n’atténue jamais le jeu quand les autres jouent, mais peut laisser un peu d’écho sur de petits haut-parleurs.',
+  'Brings a quiet microphone up slowly, from the loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.':
+    'Remonte doucement un micro trop faible, d’après les moments les plus forts, et empêche un forte de saturer : un crescendo reste un crescendo.',
+  'Send MIDI': 'Envoyer le MIDI',
+  'Notes and pedals played on the instrument reach the others.':
+    'Les notes et les pédales jouées sur l’instrument arrivent aux autres.',
+  'Play others’ MIDI': 'Jouer le MIDI des autres',
+  'Where the others’ MIDI notes sound on this side: Auto (the instrument if one can play them, else the built-in piano), the built-in piano, the instrument, or not at all (then only what the microphone carries is heard).':
+    'Où sonnent ici les notes MIDI des autres : Auto (l’instrument s’il peut les jouer, sinon le piano intégré), le piano intégré, l’instrument, ou nulle part (on n’entend alors que ce que transmet le micro).',
+  Piano: 'Piano',
+  'The built-in piano': 'Le piano intégré',
+  'Instr.': 'Instr.',
+  'The instrument connected here': 'L’instrument branché ici',
+  'MIDI in time': 'MIDI synchronisé',
+  'MIDI arrives before the sound of the same moment. The others’ notes (keys and sound) wait for their sound, so voice, microphone and MIDI stay together.':
+    'Le MIDI arrive avant le son du même instant. Les notes des autres (touches et son) attendent leur son, pour que voix, micro et MIDI restent ensemble.',
+  'Clean noise (for me)': 'Retirer le bruit (pour moi)',
+  'Takes the steady background noise (hiss, a fan) out of what you hear from them, for you only. Adds 8 ms.':
+    'Retire le bruit de fond constant (souffle, ventilateur) de ce que vous entendez de cette personne, pour vous seulement. Ajoute 8 ms.',
+  'Their sound: when it leaves their side, then your buffer; their MIDI waits that long when in time.':
+    'Son son : le temps avant qu’il parte de chez elle, puis votre tampon ; son MIDI attend autant quand il est synchronisé.',
+  MIDI: 'MIDI',
+  'Changes to someone else’s settings are made on their device, and they are told.':
+    'Les changements des réglages de quelqu’un d’autre se font sur son appareil, et il en est informé.',
   'Automatic level': 'Niveau automatique',
   'Brings a quiet microphone up slowly, from your loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.':
     'Remonte doucement un micro trop faible, d’après vos moments les plus forts, et empêche un forte de saturer : un crescendo reste un crescendo.',
@@ -383,8 +429,6 @@ export const FR: Record<string, string> = spaced({
   '{name} set your microphone to instrument and voice': '{name} a réglé votre micro sur instrument et voix',
   '{name} turned off echo cancelling on your microphone': '{name} a désactivé l’annulation d’écho de votre micro',
   '{name} turned on echo cancelling on your microphone': '{name} a activé l’annulation d’écho de votre micro',
-  'They hear the result. You can change it back in Settings → Sound.':
-    'C’est ce qu’on entend de vous. Vous pouvez le changer dans Réglages → Son.',
   'Voice only on my microphone while I play through MIDI': 'Voix seulement sur mon micro quand je joue en MIDI',
   'Your piano reaches the others as MIDI, so your microphone is tuned for speech. Turn off to also send your piano’s sound through the microphone.':
     'Votre piano arrive aux autres en MIDI : votre micro est réglé pour la parole. Désactivez pour faire aussi passer le son de votre piano par le micro.',

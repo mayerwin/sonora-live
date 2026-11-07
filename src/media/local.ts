@@ -51,6 +51,7 @@ export class LocalMedia {
   /** the microphone as sent: through the engine's echo canceller when it runs */
   readonly sentAudio = signal<MediaStreamTrack | null>(null);
   private emitting = 0;
+  private emitQueue: Promise<void> = Promise.resolve();
   /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
   readonly picture = new PictureWatch();
   constructor() {
@@ -191,7 +192,11 @@ export class LocalMedia {
       // Other processing: close the microphone first. While it is open, a browser may hand the new request
       // the same capture, with the old processing (no echo cancelling), and phones capture once at a time.
       const old = this.audio.peek();
-      if (old && (mode !== this.mode.peek() || this.browserEcho(mode) !== this.trackEcho)) old.stop();
+      if (old && (mode !== this.mode.peek() || this.browserEcho(mode) !== this.trackEcho)) {
+        // every copy of it too (the level's frame path holds one): one still open keeps the old processing
+        engine.release();
+        old.stop();
+      }
       try {
         const s = await navigator.mediaDevices.getUserMedia({
           audio: audioConstraints(mode, micId || undefined, this.browserEcho(mode)),
@@ -298,13 +303,27 @@ export class LocalMedia {
   }
 
   /** Hand the peers the microphone as it should be sent (as captured, or through the echo canceller). */
-  private async emitAudio(): Promise<void> {
+  /**
+   * Hand the peers the microphone as it should be sent. One change at a time, and only the latest pending one: two
+   * running together would both rebuild the engine's chain, and an older one still waiting for the audio context
+   * could finish last and put its stale chain back.
+   */
+  private emitAudio(): Promise<void> {
     const n = ++this.emitting;
+    this.emitQueue = this.emitQueue.then(() => (n === this.emitting ? this.doEmit() : undefined));
+    return this.emitQueue;
+  }
+
+  private async doEmit(): Promise<void> {
     const raw = this.audio.peek();
     let out = raw;
     const want = { aec: !!raw && this.engineEcho(), level: !!raw && this.autoLevel && this.mode.peek() === 'pure' };
-    if (raw) out = await engine.process(raw, want);
-    if (n !== this.emitting) return; // a newer change won
+    try {
+      if (raw) out = await engine.process(raw, want);
+    } catch (e) {
+      console.warn('[sonora] microphone processing failed', e);
+      out = raw;
+    }
     this.echo.value = this.trackEcho || (want.aec && out !== raw && engine.cancelling);
     this.sentAudio.value = out;
     this.onTrack('audio', out);

@@ -849,3 +849,45 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
   await expect(a.getByTestId('keyboard')).toBeVisible();
   await ctx.close();
 });
+
+test('the Sound tab: everyone’s settings at a glance; the teacher turns off the student’s MIDI playback from there', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  const errors: string[] = [];
+  a.on('pageerror', (e) => errors.push(e.message));
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  // the side panel (wide screens open it by default), Sound tab
+  if (!(await a.getByTestId('tab-sound').isVisible())) await a.getByTestId('btn-chat').click();
+  await a.getByTestId('tab-sound').click();
+  const panel = a.getByTestId('sound-panel');
+  await expect(panel.getByTestId('sp-me')).toBeVisible();
+  const leo = panel.getByTestId('sp-peer');
+  await expect(leo).toContainText('Leo');
+  // his settings, as he has them
+  await expect(
+    leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Auto' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // a short label explains itself on hover
+  await expect(leo.getByText('Automatic level')).toHaveAttribute('title', /crescendo/);
+  // turn off his MIDI playback: changed on his side, and he is told
+  await leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Off' }).click();
+  type W = { sonora: { midi: { playOn: { value: string } } } };
+  await expect.poll(() => b.evaluate(() => (window as unknown as W).sonora.midi.playOn.value)).toBe('off');
+  await expect(b.locator('.toast', { hasText: 'Clara turned off the others’ MIDI notes on your side' })).toBeVisible();
+  await expect(
+    leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Off' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // his MIDI waits for his sound on her side: his send time plus her buffer
+  await expect(leo.locator('.sp-info')).toContainText(/MIDI \+\d+ ms/, { timeout: 10_000 });
+  // and back to the chat
+  await a.getByTestId('tab-chat').click();
+  await expect(a.getByTestId('chat')).toBeVisible();
+  expect(errors).toEqual([]);
+  await a.context().close();
+  await b.context().close();
+});

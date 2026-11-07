@@ -61,6 +61,13 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   nothing is processed at all.
 - **Automatic level for music**: like a sound engineer setting the input gain once: slow, from the loudest moments
   of the last seconds, with a soft limiter; a quiet microphone is brought up, a crescendo stays a crescendo.
+- **Everyone's sound at a glance**: the *Sound* tab beside the chat shows each person's microphone, echo cancelling,
+  level and MIDI settings in one compact card each, and any musician can change them (on that person's device, which
+  says who changed what); hover or long-press a label for what it does.
+- **MIDI in time with the sound**: MIDI arrives before the sound of the same moment (it skips the microphone, the
+  audio frames and the jitter buffer). Each listener holds a person's notes (keys and sound) for that difference,
+  measured continuously (their send time plus this side's jitter buffer), so voice, microphone and MIDI stay
+  together; the voice itself is never delayed.
 - **Sound lab** (`?lab`): put the laptop next to the piano and it measures, in your room, the room noise, the echo
   each kind of processing removes, your piano's level and how much of it is kept while the other side plays; a
   summary to copy and a recording to download.

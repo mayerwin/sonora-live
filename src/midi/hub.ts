@@ -3,7 +3,12 @@
 //
 //   instrument in ──► echo filter ──► keyboard display ──► sender ──► peers
 //   on-screen keys ─► built-in piano ─┘
-//   peer ──► receiver (redundancy, stuck-note repair) ──► keyboard display ──► instrument out  or  built-in piano
+//   peer ──► receiver (redundancy, stuck-note repair) ──► (in time with their sound) ──► keyboard display
+//                                                          ──► instrument out  or  built-in piano
+//
+// In time with their sound: MIDI arrives before the sound of the same moment (it skips the microphone, the audio
+// frames and the jitter buffer), so the keys would light up, and the notes sound, before the voice and the
+// microphone's piano they belong to. Each peer's notes can wait that difference (setDelay), in order.
 
 import { signal } from '@preact/signals';
 import { MidiDevices } from './devices.ts';
@@ -39,6 +44,10 @@ export class MidiHub {
   /** what the instrument sounds of the others' playing, as sent to it (output channel applied) */
   private sounding = new NoteState();
   private raf = 0;
+  /** per peer: how long their notes wait (ms), the time the last one is due, and what is waiting */
+  private delays = new Map<string, number>();
+  private lastDue = new Map<string, number>();
+  private pending = new Map<string, Set<ReturnType<typeof setTimeout>>>();
 
   constructor() {
     this.sender = new MidiSender((p) => this.broadcast(p));
@@ -124,12 +133,14 @@ export class MidiHub {
       let state = this.remote.get(id);
       if (!state) this.remote.set(id, (state = new NoteState()));
       const st = state;
-      r = new MidiReceiver((m) => {
-        st.apply(m);
-        if ((m[0] & 0xf0) === 0x90 && m[2] > 0) this.lastRemote.value = performance.now();
-        this.bump();
-        this.route(m, id);
-      });
+      r = new MidiReceiver((m) =>
+        this.inTime(id, () => {
+          st.apply(m);
+          if ((m[0] & 0xf0) === 0x90 && m[2] > 0) this.lastRemote.value = performance.now();
+          this.bump();
+          this.route(m, id);
+        }),
+      );
       this.receivers.set(id, r);
     }
     r.receive(packet);
@@ -154,8 +165,42 @@ export class MidiHub {
     return this.sender.hello();
   }
 
+  /** Delay peer `id`'s notes by `ms` (0: as they arrive), to keep them in time with their sound. */
+  setDelay(id: string, ms: number): void {
+    this.delays.set(id, Math.max(0, Math.min(500, Math.round(ms))));
+  }
+
+  delayOf(id: string): number {
+    return this.delays.get(id) ?? 0;
+  }
+
+  /** Run `fn` when peer `id`'s delay has passed, after anything of theirs already waiting (order kept). */
+  private inTime(id: string, fn: () => void): void {
+    const d = this.delays.get(id) ?? 0;
+    const now = performance.now();
+    const waiting = this.pending.get(id);
+    // a hidden page's timers are slowed down to a second: play at once then
+    if ((d <= 0 && !waiting?.size) || (typeof document !== 'undefined' && document.hidden)) {
+      fn();
+      return;
+    }
+    const due = Math.max(now + d, this.lastDue.get(id) ?? 0);
+    this.lastDue.set(id, due);
+    let set = waiting;
+    if (!set) this.pending.set(id, (set = new Set()));
+    const timer = setTimeout(() => {
+      set!.delete(timer);
+      fn();
+    }, due - now);
+    set.add(timer);
+  }
+
   /** Peer `id` left or turned MIDI off: release whatever it was holding. */
   peerGone(id: string): void {
+    // what was waiting would sound after the release, and hang
+    for (const t of this.pending.get(id) ?? []) clearTimeout(t);
+    this.pending.delete(id);
+    this.lastDue.delete(id);
     this.receivers.get(id)?.reset();
     this.receivers.delete(id);
     this.remote.delete(id);

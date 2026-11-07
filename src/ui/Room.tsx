@@ -36,7 +36,8 @@ import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { SignalBars } from './common.tsx';
 import { Logo, Wordmark } from './icons.tsx';
-import { chatOpen, keyboardOpen, menu, openSettings, sheet } from './state.ts';
+import { chatOpen, keyboardOpen, menu, openSettings, sheet, sideTab } from './state.ts';
+import { SoundPanel } from './SoundPanel.tsx';
 import { PeerTile, SelfPip, Waiting } from './Tiles.tsx';
 import { ChatPanel } from './Chat.tsx';
 import { PianoKeys } from './Keyboard.tsx';
@@ -109,7 +110,7 @@ export function Room() {
         />
       )}
       <ControlBar showKeys={showKeys} />
-      {chatOpen.value && <ChatPanel />}
+      {chatOpen.value && (sideTab.value === 'sound' ? <SoundPanel /> : <ChatPanel />)}
       {sheet.value === 'midi' && <MidiSheet />}
       {sheet.value === 'settings' && <SettingsSheet />}
       {sheet.value === 'share' && <ShareSheet />}
