@@ -14,7 +14,8 @@ class DenoiseProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    this.port.onmessage = (e: MessageEvent<{ amount?: number }>) => {
+    this.port.onmessage = (e: MessageEvent<{ amount?: number; stop?: boolean }>) => {
+      if (e.data?.stop) this.alive = false;
       if (typeof e.data?.amount === 'number') {
         this.amount = e.data.amount;
         for (const c of this.channels) c.amount = this.amount;
@@ -22,7 +23,10 @@ class DenoiseProcessor extends AudioWorkletProcessor {
     };
   }
 
+  private alive = true;
+
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    if (!this.alive) return false;
     const input = inputs[0] ?? [];
     const output = outputs[0] ?? [];
     for (let c = 0; c < output.length; c++) {

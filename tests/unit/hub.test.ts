@@ -102,3 +102,28 @@ describe('MIDI in time with their sound', () => {
     }
   });
 });
+
+describe('MIDI in time: hidden page and late messages', () => {
+  it('when the page is hidden, what was waiting plays first, in order (no hanging note)', () => {
+    vi.useFakeTimers();
+    const doc = globalThis as unknown as { document?: { hidden: boolean } };
+    const before = doc.document;
+    try {
+      const { hub, sent, play } = setup();
+      hub.setDelay('teacher', 80);
+      doc.document = { hidden: false };
+      play([0x90, 60, 100]);
+      doc.document = { hidden: true };
+      play([0x80, 60, 0]);
+      expect(sent).toEqual([
+        [0x90, 60, 100],
+        [0x80, 60, 0],
+      ]);
+      vi.advanceTimersByTime(200);
+      expect(sent.length).toBe(2);
+    } finally {
+      doc.document = before;
+      vi.useRealTimers();
+    }
+  });
+});

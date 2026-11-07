@@ -925,7 +925,26 @@ export class Session {
     this.disposers.push(effect(() => void this.media.setAutoLevel(settings.value.autoLevel)));
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
     this.disposers.push(effect(() => void this.media.setEcho(this.pureEcho.value)));
-    this.disposers.push(effect(() => void this.media.setSpeaker(settings.value.speakerId)));
+    // the chosen output for everything: the others' sound (its elements), and the engine (the built-in piano,
+    // chimes, the others' sound when it goes through the engine), from the start, not only once changed
+    this.disposers.push(
+      effect(() => {
+        const id = settings.value.speakerId;
+        void this.media.setSpeaker(id);
+        void engine.setSink(id);
+      }),
+    );
+    // the others playing (their sound, from the last packets): the automatic level holds meanwhile, so it never
+    // brings up what is left of their echo
+    let farUntil = 0;
+    const farTimer = setInterval(() => {
+      if (this.phase.peek() !== 'room') return;
+      const now = performance.now();
+      // −34 dB and above: someone is playing or talking
+      if (this.parts.links().some((l) => l.audioLevel() > 0.02)) farUntil = now + 500;
+      engine.setFar(now < farUntil);
+    }, 100);
+    this.disposers.push(() => clearInterval(farTimer));
     const outputs = () => void this.media.checkOutput();
     navigator.mediaDevices?.addEventListener?.('devicechange', outputs);
     this.disposers.push(() => navigator.mediaDevices?.removeEventListener?.('devicechange', outputs));
@@ -1337,7 +1356,9 @@ export class Session {
   private syncMidi(): void {
     const on = settings.peek().midiSync;
     for (const p of this.peers.peek()) {
-      const want = on && p.remote && p.stats ? (p.remote.sendMs ?? 30) + p.stats.bufferMs : 0;
+      // their sound reaches the speakers later still when this side cleans its noise (8 ms)
+      const want =
+        on && p.remote && p.stats ? (p.remote.sendMs ?? 30) + p.stats.bufferMs + (this.cleansNoise(p.id) ? 8 : 0) : 0;
       if (Math.abs(want - this.midi.delayOf(p.id)) > 8 || (want === 0 && this.midi.delayOf(p.id) !== 0))
         this.midi.setDelay(p.id, want);
     }

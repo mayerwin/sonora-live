@@ -3,6 +3,7 @@
 
 import { signal } from '@preact/signals';
 import { t } from './i18n.ts';
+import { engine } from '../media/engine.ts';
 
 export type ToastKind = 'info' | 'join' | 'leave' | 'warn' | 'error' | 'success' | 'knock' | 'chat';
 
@@ -34,18 +35,14 @@ export function dismiss(id: number): void {
 
 // ------------------------------------------------------------------------------------------------- chimes
 
-let ctx: AudioContext | null = null;
-
+/** The audio engine's context: chimes go to the chosen output, and the music-safe echo canceller knows them (in a
+ * context of their own, the others heard them come back). */
 function audio(): AudioContext | null {
-  if (!ctx) {
-    const AC =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC({ latencyHint: 'playback' });
-  }
-  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
-  return ctx;
+  return engine.ensure();
 }
+
+/** where chimes play: the engine's output */
+const out = (c: AudioContext): AudioNode => engine.out ?? c.destination;
 
 /** Call from a click: browsers only allow sound after one. */
 export function unlockChimes(): void {
@@ -64,7 +61,7 @@ function bell(c: AudioContext, freq: number, at: number, gain: number, len = 1.2
   g2.gain.value = 0.18;
   o.connect(g);
   o2.connect(g2).connect(g);
-  g.connect(c.destination);
+  g.connect(out(c));
   g.gain.setValueAtTime(0, at);
   g.gain.linearRampToValueAtTime(gain, at + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, at + len);
@@ -98,7 +95,7 @@ export function chime(kind: Chime): void {
       o.frequency.exponentialRampToValueAtTime(110, t + d + 0.08);
       g.gain.setValueAtTime(0.25, t + d);
       g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.12);
-      o.connect(g).connect(c.destination);
+      o.connect(g).connect(out(c));
       o.start(t + d);
       o.stop(t + d + 0.13);
     }

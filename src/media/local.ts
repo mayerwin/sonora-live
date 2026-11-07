@@ -57,7 +57,10 @@ export class LocalMedia {
   constructor() {
     // the engine's audio context started (a tap): process what is sent, if anything should be
     effect(() => {
-      if (engine.running.value) void this.emitAudio();
+      // and when it stops (interrupted): back to the microphone itself rather than silence from a stopped
+      // context; with the music-safe canceller wanted, the browser's echo cancelling until it runs again
+      void engine.running.value;
+      void this.setEcho(this.wantEcho);
     });
     // the engine cannot cancel echo here: the browser's echo cancelling instead (the microphone reopens)
     effect(() => {
@@ -225,7 +228,9 @@ export class LocalMedia {
    * runs instead (and can run here). Noise suppression and automatic volume stay off in pure mode either way.
    */
   private browserEcho(mode: SoundMode): boolean {
-    return mode === 'voice' || (this.wantEcho && (!this.musicEcho || engine.aecUnavailable.peek()));
+    return (
+      mode === 'voice' || (this.wantEcho && (!this.musicEcho || engine.aecUnavailable.peek() || !engine.running.peek()))
+    );
   }
 
   /** The engine's music-safe echo cancelling on what is sent (pure mode: the capture is untouched). */
@@ -326,6 +331,7 @@ export class LocalMedia {
     }
     this.echo.value = this.trackEcho || (want.aec && out !== raw && engine.cancelling);
     this.sentAudio.value = out;
+    this.applyMute();
     this.onTrack('audio', out);
   }
 
@@ -337,8 +343,22 @@ export class LocalMedia {
 
   setMicOn(on: boolean): void {
     this.micOn.value = on;
-    const t = this.audio.value;
-    if (t) t.enabled = on;
+    this.applyMute();
+  }
+
+  /**
+   * Mute silences what is sent. When it is processed (level, canceller), the microphone itself keeps running into
+   * the processing: the canceller keeps what it learned of the room, and the level its gain; and no copy of a
+   * disabled microphone is left behind (a copy made while muted stayed silent after Unmute). Unprocessed, the
+   * microphone itself is turned off.
+   */
+  private applyMute(): void {
+    const on = this.micOn.peek();
+    const raw = this.audio.peek();
+    const sent = this.sentAudio.peek();
+    const processed = !!sent && sent !== raw;
+    if (raw) raw.enabled = processed ? true : on;
+    if (processed) sent!.enabled = on;
   }
 
   /** Camera off releases the camera (its light goes off); on opens it again. */

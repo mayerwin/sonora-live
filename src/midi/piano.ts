@@ -209,25 +209,20 @@ export class Piano {
   }
 
   private build(ctx: AudioContext, out: AudioNode): void {
+    // no compressor: it would delay every note (its look-ahead, about 6 ms) and squeeze the dynamics; the
+    // engine's output keeps the headroom (a soft clip at −1 dB, no delay)
     this.bus = ctx.createGain();
-    this.bus.gain.value = 0.6;
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -9;
-    limiter.knee.value = 8;
-    limiter.ratio.value = 6;
-    limiter.attack.value = 0.002;
-    limiter.release.value = 0.2;
+    this.bus.gain.value = 0.7;
     this.master = ctx.createGain();
     this.master.gain.value = this.volume;
-    this.bus.connect(limiter);
+    this.bus.connect(this.master);
     this.reverbSend = ctx.createGain();
     this.reverbSend.gain.value = this.reverbOn ? 0.16 : 0;
     const conv = ctx.createConvolver();
     conv.buffer = roomImpulse(ctx);
     this.bus.connect(this.reverbSend);
     this.reverbSend.connect(conv);
-    conv.connect(limiter);
-    limiter.connect(this.master);
+    conv.connect(this.master);
     this.master.connect(out);
     // a piano-like tone for the seconds before the samples are in (or if they cannot load)
     const n = 24;

@@ -422,6 +422,16 @@ export class PeerLink {
   }
 
   /** Connected, with its control channel open. */
+  /** How loud their sound is now (0..1, from the last packets; no stats round trip). */
+  audioLevel(): number {
+    let level = 0;
+    for (const r of this.pc.getReceivers()) {
+      if (r.track?.kind !== 'audio') continue;
+      for (const s of r.getSynchronizationSources?.() ?? []) level = Math.max(level, s.audioLevel ?? 0);
+    }
+    return level;
+  }
+
   healthy(): boolean {
     return this.pc.connectionState === 'connected' && this.ctlOpen;
   }

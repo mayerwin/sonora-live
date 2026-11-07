@@ -64,23 +64,31 @@ class AecProcessor extends AudioWorkletProcessor {
   private lastLag = -1;
   private agree = 0;
   private found = false;
+  private alive = true;
   private readonly search$: boolean;
 
   constructor(options: { processorOptions?: unknown }) {
     super(options);
-    const o = (options.processorOptions ?? {}) as { bytes?: ArrayBuffer; tail?: number; search?: boolean };
+    const o = (options.processorOptions ?? {}) as {
+      module?: WebAssembly.Module;
+      bytes?: ArrayBuffer;
+      tail?: number;
+      search?: boolean;
+    };
     this.search$ = o.search !== false;
     this.tail = Math.round((o.tail ?? 0.3) * sampleRate);
     this.delay = 0;
     let mod: WebAssembly.Module | null = null;
     try {
-      mod = o.bytes ? new WebAssembly.Module(o.bytes) : null;
+      // compiled on the main thread when handed over (compiling here would stall the audio thread)
+      mod = o.module instanceof WebAssembly.Module ? o.module : o.bytes ? new WebAssembly.Module(o.bytes) : null;
     } catch {
       mod = null;
     }
     this.wasm = mod;
-    this.port.onmessage = (ev: MessageEvent<{ reset?: boolean }>) => {
+    this.port.onmessage = (ev: MessageEvent<{ reset?: boolean; stop?: boolean }>) => {
       if (ev.data?.reset) this.e?.aec_reset();
+      if (ev.data?.stop) this.alive = false;
     };
   }
 
@@ -160,6 +168,8 @@ class AecProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    // dropped: let the browser release this node (and its WebAssembly memory)
+    if (!this.alive) return false;
     const mic = inputs[0] ?? [];
     const ref = inputs[1]?.[0];
     const out = outputs[0] ?? [];

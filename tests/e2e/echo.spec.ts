@@ -190,3 +190,38 @@ test('in a lesson on speakers: the browser’s echo cancelling by default, the m
   await a.context().close();
   await b.context().close();
 });
+
+test('mute silences what is sent; joining muted then unmuting brings the sound back (processed microphone)', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara');
+  // muted in the lobby, before the processing starts
+  await a.getByRole('button', { name: 'Mute microphone' }).click();
+  await enter(a);
+  const code = await a.evaluate(() => location.hash.slice(1));
+  const b = await person(browser, 'Leo', code);
+  await enter(b);
+  // the loudest the student hears from the teacher over two seconds (the fake microphone beeps)
+  const heard = () =>
+    b.evaluate(async () => {
+      const s = (window as unknown as { sonora: { parts: { links(): { audioLevel(): number }[] } } }).sonora;
+      let max = 0;
+      for (let i = 0; i < 40; i++) {
+        for (const l of s.parts.links()) max = Math.max(max, l.audioLevel());
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return max;
+    });
+  await expect.poll(() => b.evaluate(() => document.querySelectorAll('audio').length), { timeout: 15_000 }).toBe(1);
+  await b.waitForTimeout(1500);
+  expect(await heard()).toBeLessThan(0.002);
+  // unmute: heard
+  await a.getByTestId('btn-mic').click();
+  await expect.poll(heard, { timeout: 10_000 }).toBeGreaterThan(0.01);
+  // mute again: silent, though the microphone keeps feeding the processing
+  await a.getByTestId('btn-mic').click();
+  await b.waitForTimeout(800);
+  await expect.poll(heard, { timeout: 10_000 }).toBeLessThan(0.002);
+  await a.context().close();
+  await b.context().close();
+});

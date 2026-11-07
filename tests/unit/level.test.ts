@@ -59,3 +59,46 @@ describe('automatic level', () => {
     expect(limit(0.5)).toBe(0.5);
   });
 });
+
+describe('automatic level: the hard cases', () => {
+  it('a forte right after a pianissimo is caught at once, not distorted', () => {
+    const l = new Leveler(SR);
+    run(l, 20, () => 0.02); // pp: the gain climbs high
+    let over = 0;
+    let total = 0;
+    const blocks = Math.round((2 * SR) / N);
+    for (let b = 0; b < blocks; b++) {
+      const ch = new Float32Array(N);
+      for (let i = 0; i < N; i++) ch[i] = 0.9 * Math.sin((2 * Math.PI * 220 * (b * N + i)) / SR);
+      l.process([ch]);
+      for (const v of ch) {
+        total++;
+        if (Math.abs(v) > 0.89) over++;
+      }
+    }
+    // nothing reaches the limiter (no squared-off waves)
+    expect(over / total).toBeLessThan(0.001);
+  });
+
+  it('room noise in a pause is not brought up', () => {
+    const l = new Leveler(SR);
+    run(l, 15, () => 0.06);
+    const g = l.gain;
+    // −45 dBFS of steady noise (above the gate) for 8 s
+    let seed = 1;
+    const blocks = Math.round((8 * SR) / N);
+    for (let b = 0; b < blocks; b++) {
+      const ch = new Float32Array(N);
+      for (let i = 0; i < N; i++) ch[i] = (((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) * 2 - 1) * 0.01;
+      l.process([ch]);
+    }
+    expect(l.gain).toBeLessThanOrEqual(g * 1.01);
+  });
+
+  it('holds while the others play (their leftover echo is not brought up)', () => {
+    const l = new Leveler(SR, 1);
+    l.far = true;
+    run(l, 10, () => 0.02);
+    expect(l.gain).toBeLessThanOrEqual(1.0001);
+  });
+});

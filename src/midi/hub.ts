@@ -47,7 +47,7 @@ export class MidiHub {
   /** per peer: how long their notes wait (ms), the time the last one is due, and what is waiting */
   private delays = new Map<string, number>();
   private lastDue = new Map<string, number>();
-  private pending = new Map<string, Set<ReturnType<typeof setTimeout>>>();
+  private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; fn: () => void }[]>();
 
   constructor() {
     this.sender = new MidiSender((p) => this.broadcast(p));
@@ -133,8 +133,8 @@ export class MidiHub {
       let state = this.remote.get(id);
       if (!state) this.remote.set(id, (state = new NoteState()));
       const st = state;
-      r = new MidiReceiver((m) =>
-        this.inTime(id, () => {
+      r = new MidiReceiver((m, late) =>
+        this.inTime(id, late, () => {
           st.apply(m);
           if ((m[0] & 0xf0) === 0x90 && m[2] > 0) this.lastRemote.value = performance.now();
           this.bump();
@@ -174,31 +174,55 @@ export class MidiHub {
     return this.delays.get(id) ?? 0;
   }
 
-  /** Run `fn` when peer `id`'s delay has passed, after anything of theirs already waiting (order kept). */
-  private inTime(id: string, fn: () => void): void {
+  /**
+   * Run `fn` when peer `id`'s delay has passed, after anything of theirs already waiting (order kept). `late`: how
+   * old the message already is (recovered from a later packet): it waits only what is left of the delay.
+   */
+  private inTime(id: string, late: number, fn: () => void): void {
     const d = this.delays.get(id) ?? 0;
     const now = performance.now();
-    const waiting = this.pending.get(id);
-    // a hidden page's timers are slowed down to a second: play at once then
-    if ((d <= 0 && !waiting?.size) || (typeof document !== 'undefined' && document.hidden)) {
+    const queue = this.pending.get(id) ?? [];
+    // a hidden page's timers are slowed down to a second: play at once then, after what was already waiting (in
+    // order: a release must never overtake its note, or the note hangs)
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.flush(id);
       fn();
       return;
     }
-    const due = Math.max(now + d, this.lastDue.get(id) ?? 0);
-    this.lastDue.set(id, due);
-    let set = waiting;
-    if (!set) this.pending.set(id, (set = new Set()));
-    const timer = setTimeout(() => {
-      set!.delete(timer);
+    if (d <= 0 && !queue.length) {
       fn();
-    }, due - now);
-    set.add(timer);
+      return;
+    }
+    const due = Math.max(now + Math.max(0, d - late), this.lastDue.get(id) ?? 0);
+    this.lastDue.set(id, due);
+    const item = {
+      timer: setTimeout(() => {
+        const q = this.pending.get(id);
+        if (q) q.splice(q.indexOf(item), 1);
+        fn();
+      }, due - now),
+      fn,
+    };
+    queue.push(item);
+    this.pending.set(id, queue);
+  }
+
+  /** Play at once, in order, whatever of peer `id` is waiting. */
+  private flush(id: string): void {
+    const q = this.pending.get(id);
+    if (!q?.length) return;
+    this.pending.delete(id);
+    this.lastDue.delete(id);
+    for (const item of q) {
+      clearTimeout(item.timer);
+      item.fn();
+    }
   }
 
   /** Peer `id` left or turned MIDI off: release whatever it was holding. */
   peerGone(id: string): void {
     // what was waiting would sound after the release, and hang
-    for (const t of this.pending.get(id) ?? []) clearTimeout(t);
+    for (const item of this.pending.get(id) ?? []) clearTimeout(item.timer);
     this.pending.delete(id);
     this.lastDue.delete(id);
     this.receivers.get(id)?.reset();

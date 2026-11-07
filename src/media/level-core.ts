@@ -14,9 +14,8 @@ const MIN_GAIN = 0.5;
 const MAX_GAIN = 10;
 /** gain changes, in dB per second */
 const RAISE_DB_S = 2;
-/** lowering: gently when the peaks are only above the target, fast when the limiter has to work */
+/** lowering when the peaks are above the target (a peak that would reach the limiter is caught at once) */
 const LOWER_DB_S = 3;
-const LOWER_FAST_DB_S = 20;
 /** the peak memory fades this fast (dB per second): the loudest moments of the last few seconds count */
 const PEAK_FALL_DB_S = 2;
 /** below this block RMS (−50 dBFS), nothing plays: the gain holds */
@@ -26,9 +25,19 @@ const KNEE = 0.89;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
+/** the remembered peak holds this long before it starts to fade: a pause is not a quieter piece */
+const HOLD_S = 10;
+/** the gain rises only on the loud parts: a block whose peak reaches this share of the remembered peak (a pause's
+ * room noise never does, so it is not brought up) */
+const LOUD_PART = 0.25;
+
 export class Leveler {
   gain: number;
+  /** the others are playing: hold the gain (it would bring up what is left of their echo, not this side) */
+  far = false;
   private peak = 0;
+  private holdUntil = 0;
+  private t = 0;
   private readonly rate: number;
 
   constructor(sampleRate: number, startGain = dbToGain(6)) {
@@ -41,6 +50,7 @@ export class Leveler {
     const n = channels[0]?.length ?? 0;
     if (!n) return;
     const dt = n / this.rate;
+    this.t += dt;
     let peak = 0;
     let sum = 0;
     for (const ch of channels)
@@ -50,19 +60,26 @@ export class Leveler {
         sum += ch[i] * ch[i];
       }
     const rms = Math.sqrt(sum / (n * channels.length));
-    // the remembered peak: jumps up at once, fades slowly
-    this.peak = Math.max(peak, this.peak * dbToGain(-PEAK_FALL_DB_S * dt));
-    const from = this.gain;
+    // the remembered peak: jumps up at once, holds through pauses, then fades slowly
+    if (peak >= this.peak) {
+      this.peak = peak;
+      this.holdUntil = this.t + HOLD_S;
+    } else if (this.t > this.holdUntil) {
+      this.peak = Math.max(peak, this.peak * dbToGain(-PEAK_FALL_DB_S * dt));
+    }
+    let from = this.gain;
     if (rms > GATE && this.peak > 1e-5) {
       const want = Math.min(MAX_GAIN, Math.max(MIN_GAIN, TARGET / this.peak));
-      const fast = this.peak * this.gain > KNEE;
-      if (want > this.gain) this.gain = Math.min(want, this.gain * dbToGain(RAISE_DB_S * dt));
-      else this.gain = Math.max(want, this.gain * dbToGain(-(fast ? LOWER_FAST_DB_S : LOWER_DB_S) * dt));
-    } else if (this.peak * this.gain > 1) {
-      // nothing playing but the memory says it would clip: come down anyway
-      this.gain = Math.max(MIN_GAIN, this.gain * dbToGain(-LOWER_FAST_DB_S * dt));
+      if (want > this.gain) {
+        if (!this.far && peak >= LOUD_PART * this.peak)
+          this.gain = Math.min(want, this.gain * dbToGain(RAISE_DB_S * dt));
+      } else this.gain = Math.max(want, this.gain * dbToGain(-LOWER_DB_S * dt));
     }
-    // the gain glides across the block (no clicks), then the soft limiter
+    // instant attack: this block's peak is known before the gain is applied, so a forte after a pianissimo is
+    // turned down at once (the limiter below is only a safety net: as a steady stage it would distort)
+    if (peak * this.gain > KNEE) this.gain = Math.max(MIN_GAIN * 0.1, KNEE / peak);
+    if (peak * from > KNEE) from = this.gain;
+    // the gain glides across the block (no clicks), then the safety limiter
     const to = this.gain;
     for (const ch of channels)
       for (let i = 0; i < n; i++) {

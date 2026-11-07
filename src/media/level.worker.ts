@@ -29,15 +29,24 @@ interface Start {
 
 let lev: Leveler | null = null;
 let lastReport = 0;
+let far = false;
 
-self.onmessage = (e: MessageEvent<Start | { stop: true }>) => {
+self.onmessage = (e: MessageEvent<Start | { far: boolean }>) => {
+  if ('far' in e.data) {
+    far = e.data.far;
+    if (lev) lev.far = far;
+    return;
+  }
   if (!('readable' in e.data)) return;
   const { readable, writable } = e.data;
   const t = new TransformStream<AudioData, AudioData>({
     transform(frame, out) {
       const n = frame.numberOfFrames;
       const c = frame.numberOfChannels;
-      if (!lev) lev = new Leveler(frame.sampleRate);
+      if (!lev) {
+        lev = new Leveler(frame.sampleRate);
+        lev.far = far;
+      }
       const planes: Float32Array[] = [];
       for (let k = 0; k < c; k++) {
         const p = new Float32Array(n);

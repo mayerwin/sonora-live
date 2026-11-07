@@ -77,6 +77,10 @@ class AudioEngine {
     src: MediaStreamAudioSourceNode | null;
     nodes: AudioNode[];
     aec: AudioWorkletNode | null;
+    /** the automatic level's node (context path), and where the chain ends */
+    level?: AudioWorkletNode | null;
+    dest?: MediaStreamAudioDestinationNode;
+    channels?: number;
     output: MediaStreamTrack;
     /** the frame path: its worker and the copy of the microphone it reads */
     frames?: { worker: Worker; input: MediaStreamTrack };
@@ -88,6 +92,10 @@ class AudioEngine {
     { stream: MediaStream; src: MediaStreamAudioSourceNode; nodes: AudioNode[]; denoise: boolean }
   >();
   private sinkId = '';
+  /** the canceller compiled once, on this thread (compiling it on the audio thread stalls every sound) */
+  private module: WebAssembly.Module | null = null;
+  /** the others are playing (the automatic level holds) */
+  private far = false;
 
   /** Create the context (in a tap the first time: Safari starts audio only then) and wake it. */
   ensure(): AudioContext | null {
@@ -95,16 +103,24 @@ class AudioEngine {
       const AC =
         window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AC) return null;
-      try {
-        this.ctx = new AC({ latencyHint: 'interactive', sampleRate: 48_000 });
-      } catch {
-        // a device that cannot run at 48 kHz: its own rate
-        this.ctx = new AC({ latencyHint: 'interactive' });
-      }
+      // at the device's own rate: forcing one (48 kHz on a 44.1 kHz output) adds a resampler, and its delay
+      this.ctx = new AC({ latencyHint: 'interactive' });
       const ctx = this.ctx;
       this.out = ctx.createGain();
-      this.out.connect(ctx.destination);
-      ctx.addEventListener('statechange', () => (this.running.value = ctx.state === 'running'));
+      // headroom: several sounds together (someone's playing, the built-in piano) may add up past full scale; a
+      // soft clip above −1 dB instead of hard clipping (a wave shaper adds no delay)
+      const clip = ctx.createWaveShaper();
+      clip.curve = softClipCurve();
+      clip.oversample = 'none';
+      this.out.connect(clip).connect(ctx.destination);
+      let was = ctx.state;
+      ctx.addEventListener('statechange', () => {
+        this.running.value = ctx.state === 'running';
+        // interrupted (a phone call, another app took the sound): start again when allowed
+        if (was === 'running' && ctx.state !== 'running' && ctx.state !== 'closed')
+          setTimeout(() => void ctx.resume().catch(() => {}), 300);
+        was = ctx.state;
+      });
       this.running.value = ctx.state === 'running';
       if (this.sinkId) void this.setSink(this.sinkId);
     }
@@ -130,8 +146,8 @@ class AudioEngine {
               return r.arrayBuffer();
             }),
           ]);
-          // checked here, so a browser that cannot compile it falls back at once
-          new WebAssembly.Module(bytes);
+          // compiled here, once: a browser that cannot falls back at once
+          this.module = new WebAssembly.Module(bytes);
           this.wasm = bytes;
           this.loaded.value = true;
           return true;
@@ -159,6 +175,7 @@ class AudioEngine {
       this.dropChain();
       return track;
     }
+    if (track.readyState !== 'live') return track;
     // the level alone: on the microphone's frames where the browser allows it (no audio context, no tap needed)
     if (!want.aec && framePath()) {
       const c = this.chain;
@@ -176,7 +193,22 @@ class AudioEngine {
     if (ctx.state !== 'running') return track;
     const c = this.chain;
     if (c && c.track === track && c.want.aec === want.aec && c.want.level === want.level) return c.output;
-    this.dropChain();
+    // only the level changes after the canceller: keep the canceller (and what it learned of the room) and the
+    // same output track, rewire after it
+    if (c && !c.frames && c.track === track && c.aec && want.aec && c.dest) {
+      c.aec.disconnect();
+      if (c.level) {
+        stopNode(c.level);
+        c.level.disconnect();
+      }
+      c.level = want.level ? this.levelNode(ctx, c.channels ?? 1) : null;
+      if (c.level) c.aec.connect(c.level).connect(c.dest);
+      else c.aec.connect(c.dest);
+      c.want = { ...want };
+      return c.output;
+    }
+    // the others' sound stays where it plays while the chain is rebuilt with a canceller (no jump between paths)
+    this.dropChain(want.aec);
 
     const channels = Math.min(2, Math.max(1, track.getSettings().channelCount ?? 1));
     const src = ctx.createMediaStreamSource(new MediaStream([track]));
@@ -184,14 +216,7 @@ class AudioEngine {
     let aec: AudioWorkletNode | null = null;
     let head: AudioNode = src;
     if (want.aec && this.wasm && this.out) {
-      aec = new AudioWorkletNode(ctx, 'sonora-aec', {
-        numberOfInputs: 2,
-        numberOfOutputs: 1,
-        outputChannelCount: [channels],
-        channelCount: channels,
-        channelCountMode: 'explicit',
-        processorOptions: { bytes: this.wasm.slice(0), tail: TAIL_S },
-      });
+      aec = this.aecNode(ctx, channels);
       aec.port.onmessage = (e: MessageEvent<EchoStats & { failed?: string }>) => {
         if (e.data.failed) {
           console.warn('[sonora] echo canceller failed', e.data.failed);
@@ -211,18 +236,11 @@ class AudioEngine {
       nodes.push(mono, aec);
       head = aec;
     }
+    let level: AudioWorkletNode | null = null;
     if (want.level) {
-      const lv = new AudioWorkletNode(ctx, 'sonora-level', {
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        outputChannelCount: [channels],
-        channelCount: channels,
-        channelCountMode: 'explicit',
-      });
-      lv.port.onmessage = (e: MessageEvent<{ gainDb: number }>) => (this.levelDb.value = e.data.gainDb);
-      head.connect(lv);
-      nodes.push(lv);
-      head = lv;
+      level = this.levelNode(ctx, channels);
+      head.connect(level);
+      head = level;
     }
     const dest = ctx.createMediaStreamDestination();
     dest.channelCount = channels;
@@ -230,15 +248,61 @@ class AudioEngine {
     nodes.push(dest);
     const output = dest.stream.getAudioTracks()[0];
     output.contentHint = 'music';
-    this.chain = { track, want: { ...want }, src, nodes, aec, output };
+    this.chain = { track, want: { ...want }, src, nodes, aec, level, dest, channels, output };
     this.aecOn.value = !!aec;
     this.path.value = 'context';
     return output;
   }
 
+  /** The music-safe canceller's node: the module compiled here when the browser can hand it over, else the bytes. */
+  private aecNode(ctx: AudioContext, channels: number): AudioWorkletNode {
+    const opts = {
+      numberOfInputs: 2,
+      numberOfOutputs: 1,
+      outputChannelCount: [channels],
+      channelCount: channels,
+      channelCountMode: 'explicit' as const,
+    };
+    try {
+      return new AudioWorkletNode(ctx, 'sonora-aec', {
+        ...opts,
+        processorOptions: { module: this.module, tail: TAIL_S },
+      });
+    } catch {
+      return new AudioWorkletNode(ctx, 'sonora-aec', {
+        ...opts,
+        processorOptions: { bytes: this.wasm!.slice(0), tail: TAIL_S },
+      });
+    }
+  }
+
+  private levelNode(ctx: AudioContext, channels: number): AudioWorkletNode {
+    const lv = new AudioWorkletNode(ctx, 'sonora-level', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [channels],
+      channelCount: channels,
+      channelCountMode: 'explicit',
+    });
+    lv.port.onmessage = (e: MessageEvent<{ gainDb: number }>) => (this.levelDb.value = e.data.gainDb);
+    lv.port.postMessage({ far: this.far });
+    return lv;
+  }
+
+  /** The others are playing (or not): the automatic level holds its gain meanwhile. */
+  setFar(on: boolean): void {
+    if (on === this.far) return;
+    this.far = on;
+    const c = this.chain;
+    c?.frames?.worker.postMessage({ far: on });
+    c?.level?.port.postMessage({ far: on });
+  }
+
   /** The automatic level on the microphone's frames, in a worker. */
   private frameChain(track: MediaStreamTrack, want: MicChain): MediaStreamTrack {
     const input = track.clone();
+    // the copy always runs (a muted microphone is silenced on what is sent, see LocalMedia.applyMute)
+    input.enabled = true;
     const proc = new g.MediaStreamTrackProcessor!({ track: input });
     const gen = new g.MediaStreamTrackGenerator!({ kind: 'audio' });
     const worker = new LevelWorker();
@@ -247,6 +311,7 @@ class AudioEngine {
       proc.readable as unknown as Transferable,
       gen.writable as unknown as Transferable,
     ]);
+    worker.postMessage({ far: this.far });
     gen.contentHint = 'music';
     this.chain = { track, want: { ...want }, src: null, nodes: [], aec: null, output: gen, frames: { worker, input } };
     this.aecOn.value = false;
@@ -259,7 +324,8 @@ class AudioEngine {
     this.dropChain();
   }
 
-  private dropChain(): void {
+  /** `keepRouting`: a chain with a canceller follows (the others' sound stays in the engine meanwhile). */
+  private dropChain(keepRouting = false): void {
     const c = this.chain;
     if (!c) return;
     this.chain = null;
@@ -267,8 +333,9 @@ class AudioEngine {
       c.frames.worker.terminate();
       c.frames.input.stop();
     }
-    for (const n of [c.src, ...c.nodes]) {
+    for (const n of [c.src, ...c.nodes, c.level]) {
       if (!n) continue;
+      stopNode(n);
       try {
         n.disconnect();
       } catch {
@@ -283,7 +350,7 @@ class AudioEngine {
     c.output.stop();
     this.echo.value = null;
     this.levelDb.value = null;
-    this.aecOn.value = false;
+    if (!keepRouting) this.aecOn.value = false;
     this.path.value = 'none';
   }
 
@@ -308,6 +375,7 @@ class AudioEngine {
     if (cur && stream && cur.stream === stream && cur.denoise === denoise) return true;
     if (cur) {
       for (const n of [cur.src, ...cur.nodes]) {
+        stopNode(n);
         try {
           n.disconnect();
         } catch {
@@ -366,3 +434,22 @@ class AudioEngine {
 }
 
 export const engine = new AudioEngine();
+
+/** A processing node that is no longer used: told to stop (otherwise it may keep running, and its memory). */
+function stopNode(n: AudioNode): void {
+  if (typeof AudioWorkletNode !== 'undefined' && n instanceof AudioWorkletNode) n.port.postMessage({ stop: true });
+}
+
+/** Unchanged up to −1 dBFS, then bending smoothly to full scale (a soft clip, for headroom). */
+function softClipCurve(): Float32Array<ArrayBuffer> {
+  const n = 4096;
+  const curve = new Float32Array(n);
+  const knee = 0.89;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + (1 - knee) * Math.tanh((a - knee) / (1 - knee));
+    curve[i] = x < 0 ? -y : y;
+  }
+  return curve;
+}
