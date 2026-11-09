@@ -5,13 +5,13 @@ of all: every network, browser and instrument is a little different.
 
 ## Reporting a problem
 
-[Open an issue](https://github.com/mayerwin/sonora-live/issues/new/choose) and say, for **each side** of the lesson:
+[Open an issue](https://github.com/sonora-live/sonora-live.github.io/issues/new/choose) and say, for **each side** of the lesson:
 
 - the device and system (e.g. Windows 11 laptop, iPad, Android phone), the browser and its version;
 - the instrument, if any, and how it is connected (USB, Bluetooth, which app or adapter);
 - what you did, what you expected, what happened instead.
 
-The connection log helps a lot: add `?debug` to the address (`https://mayerwin.github.io/sonora-live/?debug#ROOMCODE`),
+The connection log helps a lot: add `?debug` to the address (`https://sonora-live.github.io/?debug#ROOMCODE`),
 reproduce the problem, open the browser's developer tools (F12) and copy the console lines that start with
 `[sonora]`. **Settings → Connection** in the app shows the path, the round trip and the codec.
 

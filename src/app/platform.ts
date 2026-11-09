@@ -73,4 +73,4 @@ export function isStandalone(): boolean {
 export const PERFECT_BT_MIDI = 'https://github.com/mayerwin/Perfect-Bluetooth-MIDI-For-Windows';
 export const WEB_MIDI_BROWSER_IOS = 'https://apps.apple.com/app/id953846217';
 export const BLUEFY_IOS = 'https://apps.apple.com/app/id1492822055';
-export const REPO_URL = 'https://github.com/mayerwin/sonora-live';
+export const REPO_URL = 'https://github.com/sonora-live/sonora-live.github.io';

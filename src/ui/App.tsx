@@ -60,7 +60,7 @@ function Left() {
             <Plus /> {t('New room')}
           </button>
         </div>
-        <a class="link-btn" href="https://github.com/mayerwin/sonora-live/issues" target="_blank" rel="noopener">
+        <a class="link-btn" href="https://github.com/sonora-live/sonora-live.github.io/issues" target="_blank" rel="noopener">
           {t('Something not right? Tell us')} <ArrowRight size={14} style="vertical-align:-2px" />
         </a>
       </div>

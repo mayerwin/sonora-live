@@ -4,14 +4,14 @@ Sonora Live carries people's camera, microphone and conversations, so security r
 
 ## Reporting a vulnerability
 
-Please report it privately through GitHub: **[Security → Report a vulnerability](https://github.com/mayerwin/sonora-live/security/advisories/new)**.
+Please report it privately through GitHub: **[Security → Report a vulnerability](https://github.com/sonora-live/sonora-live.github.io/security/advisories/new)**.
 Do not open a public issue for it. You will get an answer within a few days, and credit in the fix if you wish.
 
 Useful to include: what an attacker can do, the steps to reproduce, and the browsers concerned.
 
 ## Supported versions
 
-Only the current version, published at <https://mayerwin.github.io/sonora-live/>, is supported. The installed app
+Only the current version, published at <https://sonora-live.github.io/>, is supported. The installed app
 updates itself to it.
 
 ## How Sonora Live is built to be safe

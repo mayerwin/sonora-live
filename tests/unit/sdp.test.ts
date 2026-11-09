@@ -83,6 +83,7 @@ describe('room codes', () => {
   it('accept typing variations and pasted links', () => {
     expect(normalizeRoomCode('k7q 2mx')).toBe('K7Q2MX');
     expect(normalizeRoomCode('K7Q-2MX')).toBe('K7Q2MX');
+    expect(normalizeRoomCode('https://sonora-live.github.io/#K7Q2MX')).toBe('K7Q2MX');
     expect(normalizeRoomCode('https://mayerwin.github.io/sonora-live/#K7Q2MX')).toBe('K7Q2MX');
     expect(normalizeRoomCode('K7Q2M')).toBeNull();
     expect(normalizeRoomCode('K0Q2MX')).toBeNull();

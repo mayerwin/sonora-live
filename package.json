@@ -6,13 +6,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Erwin Mayer (https://github.com/mayerwin)",
-  "homepage": "https://mayerwin.github.io/sonora-live/",
+  "homepage": "https://sonora-live.github.io/",
   "bugs": {
-    "url": "https://github.com/mayerwin/sonora-live/issues"
+    "url": "https://github.com/sonora-live/sonora-live.github.io/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mayerwin/sonora-live.git"
+    "url": "https://github.com/sonora-live/sonora-live.github.io.git"
   },
   "keywords": [
     "webrtc",
