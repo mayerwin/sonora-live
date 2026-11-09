@@ -5,7 +5,7 @@ of all: every network, browser and instrument is a little different.
 
 ## Reporting a problem
 
-[Open an issue](https://github.com/sonora-live/sonora-live.github.io/issues/new/choose) and say, for **each side** of the lesson:
+[Open an issue](https://github.com/sonora-live/sonora-live/issues/new/choose) and say, for **each side** of the lesson:
 
 - the device and system (e.g. Windows 11 laptop, iPad, Android phone), the browser and its version;
 - the instrument, if any, and how it is connected (USB, Bluetooth, which app or adapter);

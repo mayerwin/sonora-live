@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sonora-live/sonora-live.github.io/actions/workflows/ci.yml"><img src="https://github.com/sonora-live/sonora-live.github.io/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/sonora-live/sonora-live.github.io/actions/workflows/pages.yml"><img src="https://github.com/sonora-live/sonora-live.github.io/actions/workflows/pages.yml/badge.svg" alt="Deploy"></a>
+  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/pages.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/pages.yml/badge.svg" alt="Deploy"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f5b544" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/PWA-installable-52d6b4" alt="Installable web app">
 </p>
@@ -302,7 +302,7 @@ response adds a little air, slightly more while the sustain pedal lets the strin
 You need [Node.js](https://nodejs.org) 22.18 or newer.
 
 ```sh
-git clone https://github.com/sonora-live/sonora-live.github.io.git
+git clone https://github.com/sonora-live/sonora-live.git
 cd sonora-live.github.io
 npm install
 npm run dev
@@ -367,7 +367,7 @@ Built with [Vite](https://vite.dev), [TypeScript](https://www.typescriptlang.org
 
 ## Contributing
 
-Reports from real lessons are the most useful contribution: [open an issue](https://github.com/sonora-live/sonora-live.github.io/issues/new/choose)
+Reports from real lessons are the most useful contribution: [open an issue](https://github.com/sonora-live/sonora-live/issues/new/choose)
 with each side's device, browser and instrument. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to capture the
 connection log and how to work on the code; security problems go through [SECURITY.md](SECURITY.md), and everyone is
 expected to follow the [code of conduct](CODE_OF_CONDUCT.md).

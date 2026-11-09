@@ -8,11 +8,11 @@
   "author": "Erwin Mayer (https://github.com/mayerwin)",
   "homepage": "https://sonora-live.github.io/",
   "bugs": {
-    "url": "https://github.com/sonora-live/sonora-live.github.io/issues"
+    "url": "https://github.com/sonora-live/sonora-live/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/sonora-live/sonora-live.github.io.git"
+    "url": "https://github.com/sonora-live/sonora-live.git"
   },
   "keywords": [
     "webrtc",
