@@ -1,0 +1,113 @@
+name: Sync website to sonora-live.github.io
+
+# Builds Sonora Live and mirrors the output into the sonora-live/sonora-live.github.io repo
+# every time main changes. The website repo is a user/org Pages repo, so GitHub Pages serves
+# its root at https://sonora-live.github.io/.
+#
+# ──────────────────────────────────────────────────────────────────────────
+# Setup: a fine-grained Personal Access Token with Contents: read and write on
+# sonora-live/sonora-live.github.io, stored in this repo as WEBSITE_DEPLOY_TOKEN.
+# ──────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-website
+  cancel-in-progress: true
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build web application
+        run: npm run build
+        env:
+          VITE_TURN_URLS: ${{ vars.TURN_URLS }}
+          VITE_TURN_USERNAME: ${{ vars.TURN_USERNAME }}
+          VITE_TURN_API: ${{ vars.TURN_API }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.TURN_CREDENTIAL }}
+          VITE_TIDESIGHT_SITE_ID: ${{ vars.TIDESIGHT_SITE_ID }}
+          VITE_TIDESIGHT_URL: ${{ vars.TIDESIGHT_URL }}
+
+      - name: Inject subpath redirect and 404 handler
+        run: |
+          touch dist/.nojekyll
+          mkdir -p dist/sonora-live
+          cat << 'EOF' > dist/sonora-live/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Sonora Live</title>
+            <meta http-equiv="refresh" content="0; url=https://sonora-live.github.io/">
+            <link rel="canonical" href="https://sonora-live.github.io/">
+            <script>
+              window.location.replace("https://sonora-live.github.io/" + window.location.search + window.location.hash);
+            </script>
+          </head>
+          <body>
+            <p>Redirecting to <a href="https://sonora-live.github.io/">sonora-live.github.io</a>...</p>
+          </body>
+          </html>
+          EOF
+
+          cat << 'EOF' > dist/404.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Sonora Live</title>
+            <script>
+              (function() {
+                var path = window.location.pathname;
+                var match = path.match(/^\/sonora-live(?:\/(.*))?$/i);
+                if (match) {
+                  var sub = match[1] || '';
+                  window.location.replace("https://sonora-live.github.io/" + sub + window.location.search + window.location.hash);
+                  return;
+                }
+                window.location.replace("https://sonora-live.github.io/");
+              })();
+            </script>
+          </head>
+          <body>
+            <p>Redirecting to <a href="https://sonora-live.github.io/">sonora-live.github.io</a>...</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Mirror to sonora-live.github.io
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+          external_repository: sonora-live/sonora-live.github.io
+          publish_branch: main
+          publish_dir: ./dist
+          force_orphan: true
+          user_name: 'sonora-bot'
+          user_email: 'bot@users.noreply.github.com'
+          commit_message: 'Sync from sonora-live/sonora-live@${{ github.sha }}'
