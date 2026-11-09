@@ -39,6 +39,7 @@ export interface TheirSettings {
   send?: boolean;
 }
 import { log } from './log.ts';
+import { trackEvent } from './analytics.ts';
 import {
   Participants,
   RECONNECT_AFTER_AWAY_MS,
@@ -79,6 +80,7 @@ export class Session {
   /** this tab's id (kept across reloads; a duplicated tab gets its own, see uniqueTab) */
   private readonly id = signal(tabId(newPeerId));
   private tabs: BroadcastChannel | null = null;
+  private enteredAt = 0;
   readonly media = new LocalMedia();
   /** the audio engine (src/media/engine.ts), for tests and diagnostics */
   readonly engine = engine;
@@ -434,6 +436,12 @@ export class Session {
       }
     }
     this.roomPhase.value = fresh ? 'in' : 'joining';
+    this.enteredAt = Date.now();
+    trackEvent(fresh ? 'room_created' : 'room_joined', {
+      role: this.self.peek().role,
+      has_video: this.media.camOn.peek(),
+      has_audio: this.media.micOn.peek(),
+    });
     await this.room.enter(this.code.peek(), fresh, this.since);
     this.roomPhase.value = this.room.phase;
     this.fresh.value = false;
@@ -449,6 +457,11 @@ export class Session {
 
   /** Leave the lesson (camera and microphone are released). */
   leave(): void {
+    if (this.enteredAt > 0) {
+      const durationSec = Math.round((Date.now() - this.enteredAt) / 1000);
+      trackEvent('lesson_ended', { role: this.self.peek().role }, durationSec);
+      this.enteredAt = 0;
+    }
     this.noteLesson();
     this.markInLesson(false);
     this.sayBye();
@@ -602,6 +615,7 @@ export class Session {
   private announceJoin(peer: PeerView): void {
     const name = peer.info.name;
     const role = roleLabel(peer.info.role);
+    trackEvent('peer_joined', { role: peer.info.role });
     if (settings.peek().joinSound) chime('join');
     buzz(40);
     toast({ kind: 'join', title: t('{name} joined', { name }), body: role });
@@ -989,6 +1003,7 @@ export class Session {
       }),
     );
     this.midi.devices.onPresence = (present, name) => {
+      if (present) trackEvent('midi_device_connected', { name });
       toast({
         kind: present ? 'success' : 'warn',
         title: present ? t('{name} connected', { name }) : t('{name} disconnected', { name }),

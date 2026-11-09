@@ -28,6 +28,25 @@ function gitVersion(): string {
   }
 }
 
+/** Injects web analytics snippet and event bridge when analytics variables are provided. */
+function webAnalytics(): Plugin {
+  return {
+    name: 'sonora-analytics',
+    transformIndexHtml(html) {
+      const site = process.env.VITE_TIDESIGHT_SITE_ID || process.env.TIDESIGHT_SITE_ID;
+      const url = process.env.VITE_TIDESIGHT_URL || process.env.TIDESIGHT_URL;
+      if (!site || !url) return html;
+      const snippet = [
+        '    <!-- Web analytics -->',
+        '    <script>window.tidesight=typeof tidesight=="function"?tidesight:function(){(tidesight.q=tidesight.q||[]).push(arguments)};</script>',
+        `    <script async src="${url}" data-site="${site}"></script>`,
+        '    <script>window.addEventListener("app:event",function(e){var d=e.detail||{};if(typeof tidesight=="function"){tidesight("track",d.name,d.props,d.value)}else if(window.tidesight&&window.tidesight.q){window.tidesight.q.push(["track",d.name,d.props,d.value])}});</script>',
+      ].join('\n');
+      return html.replace('</head>', `${snippet}\n  </head>`);
+    },
+  };
+}
+
 const BRAND = '#0f0e13';
 
 export default defineConfig({
@@ -41,6 +60,7 @@ export default defineConfig({
   plugins: [
     localRelay(),
     versioning(),
+    webAnalytics(),
     VitePWA({
       // registered by src/app/update.ts, which also decides when a page reloads (never during a lesson)
       registerType: 'autoUpdate',

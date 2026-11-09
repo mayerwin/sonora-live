@@ -2,6 +2,7 @@
 // New versions: src/app/update.ts.
 
 import { signal } from '@preact/signals';
+import { trackEvent } from './analytics.ts';
 import { toast } from './notify.ts';
 import { isStandalone, os } from './platform.ts';
 import { t } from './i18n.ts';
@@ -27,6 +28,7 @@ export function setupPwa(): void {
   window.addEventListener('appinstalled', () => {
     installable.value = false;
     deferred = null;
+    trackEvent('pwa_installed');
     toast({ kind: 'success', title: t('Sonora Live installed'), body: t('Open it from your home screen or apps.') });
   });
   if (os === 'ios') installable.value = true;

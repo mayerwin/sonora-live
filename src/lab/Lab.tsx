@@ -13,6 +13,7 @@
 
 import { useRef, useState } from 'preact/hooks';
 import { session } from '../app/session.ts';
+import { trackEvent } from '../app/analytics.ts';
 import { audioConstraints } from '../media/constraints.ts';
 import { engine } from '../media/engine.ts';
 import { analyzePass, power, SR, wav, type PassReport, type Report, type Segments } from './analyze.ts';
@@ -296,6 +297,7 @@ export function Lab() {
     stopped.current = false;
     setPhase('running');
     setError('');
+    trackEvent('sound_lab_run');
     try {
       const ctx = engine.ensure();
       if (!ctx || !engine.out) throw new Error('No audio engine in this browser');

@@ -40,6 +40,8 @@ jobs:
           VITE_TURN_USERNAME: ${{ vars.TURN_USERNAME }}
           VITE_TURN_API: ${{ vars.TURN_API }}
           VITE_TURN_CREDENTIAL: ${{ secrets.TURN_CREDENTIAL }}
+          VITE_TIDESIGHT_SITE_ID: ${{ vars.TIDESIGHT_SITE_ID }}
+          VITE_TIDESIGHT_URL: ${{ vars.TIDESIGHT_URL }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
