@@ -237,6 +237,18 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
       </div>
 
       <div class="section">
+        <h3>{t('Backing track')}</h3>
+        <ToggleRow
+          title={t('Show the backing track player')}
+          sub={t(
+            'Load an MP3, WAV or FLAC file: it reaches everyone and plays on each side at full quality, in time with whoever plays or sings along, with a shared speed, key and repeated passage, and your own volume. A track someone else shares always shows.',
+          )}
+          checked={s.backingTrack}
+          onChange={(v) => update({ backingTrack: v })}
+        />
+      </div>
+
+      <div class="section">
         <h3>{t('Quality')}</h3>
         <Seg<AudioQuality>
           label={t('Audio quality')}

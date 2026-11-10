@@ -891,3 +891,106 @@ test('the Sound tab: everyone’s settings at a glance; the teacher turns off th
   await a.context().close();
   await b.context().close();
 });
+
+/** A WAV file of `seconds` of a 440 Hz tone (16-bit mono, 48 kHz). */
+function wav(seconds: number): Buffer {
+  const sr = 48000;
+  const n = sr * seconds;
+  const b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0);
+  b.writeUInt32LE(36 + n * 2, 4);
+  b.write('WAVEfmt ', 8);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(sr, 24);
+  b.writeUInt32LE(sr * 2, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write('data', 36);
+  b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / sr) * 8000), 44 + i * 2);
+  return b;
+}
+
+test('a backing track plays on both sides, in time, with shared speed and key', async ({ browser }) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  const errors: string[] = [];
+  a.on('pageerror', (e) => errors.push(e.message));
+  await enter(a);
+  const code = await codeOf(a);
+  const b = await person(browser, 'Leo', 'student', code);
+  b.on('pageerror', (e) => errors.push(e.message));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+
+  // off by default: no button until it is turned on in Settings (and remembered)
+  await expect(a.getByTestId('btn-track')).toHaveCount(0);
+  await a.getByTestId('btn-settings').click();
+  await a.getByText('Show the backing track player').click();
+  await a.keyboard.press('Escape');
+  await expect(a.getByTestId('btn-track')).toBeVisible();
+  expect(await a.evaluate(() => JSON.parse(localStorage.getItem('sonora.settings.v1')!).backingTrack)).toBe(true);
+  await a.getByTestId('btn-track').click();
+  await a
+    .getByTestId('backing-track')
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav(20) });
+
+  // the student, who never turned it on, gets the file and the player
+  const playerB = b.getByTestId('backing-track');
+  await expect(playerB).toContainText('tone.wav', { timeout: 20_000 });
+  type W = {
+    sonora: {
+      backing: {
+        position: { value: number };
+        sounding: { value: boolean };
+        delay: { value: number };
+        shared: { value: { rate: number; semis: number; ref: string; playing: boolean } | null };
+      };
+      selfId: string;
+    };
+  };
+  const state = (p: Page) =>
+    p.evaluate(() => {
+      const bk = (window as unknown as W).sonora.backing;
+      return {
+        pos: bk.position.value,
+        sounding: bk.sounding.value,
+        delay: bk.delay.value,
+        shared: bk.shared.value,
+      };
+    });
+  // by default the student plays along: the teacher hears it later
+  const leoId = await b.evaluate(() => (window as unknown as W).sonora.selfId);
+  expect((await state(a)).shared?.ref).toBe(leoId);
+
+  await a.getByTestId('track-play').click();
+  await expect.poll(async () => (await state(a)).sounding).toBe(true);
+  await expect.poll(async () => (await state(b)).sounding).toBe(true);
+  await a.waitForTimeout(3000);
+  const [sa, sb] = await Promise.all([state(a), state(b)]);
+  expect(sa.pos).toBeGreaterThan(2);
+  // the teacher is behind the student by about her delay (a local connection: a few tens of ms)
+  expect(Math.abs(sb.pos - sa.pos - sa.delay / 1000)).toBeLessThan(0.25);
+
+  // speed and key are shared
+  await a.getByRole('button', { name: 'Slower' }).click();
+  await a.getByRole('button', { name: 'A semitone higher' }).click();
+  await expect.poll(async () => (await state(b)).shared?.rate).toBe(0.95);
+  await expect.poll(async () => (await state(b)).shared?.semis).toBe(1);
+  await expect(playerB).toContainText('95%');
+
+  // pause from the student's side reaches the teacher
+  await playerB.getByTestId('track-play').click();
+  await expect.poll(async () => (await state(a)).shared?.playing).toBe(false);
+  await expect.poll(async () => (await state(a)).sounding).toBe(false);
+
+  // removed for everyone
+  await a.getByRole('button', { name: 'Remove the track for everyone' }).click();
+  await expect(playerB).toHaveCount(0);
+  expect(errors).toEqual([]);
+  await a.context().close();
+  await b.context().close();
+});

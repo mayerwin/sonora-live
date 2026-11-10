@@ -924,10 +924,11 @@ a:hover {
   height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   grid-template-areas:
     'top chat'
     'stage chat'
+    'track chat'
     'keys chat'
     'bar chat';
   overflow: hidden;
@@ -2601,6 +2602,154 @@ emoji-picker {
   pointer-events: none;
 }
 
+/* ----------------------------------------------------------------------------------------- backing track */
+
+.track {
+  grid-area: track;
+  display: grid;
+  gap: 6px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.track-opts {
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.track-ico {
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+  flex: none;
+}
+
+.track-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track .muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.track .icon-btn:disabled,
+.track .btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.track .icon-btn.sm {
+  width: 30px;
+  height: 30px;
+}
+
+.track .icon-btn.xs {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.track .icon-btn.play {
+  color: #141018;
+  background: var(--gold);
+  border-radius: 50%;
+}
+
+.track-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-seek {
+  position: relative;
+  flex: 1;
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.track-loop {
+  position: absolute;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  background: rgba(245, 181, 68, 0.25);
+  pointer-events: none;
+}
+
+.track-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.track-ctl .lbl {
+  color: var(--muted);
+}
+
+.track-ctl b {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-ctl b.on,
+.track-ctl svg.on {
+  color: var(--gold);
+}
+
+.track .btn-xs {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+.track select {
+  max-width: 150px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+.track-vol {
+  flex: 1;
+  min-width: 140px;
+}
+
+.track-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
 /* ----------------------------------------------------------------------------------------- keyboard */
 
 .keys {
@@ -2773,6 +2922,7 @@ emoji-picker {
     grid-template-areas:
       'top'
       'stage'
+      'track'
       'keys'
       'bar';
   }
@@ -2907,6 +3057,10 @@ emoji-picker {
 
   .keys {
     padding: 0 8px 2px;
+  }
+
+  .track {
+    margin: 0 8px 6px;
   }
 
   .tile-label {
@@ -3051,7 +3205,9 @@ button.chip-btn:hover {
 .lab-json {
   width: 100%;
   min-height: 90px;
-  font: 12px ui-monospace, monospace;
+  font:
+    12px ui-monospace,
+    monospace;
   background: var(--surface);
   color: var(--text-2);
   border: 1px solid var(--line);

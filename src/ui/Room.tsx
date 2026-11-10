@@ -7,6 +7,7 @@ import {
   DoorOpen,
   Ellipsis,
   Keyboard,
+  ListMusic,
   Lock,
   LockOpen,
   LogOut,
@@ -36,7 +37,8 @@ import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { SignalBars } from './common.tsx';
 import { Logo, Wordmark } from './icons.tsx';
-import { chatOpen, keyboardOpen, menu, openSettings, sheet, sideTab } from './state.ts';
+import { chatOpen, keyboardOpen, menu, openSettings, sheet, sideTab, trackOpen } from './state.ts';
+import { BackingPlayer } from './BackingTrack.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { PeerTile, SelfPip, Waiting } from './Tiles.tsx';
 import { ChatPanel } from './Chat.tsx';
@@ -72,12 +74,29 @@ const midiActive = computed(
     session.midi.lastLocal.value > 0,
 );
 
+/** The player shows: opened by hand (with the feature on), or by itself while a track is shared, unless hidden. */
+function trackShows(feature: boolean): boolean {
+  const open = trackOpen.value;
+  return trackInPlay.value ? open !== false : feature && open === true;
+}
+
+/** a backing track is shared in the lesson (or on its way): the player shows for everyone */
+const trackInPlay = computed(
+  () => !!session.backing.track.value || !!session.backing.incoming.value || !!session.backing.shared.value?.id,
+);
+
 export function Room() {
   const peers = session.peers.value;
   const rp = session.roomPhase.value;
   const denied = session.denied.value;
   const s = settings.value;
   const showKeys = keyboardOpen.value || (s.midi.keyboard && midiActive.value);
+  const showTrack = trackShows(s.backingTrack);
+  // a new track (or none any more): the player shows by itself again
+  const trackId = session.backing.shared.value?.id ?? null;
+  useEffect(() => {
+    trackOpen.value = null;
+  }, [trackId]);
 
   useEffect(() => {
     chatOpenTracker();
@@ -101,6 +120,7 @@ export function Room() {
         {!denied && rp !== 'joining' && <SelfPip />}
         <Reactions />
       </main>
+      {showTrack && <BackingPlayer />}
       {showKeys && (
         <PianoKeys
           onClose={() => {
@@ -352,6 +372,10 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
   const unread = session.chat.unread.value;
   const midiOn = session.midi.devices.connected.value;
   const sharing = media.extraKind.value === 'screen';
+  // the button: with the feature on, or while someone shares a track (to hide and show it again)
+  const trackFeature = settings.value.backingTrack || trackInPlay.value;
+  const trackShown = trackShows(settings.value.backingTrack);
+  const toggleTrack = () => (trackOpen.value = !trackShown);
   const open = menu.value;
   const [confirmLeave, setConfirmLeave] = useState(false);
   const toggleMenu = (m: typeof open) => (menu.value = open === m ? null : m);
@@ -465,6 +489,17 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <Keyboard />
           <span>{t('Keys')}</span>
         </button>
+        {trackFeature && (
+          <button
+            class={`ctl hide-sm ${trackShown ? 'active' : ''}`}
+            onClick={toggleTrack}
+            aria-pressed={trackShown}
+            data-testid="btn-track"
+          >
+            <ListMusic />
+            <span>{t('Track')}</span>
+          </button>
+        )}
         {media.canShareScreen ? (
           <button
             class={`ctl hide-sm ${sharing ? 'active' : ''}`}
@@ -572,6 +607,20 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
                   <b>{showKeys ? t('Hide piano keys') : t('Show piano keys')}</b>
                 </span>
               </button>
+              {trackFeature && (
+                <button
+                  class="menu-item"
+                  onClick={() => {
+                    toggleTrack();
+                    menu.value = null;
+                  }}
+                >
+                  <ListMusic />
+                  <span>
+                    <b>{trackShown ? t('Hide the backing track') : t('Backing track')}</b>
+                  </span>
+                </button>
+              )}
               {isMobile && (
                 <button
                   class="menu-item"

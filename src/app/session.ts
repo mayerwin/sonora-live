@@ -25,6 +25,7 @@ import {
 } from '../net/room.ts';
 import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
+import { BackingTrack, MAX_TRACK_BYTES, type TrackMeta } from './backing.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -87,6 +88,17 @@ export class Session {
   readonly meter = new Meter();
   readonly midi = new MidiHub();
   readonly chat = new Chat();
+  /** the backing track everyone plays in time (src/app/backing.ts) */
+  readonly backing = new BackingTrack({
+    selfId: () => this.selfId,
+    observer: () => watching(),
+    peers: () => this.peers.peek(),
+    send: (msg, to) => {
+      for (const l of this.parts.links()) if (!to || l.id === to) l.sendControl(msg);
+    },
+    sendFile: (meta, blob, to) => this.sendTrackFile(meta, blob, to),
+    note: (text) => this.chat.system(text),
+  });
 
   /** lobby: choosing name and role; room: in the lesson; left: after leaving */
   readonly phase = signal<'lobby' | 'room' | 'left'>('lobby');
@@ -141,9 +153,10 @@ export class Session {
   private audioHost: HTMLElement | null = null;
   private wakeLock: { release(): Promise<void> } | null = null;
   private reactionId = 1;
+  /** what each person is sending over the file channel now: a chat file or the backing track */
   private fileIn = new Map<
     string,
-    { id: string; chunks: BlobPart[]; got: number; size: number; mime: string; name: string }
+    { kind: 'chat' | 'track'; id: string; chunks: BlobPart[]; got: number; size: number; mime: string; name: string }
   >();
   private fileOutQueue = Promise.resolve();
   private iceCache: RTCIceServer[] | null = null;
@@ -472,6 +485,7 @@ export class Session {
     this.media.stopAll();
     this.meter.detach();
     this.chat.clear();
+    this.backing.clear();
     this.knocks.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
     this.statsTimer = null;
@@ -609,6 +623,7 @@ export class Session {
     link.setParams(this.sendParams());
     this.sendRoster();
     this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
+    this.backing.onConnected(link.id);
   }
 
   /** The other side introduced itself for the first time: now we can say who joined. */
@@ -644,8 +659,9 @@ export class Session {
     this.midi.peerGone(id);
     // a file they were sending will not finish
     const f = this.fileIn.get(id);
-    if (f) this.chat.updateFile(f.id, { progress: 1, failed: true });
+    if (f?.kind === 'chat') this.chat.updateFile(f.id, { progress: 1, failed: true });
     this.fileIn.delete(id);
+    this.backing.peerGone(id);
     engine.playRemote(id, null);
     const el = this.audioEls.get(id);
     if (el) {
@@ -1094,6 +1110,10 @@ export class Session {
       case 'sound':
         this.onSoundChange(id, msg);
         break;
+      case 'bt':
+      case 'bt-at':
+        this.backing.onControl(id, msg);
+        break;
     }
   }
 
@@ -1274,39 +1294,48 @@ export class Session {
       this.chat.updateFile(fid, { progress: 1 });
       return;
     }
+    const meta = { t: 'file', id: fid, name: file.name, size: file.size, mime: file.type, ts: Date.now() };
+    this.pushFile(links, meta, file, (p) => this.chat.updateFile(fid, { progress: p }));
+  }
+
+  /** The backing track's file, to everyone or to one person. */
+  private sendTrackFile(meta: TrackMeta, blob: Blob, to?: string): void {
+    const links = this.parts.links().filter((l) => l.file.readyState === 'open' && (!to || l.id === to));
+    if (!links.length) return;
+    this.pushFile(links, { t: 'track', ...meta }, blob, () => {});
+  }
+
+  /**
+   * Send `blob` over the file channel of `links`, one after the other and after what is already being sent:
+   * the description (`meta`), the chunks, then the end.
+   */
+  private pushFile(links: PeerLink[], meta: Record<string, unknown>, blob: Blob, progress: (p: number) => void): void {
     this.fileOutQueue = this.fileOutQueue.then(async () => {
-      const meta = JSON.stringify({
-        t: 'file',
-        id: fid,
-        name: file.name,
-        size: file.size,
-        mime: file.type,
-        ts: Date.now(),
-      });
+      const head = JSON.stringify(meta);
       // small chunks: a chunk being sent cannot be overtaken, and MIDI shares the connection
       const chunk = 16 * 1024;
       let sent = 0;
-      const total = file.size * links.length;
+      const total = blob.size * links.length;
       for (const l of links) {
         const ch = l.file;
         const max = (l.pc.sctp?.maxMessageSize ?? 65536) || 65536;
         const size = Math.min(chunk, max);
         try {
-          ch.send(meta);
-          for (let off = 0; off < file.size; off += size) {
-            const buf = await file.slice(off, off + size).arrayBuffer();
+          ch.send(head);
+          for (let off = 0; off < blob.size; off += size) {
+            const buf = await blob.slice(off, off + size).arrayBuffer();
             if (ch.bufferedAmount > 256 * 1024) await drained(ch);
             if (ch.readyState !== 'open') break;
             ch.send(buf);
             sent += buf.byteLength;
-            this.chat.updateFile(fid, { progress: Math.min(0.99, sent / total) });
+            progress(Math.min(0.99, sent / total));
           }
-          ch.send(JSON.stringify({ t: 'end', id: fid }));
+          ch.send(JSON.stringify({ t: 'end', id: meta.id }));
         } catch {
           // this peer left mid-way
         }
       }
-      this.chat.updateFile(fid, { progress: 1 });
+      progress(1);
     });
   }
 
@@ -1322,7 +1351,7 @@ export class Session {
         const size = Math.min(MAX_FILE_BYTES, Number(m.size) || 0);
         const name = String(m.name ?? 'file').slice(0, 120);
         const mime = safeMime(String(m.mime || ''));
-        this.fileIn.set(from, { id: m.id, chunks: [], got: 0, size, mime, name });
+        this.fileIn.set(from, { kind: 'chat', id: m.id, chunks: [], got: 0, size, mime, name });
         const peer = this.peers.peek().find((p) => p.id === from);
         const msg: ChatMessage = {
           id: m.id,
@@ -1336,21 +1365,37 @@ export class Session {
         };
         this.chat.add(msg);
         this.onIncomingChat(msg);
+      } else if (m.t === 'track' && typeof m.id === 'string') {
+        const meta: TrackMeta = {
+          id: m.id.slice(0, 40),
+          name: String(m.name ?? 'track').slice(0, 120),
+          size: Math.min(MAX_TRACK_BYTES, Number(m.size) || 0),
+          mime: safeMime(String(m.mime || '')),
+        };
+        this.fileIn.set(from, { kind: 'track', ...meta, chunks: [], got: 0 });
+        this.backing.receiving(from, meta);
       } else if (m.t === 'end') {
         const f = this.fileIn.get(from);
         if (!f || f.id !== m.id) return;
         this.fileIn.delete(from);
+        const ok = f.got >= f.size;
         const blob = new Blob(f.chunks, { type: f.mime });
-        this.chat.updateFile(f.id, { url: URL.createObjectURL(blob), progress: 1, failed: f.got < f.size });
+        if (f.kind === 'track') {
+          this.backing.received(from, { id: f.id, name: f.name, size: f.size, mime: f.mime }, ok ? blob : null);
+          return;
+        }
+        this.chat.updateFile(f.id, { url: URL.createObjectURL(blob), progress: 1, failed: !ok });
       }
       return;
     }
     const f = this.fileIn.get(from);
     if (!f) return;
-    if (f.got + data.byteLength > MAX_FILE_BYTES) return;
+    if (f.got + data.byteLength > (f.kind === 'track' ? MAX_TRACK_BYTES : MAX_FILE_BYTES)) return;
     f.chunks.push(data);
     f.got += data.byteLength;
-    if (f.size) this.chat.updateFile(f.id, { progress: Math.min(0.99, f.got / f.size) });
+    const p = f.size ? Math.min(0.99, f.got / f.size) : 0;
+    if (f.kind === 'track') this.backing.progress(from, p);
+    else if (f.size) this.chat.updateFile(f.id, { progress: p });
   }
 
   // =========================================================================================== stats

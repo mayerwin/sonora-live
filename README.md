@@ -87,6 +87,11 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   processing, so talking stays clear and the piano is not sent twice; it switches back by itself. One switch keeps
   your piano in the microphone too (*Settings → Sound*, or the MIDI panel). It only ever applies on the side whose
   instrument plays through MIDI.
+- **Backing tracks** (turn on in *Settings → Sound*): load an MP3, WAV or FLAC file and it reaches everyone once,
+  then plays on each side from the original file, never through the microphone or the codec. Play, pause, position,
+  speed (pitch kept), key (in semitones) and a repeated passage are shared; the volume is each person's own. Choose
+  who plays or sings along: they hear the track on time, and everyone else hears it later by exactly how long that
+  person's sound takes to reach them, so voice and track arrive together. Best with headphones.
 - **Clip warning**: with automatic gain off, the meter tells you when a forte passage overloads your microphone.
 
 ### Play together over MIDI

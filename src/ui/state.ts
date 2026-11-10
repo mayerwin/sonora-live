@@ -20,6 +20,8 @@ effect(() => {
   const open = keyboardOpen.value;
   if (open !== settings.peek().midi.keysOpen) updateMidi({ keysOpen: open });
 });
+/** the backing track player opened or hidden by hand; null: by itself (shown while a track is shared) */
+export const trackOpen = signal<boolean | null>(null);
 export const menu = signal<'sound' | 'sound-more' | 'react' | 'more' | null>(null);
 // 'sound': the sound menu under its own button; 'sound-more': the same, opened from More (small screens)
 
