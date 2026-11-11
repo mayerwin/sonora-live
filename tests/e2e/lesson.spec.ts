@@ -718,11 +718,11 @@ test('echo cancelling: on in pure sound on speakers, off by choice, and the soun
   await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: true });
   // the musician says they wear headphones: no cancelling
   await a.getByTestId('btn-settings').click();
-  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
+  await a.getByRole('group', { name: 'Listening on' }).getByRole('button', { name: 'Headphones' }).click();
   await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: false });
   await expect(a.getByText('Echo cancelling is off: wear headphones')).toBeVisible();
   // and back on
-  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'On', exact: true }).click();
+  await a.getByRole('group', { name: 'Listening on' }).getByRole('button', { name: 'Speakers' }).click();
   await expect.poll(mic).toEqual({ mode: 'pure', live: true, echo: true });
   // the other side still hears it
   const audioIn = () =>
@@ -817,7 +817,7 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
     });
   // voice only, echo cancelling off for pure sound, muted, keys open
   await a.getByTestId('btn-settings').click();
-  await a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }).click();
+  await a.getByRole('group', { name: 'Listening on' }).getByRole('button', { name: 'Headphones' }).click();
   await a.getByRole('group', { name: 'Your microphone' }).getByRole('button', { name: 'Voice only' }).click();
   await a.keyboard.press('Escape');
   await a.getByTestId('btn-mic').click();
@@ -834,7 +834,7 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
   await expect(a.getByTestId('keyboard')).toBeVisible();
   await a.getByTestId('btn-settings').click();
   await expect(
-    a.getByRole('group', { name: 'Echo cancelling' }).getByRole('button', { name: 'Off (headphones)' }),
+    a.getByRole('group', { name: 'Listening on' }).getByRole('button', { name: 'Headphones' }),
   ).toHaveAttribute('aria-pressed', 'true');
   await a.keyboard.press('Escape');
 
@@ -870,20 +870,20 @@ test('the Sound tab: everyone’s settings at a glance; the teacher turns off th
   await expect(leo).toContainText('Leo');
   // his settings, as he has them
   await expect(
-    leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Auto' }),
+    leo.getByRole('group', { name: 'Others’ notes on' }).getByRole('button', { name: 'Auto' }),
   ).toHaveAttribute('aria-pressed', 'true');
   // a short label explains itself on hover
   await expect(leo.getByText('Automatic level')).toHaveAttribute('title', /crescendo/);
   // turn off his MIDI playback: changed on his side, and he is told
-  await leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Off' }).click();
+  await leo.getByRole('group', { name: 'Others’ notes on' }).getByRole('button', { name: 'Off' }).click();
   type W = { sonora: { midi: { playOn: { value: string } } } };
   await expect.poll(() => b.evaluate(() => (window as unknown as W).sonora.midi.playOn.value)).toBe('off');
   await expect(b.locator('.toast', { hasText: 'Clara turned off the others’ MIDI notes on your side' })).toBeVisible();
   await expect(
-    leo.getByRole('group', { name: 'Play others’ MIDI' }).getByRole('button', { name: 'Off' }),
+    leo.getByRole('group', { name: 'Others’ notes on' }).getByRole('button', { name: 'Off' }),
   ).toHaveAttribute('aria-pressed', 'true');
   // his MIDI waits for his sound on her side: his send time plus her buffer
-  await expect(leo.locator('.sp-info')).toContainText(/MIDI \+\d+ ms/, { timeout: 10_000 });
+  await expect(leo.locator('.sp-info')).toContainText(/their notes wait \d+ ms/, { timeout: 10_000 });
   // and back to the chat
   await a.getByTestId('tab-chat').click();
   await expect(a.getByTestId('chat')).toBeVisible();
@@ -925,20 +925,16 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   await connected(a, 1);
   await connected(b, 1);
 
-  // off by default: no button until it is turned on in Settings (and remembered)
-  await expect(a.getByTestId('btn-track')).toHaveCount(0);
-  await a.getByTestId('btn-settings').click();
-  await a.getByText('Show the backing track player').click();
-  await a.keyboard.press('Escape');
-  await expect(a.getByTestId('btn-track')).toBeVisible();
-  expect(await a.evaluate(() => JSON.parse(localStorage.getItem('sonora.settings.v1')!).backingTrack)).toBe(true);
+  // the player opens from its button; nobody else sees it until a track is loaded
   await a.getByTestId('btn-track').click();
+  await expect(a.getByTestId('backing-track')).toBeVisible();
+  await expect(b.getByTestId('backing-track')).toHaveCount(0);
   await a
     .getByTestId('backing-track')
     .locator('input[type=file]')
     .setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: wav(20) });
 
-  // the student, who never turned it on, gets the file and the player
+  // the student gets the file, and the player opens by itself
   const playerB = b.getByTestId('backing-track');
   await expect(playerB).toContainText('tone.wav', { timeout: 20_000 });
   type W = {
@@ -972,7 +968,7 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   await a.waitForTimeout(3000);
   const [sa, sb] = await Promise.all([state(a), state(b)]);
   expect(sa.pos).toBeGreaterThan(2);
-  // the teacher is behind the student by about her delay (a local connection: a few tens of ms)
+  // the teacher is behind the student by about her delay (timing measured precisely in latency.spec.ts)
   expect(Math.abs(sb.pos - sa.pos - sa.delay / 1000)).toBeLessThan(0.25);
 
   // speed and key are shared

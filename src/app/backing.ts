@@ -7,20 +7,21 @@
 // hears the track later by how long that person's sound takes to reach them, so the voice or instrument they hear
 // lands in time with the track (src/media/backing-core.ts).
 //
-// The track plays through the audio engine, so the music-safe echo canceller knows it and keeps it out of what the
-// microphone sends; with headphones there is nothing to cancel. Each person sets their own volume.
+// Each side plays it with Signalsmith Stretch (src/media/stretch.ts): any speed with the pitch kept, any key with
+// the speed kept, each change scheduled at an exact time of the audio clock. It plays into the audio engine's
+// track bus, which the echo canceller takes as its reference: on speakers, the track is taken out of what the
+// microphone sends (src/media/engine.ts). Each person sets their own volume.
 //
 // Who may change it: musicians. Observers hear it and set their own volume.
 
 import { signal } from '@preact/signals';
 import { engine } from '../media/engine.ts';
-import pitchWorkletUrl from '../media/pitch.worklet.ts?worker&url';
+import { StretchPlayer } from '../media/stretch.ts';
 import {
   cleanLoop,
   correction,
   localTarget,
   MAX_SEMITONES,
-  pitchLatency,
   timelinePos,
   type Loop,
   type Timeline,
@@ -35,7 +36,7 @@ import type { PeerView } from './participants.ts';
 export const MAX_TRACK_BYTES = 100 * 1024 * 1024;
 const AUDIO_EXT = /\.(mp3|wav|wave|flac|ogg|oga|opus|m4a|aac|webm|aif|aiff)$/i;
 /** a play command starts this long after it is given, so it starts everywhere at the same moment */
-const LEAD_MS = 150;
+const LEAD_MS = 300;
 const TICK_MS = 100;
 /** how often the reference tells the others where its track is */
 const REPORT_MS = 2000;
@@ -102,21 +103,12 @@ export class BackingTrack {
   /** this browser cannot play the file */
   readonly failed = signal(false);
 
-  private el: HTMLAudioElement | null = null;
-  private ready = false;
-  private graph: {
-    src: MediaElementAudioSourceNode;
-    gain: GainNode;
-    pitch: AudioWorkletNode | null;
-    /** the pitch ratio last told to the shifter */
-    ratio: number;
-  } | null = null;
-  private pitchLoaded: Promise<boolean> | null = null;
+  /** this side's player, once the file is decoded */
+  private player: StretchPlayer | null = null;
+  /** the version of the shared state the player's schedule follows (-1: none) */
+  private plannedVer = -1;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private startTimer: ReturnType<typeof setTimeout> | null = null;
   private lastReport = 0;
-  /** the reference's output latency, as it said (ms) */
-  private refOut = 0;
 
   constructor(private host: BackingHost) {}
 
@@ -339,11 +331,13 @@ export class BackingTrack {
     if (!s || !s.playing || s.ref !== from || msg.id !== s.id) return;
     const pos = Number(msg.pos);
     if (!Number.isFinite(pos) || pos < 0) return;
-    const out = Number(msg.out);
-    if (Number.isFinite(out) && out >= 0 && out < 500) this.refOut = out;
     // a report from before the last change (it crossed it on the way) is not taken
     if (Number(msg.ver) !== s.ver) return;
-    this.shared.value = { ...s, pos, anchor: performance.now() - this.oneWay(from) };
+    const now = performance.now();
+    const next = { ...s, pos, anchor: now - this.oneWay(from) };
+    // a few ms of difference is the network's wobble, not drift
+    if (Math.abs(timelinePos(this.timeline(next), now) - timelinePos(this.timeline(s), now)) > 0.015)
+      this.shared.value = next;
   }
 
   /** Someone joined, or connected again: they get the track and where it is. */
@@ -416,55 +410,35 @@ export class BackingTrack {
     this.unload();
     this.failed.value = false;
     this.track.value = tr;
-    const el = new Audio();
-    el.preload = 'auto';
-    // the speed changes, the pitch stays
-    (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
-    el.setAttribute('playsinline', '');
-    el.addEventListener('loadedmetadata', () => {
-      if (this.el !== el) return;
-      this.duration.value = Number.isFinite(el.duration) ? el.duration : 0;
-      this.ready = true;
-      this.reconcile();
-    });
-    el.addEventListener('error', () => {
-      if (this.el !== el) return;
+    const ctx = engine.ensure();
+    const fail = (e?: unknown) => {
+      if (this.track.peek() !== tr) return;
+      if (e) console.warn('[sonora] backing track', e);
       this.failed.value = true;
       toast({
         kind: 'warn',
         title: t('This browser cannot play {file}', { file: tr.name }),
         body: t('Try an MP3 or WAV file.'),
       });
-    });
-    el.src = tr.url;
-    this.el = el;
-    this.applyVolume();
+    };
+    if (!ctx || !engine.trackBus) return fail();
+    void tr.blob
+      .arrayBuffer()
+      .then((data) => StretchPlayer.create(ctx, data, engine.trackBus!))
+      .then((player) => {
+        if (this.track.peek() !== tr) return player.dispose();
+        this.player = player;
+        this.duration.value = player.duration;
+        this.applyVolume();
+        this.reconcile();
+      }, fail);
     if (!this.timer) this.timer = setInterval(() => this.reconcile(), TICK_MS);
   }
 
   private unload(): void {
-    if (this.startTimer) clearTimeout(this.startTimer);
-    this.startTimer = null;
-    const el = this.el;
-    this.el = null;
-    this.ready = false;
-    if (el) {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-    }
-    if (this.graph) {
-      for (const n of [this.graph.src, this.graph.pitch, this.graph.gain]) {
-        if (!n) continue;
-        if (n instanceof AudioWorkletNode) n.port.postMessage({ stop: true });
-        try {
-          n.disconnect();
-        } catch {
-          // already
-        }
-      }
-      this.graph = null;
-    }
+    this.player?.dispose();
+    this.player = null;
+    this.plannedVer = -1;
     const tr = this.track.peek();
     if (tr) URL.revokeObjectURL(tr.url);
     this.track.value = null;
@@ -507,172 +481,91 @@ export class BackingTrack {
   }
 
   /**
-   * How long the reference's sound takes to reach this side's ears (ms): their speakers (as they said), their
-   * microphone's way out, the network, this side's jitter buffer. 0 for the reference itself, or when the
-   * reference is not here.
+   * How long the reference's sound takes to reach this side's ears (ms): their microphone's way out (as they said),
+   * the network, this side's jitter buffer and its speakers. Their own speakers do not count: each side's track is
+   * scheduled for the moment it is heard. 0 for the reference itself, or when the reference is not here.
    */
   private refDelay(s: Shared): number {
     if (s.ref === this.host.selfId()) return 0;
     const p = this.host.peers().find((x) => x.id === s.ref && x.link === 'connected');
     if (!p?.stats || p.stats.rtt === null) return 0;
-    const want = this.refOut + (p.remote?.sendMs ?? 20) + p.stats.rtt / 2 + p.stats.bufferMs;
+    const want = (p.remote?.sendMs ?? 20) + p.stats.rtt / 2 + p.stats.bufferMs + engine.outputLatencyMs;
     // kept steady: changed only when it moves by more than a few ms
     const cur = this.delay.peek();
     if (Math.abs(want - cur) > 12 || cur === 0) this.delay.value = Math.round(want);
     return this.delay.peek();
   }
 
-  /** the pitch shifter's own delay (seconds): the element runs that much ahead */
-  private pitchLead(): number {
-    const ctx = engine.ctx;
-    if (!this.graph?.pitch || !ctx) return 0;
-    return pitchLatency(ctx.sampleRate);
-  }
-
   /** Bring this side's track to where it should be now. */
   private reconcile(): void {
-    const el = this.el;
+    const p = this.player;
     const s = this.shared.peek();
-    if (!el || !s || !this.ready || this.track.peek()?.id !== s.id) return;
-    this.wire(s);
+    if (!p || !s || this.track.peek()?.id !== s.id) return;
     const now = performance.now();
     const isRef = s.ref === this.host.selfId();
     const delay = s.playing ? this.refDelay(s) : 0;
     if (isRef) this.delay.value = 0;
-    const lead = this.pitchLead();
     const target = localTarget(this.timeline(s), now, delay);
-    this.position.value = s.playing && !el.paused ? Math.max(0, el.currentTime - lead) : target.pos;
 
     if (!s.playing || target.ended) {
-      if (!el.paused) el.pause();
-      if (this.startTimer) clearTimeout(this.startTimer);
-      this.startTimer = null;
-      if (Math.abs(el.currentTime - target.pos) > 0.05) el.currentTime = target.pos;
+      p.stop();
+      this.plannedVer = -1;
       this.sounding.value = false;
+      this.position.value = target.pos;
       // at the end: everyone stops by themselves, at the start of the next play
       if (target.ended && s.playing) this.shared.value = { ...s, playing: false, pos: target.pos, anchor: now };
       return;
     }
-    if (target.wait > 0) {
-      // not yet (the lead-in, or the delay behind the reference): ready at the start, then started on time
-      if (!el.paused) el.pause();
-      if (Math.abs(el.currentTime - (target.pos + lead)) > 0.02) el.currentTime = target.pos + lead;
-      if (!this.startTimer && target.wait < TICK_MS * 1.5) {
-        this.startTimer = setTimeout(() => {
-          this.startTimer = null;
-          this.reconcile();
-        }, target.wait);
-      }
-      return;
+    const heard = p.positionAt(now);
+    this.position.value = heard ?? target.pos;
+    this.sounding.value = p.playing;
+    const cur = p.current;
+    // a command (play, seek, speed, key, loop): scheduled as soon as the player can, on the timeline
+    if (!cur || heard === null || this.plannedVer !== s.ver) return this.plan(p, s, delay);
+    if (target.wait > 0) return;
+    let ahead = target.pos - heard;
+    // across the loop's end, the short way round
+    if (s.loop) {
+      const len = s.loop.b - s.loop.a;
+      if (ahead > len / 2) ahead -= len;
+      else if (ahead < -len / 2) ahead += len;
     }
-    const loop = s.loop;
-    if (el.paused) {
-      el.currentTime = target.pos + lead;
-      el.playbackRate = s.rate;
-      void el.play().then(
-        () => (this.sounding.value = true),
-        () => {
-          // the browser wants a tap first (autoplay rules): the next tap or command starts it
-          this.sounding.value = false;
-        },
-      );
-      return;
+    const c = correction(ahead, s.rate);
+    if (c.seek) return this.plan(p, s, delay);
+    // a little faster or slower for a moment (or back to the speed), from where it is
+    if (Math.abs(c.rate - cur.rate) > 1e-4) {
+      const at = p.earliest();
+      p.play(at, p.positionAt(at) ?? target.pos, c.rate, s.semis, s.loop);
     }
-    // the loop's end, here: back to its start
-    if (loop && el.currentTime - lead >= loop.b) {
-      el.currentTime = loop.a + (el.currentTime - lead - loop.b) + lead;
-      if (isRef) this.report(s, true);
-      return;
-    }
-    if (isRef) {
-      // the reference's track is the clock: it plays at the chosen speed and tells the others where it is
-      el.playbackRate = s.rate;
-      this.report(s);
-      return;
-    }
-    const c = correction(target.pos + lead - el.currentTime, s.rate);
-    if (c.seek) el.currentTime = target.pos + lead;
-    if (Math.abs(el.playbackRate - c.rate) > 1e-4) el.playbackRate = c.rate;
+    if (isRef) this.report(s, heard);
   }
 
-  /** The reference: where its track is, to everyone (every few seconds, and at once after a jump). */
-  private report(s: Shared, now = false): void {
-    const el = this.el;
-    if (!el || el.paused) return;
+  /** Schedule the track on the timeline: heard from the first moment the player can, or when it starts here. */
+  private plan(p: StretchPlayer, s: Shared, delay: number): void {
+    const tl = this.timeline(s);
+    const now = performance.now();
+    const at = Math.max(p.earliest(), now + localTarget(tl, now, delay).wait);
+    p.play(at, localTarget(tl, at, delay).pos, s.rate, s.semis, s.loop);
+    this.plannedVer = s.ver;
+    this.sounding.value = true;
+  }
+
+  /** The reference: where its track is heard, to everyone (every few seconds). */
+  private report(s: Shared, pos: number): void {
     const t0 = performance.now();
-    if (!now && t0 - this.lastReport < REPORT_MS) return;
+    if (t0 - this.lastReport < REPORT_MS) return;
     this.lastReport = t0;
-    const pos = Math.max(0, el.currentTime - this.pitchLead());
-    // this side's timeline follows its own track (it is the clock)
-    this.shared.value = { ...s, pos, anchor: t0 };
-    this.host.send({ t: 'bt-at', id: s.id, ver: s.ver, pos, out: engine.outputLatencyMs });
-  }
-
-  /** The element plays through the audio engine (the echo canceller hears it), with the pitch shifter when needed. */
-  private wire(s: Shared): void {
-    const el = this.el;
-    if (!el) return;
-    const ctx = engine.ctx;
-    if (!this.graph) {
-      if (!ctx || ctx.state !== 'running' || !engine.out) return;
-      try {
-        const src = ctx.createMediaElementSource(el);
-        const gain = ctx.createGain();
-        src.connect(gain).connect(engine.out);
-        this.graph = { src, gain, pitch: null, ratio: 1 };
-        this.applyVolume();
-      } catch (e) {
-        console.warn('[sonora] backing track through the engine', e);
-        return;
-      }
-    }
-    const g = this.graph;
-    const want = s.semis !== 0;
-    if (want && !g.pitch && ctx) {
-      if (!this.pitchLoaded)
-        this.pitchLoaded = ctx.audioWorklet.addModule(pitchWorkletUrl).then(
-          () => true,
-          () => false,
-        );
-      void this.pitchLoaded.then((ok) => {
-        if (!ok || this.graph !== g || g.pitch || this.shared.peek()?.semis === 0) return;
-        const node = new AudioWorkletNode(ctx, 'sonora-pitch', {
-          numberOfInputs: 1,
-          numberOfOutputs: 1,
-          outputChannelCount: [2],
-        });
-        g.src.disconnect();
-        g.src.connect(node).connect(g.gain);
-        g.pitch = node;
-        g.ratio = 2 ** ((this.shared.peek()?.semis ?? 0) / 12);
-        node.port.postMessage({ ratio: g.ratio });
-        // the element now runs ahead of the shifter's delay
-        const e2 = this.el;
-        if (e2 && !e2.paused) e2.currentTime += this.pitchLead();
-      });
-    } else if (!want && g.pitch) {
-      const lead = this.pitchLead();
-      g.pitch.port.postMessage({ stop: true });
-      g.src.disconnect();
-      g.pitch.disconnect();
-      g.pitch = null;
-      g.src.connect(g.gain);
-      if (!el.paused) el.currentTime = Math.max(0, el.currentTime - lead);
-    } else if (g.pitch && g.ratio !== 2 ** (s.semis / 12)) {
-      g.ratio = 2 ** (s.semis / 12);
-      g.pitch.port.postMessage({ ratio: g.ratio });
-    }
+    this.host.send({ t: 'bt-at', id: s.id, ver: s.ver, pos });
   }
 
   private applyVolume(): void {
     const v = settings.peek().backingVolume;
     // a perceived volume: the slider's middle is about −12 dB
-    const gain = v * v;
-    if (this.graph) {
-      this.graph.gain.gain.value = gain;
-      if (this.el) this.el.volume = 1;
-    } else if (this.el) {
-      this.el.volume = gain;
-    }
+    this.player?.setVolume(v * v);
+  }
+
+  /** For tests: where this side's track is heard at a moment of the shared wall clock (ms since 1970), or null. */
+  heardAt(epochMs: number): number | null {
+    return this.player?.positionAt(epochMs - performance.timeOrigin) ?? null;
   }
 }

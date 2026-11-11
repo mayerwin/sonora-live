@@ -7,9 +7,15 @@
 // here keeps every note.
 //
 //   someone's sound ─► (steady-noise reduction, if this listener wants it for them) ─┐
-//   built-in piano ─────────────────────────────────────────────────────────────────┴─► out ─► speakers
-//                                                                                        └──► (reference) ─┐
+//   built-in piano ─────────────────────────────────────────────────────────────────┤
+//   backing track ─► track bus ──────────────────────────────────────────────────────┴─► out ─► speakers
+//                        │                                                               └──► (reference) ─┐
+//                        └──────────────────────────────────── (reference, track only) ─────────────────────┤
 //   microphone ───────────────────────────────────────────────────────────────────────► echo canceller ─► sent
+//
+// The track-only canceller runs on speakers whenever a backing track is loaded and the music-safe one does not
+// (that one already hears everything): the browser's own echo cancelling only knows the call's sound, not what
+// the page plays, so the track would otherwise reach the others through the microphone.
 //
 // Noise reduction is the listener's: whoever hears a sound decides how it is cleaned, for themselves only. The
 // others' sound goes through the engine only while echo cancelling runs or noise is reduced for them; otherwise it
@@ -38,6 +44,8 @@ export interface MicChain {
   aec: boolean;
   /** automatic level for music (src/media/level-core.ts) */
   level: boolean;
+  /** cancel the backing track's echo only (when `aec` is off: that one includes it) */
+  track?: boolean;
 }
 
 export interface EchoStats {
@@ -56,6 +64,8 @@ class AudioEngine {
   ctx: AudioContext | null = null;
   /** everything played out loud goes here */
   out: GainNode | null = null;
+  /** the backing track plays here (into `out`): the track-only canceller's reference */
+  trackBus: GainNode | null = null;
   /** worklets loaded (both), or false when this browser cannot run them */
   private ready: Promise<boolean> | null = null;
   wasm: ArrayBuffer | null = null;
@@ -77,6 +87,8 @@ class AudioEngine {
     src: MediaStreamAudioSourceNode | null;
     nodes: AudioNode[];
     aec: AudioWorkletNode | null;
+    /** what the canceller's reference listens to */
+    refSrc?: AudioNode | null;
     /** the automatic level's node (context path), and where the chain ends */
     level?: AudioWorkletNode | null;
     dest?: MediaStreamAudioDestinationNode;
@@ -113,6 +125,8 @@ class AudioEngine {
       clip.curve = softClipCurve();
       clip.oversample = 'none';
       this.out.connect(clip).connect(ctx.destination);
+      this.trackBus = ctx.createGain();
+      this.trackBus.connect(this.out);
       let was = ctx.state;
       ctx.addEventListener('statechange', () => {
         this.running.value = ctx.state === 'running';
@@ -171,13 +185,13 @@ class AudioEngine {
    * the engine cannot run yet (no tap so far: call again once `running`), or at all.
    */
   async process(track: MediaStreamTrack, want: MicChain): Promise<MediaStreamTrack> {
-    if (!want.aec && !want.level) {
+    if (!want.aec && !want.level && !want.track) {
       this.dropChain();
       return track;
     }
     if (track.readyState !== 'live') return track;
     // the level alone: on the microphone's frames where the browser allows it (no audio context, no tap needed)
-    if (!want.aec && framePath()) {
+    if (!want.aec && !want.track && framePath()) {
       const c = this.chain;
       if (c?.frames && c.track === track) return c.output;
       this.dropChain();
@@ -192,10 +206,11 @@ class AudioEngine {
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
     if (ctx.state !== 'running') return track;
     const c = this.chain;
-    if (c && c.track === track && c.want.aec === want.aec && c.want.level === want.level) return c.output;
+    const sameRef = !!c && c.want.aec === want.aec && !!c.want.track === !!want.track;
+    if (c && c.track === track && sameRef && c.want.level === want.level) return c.output;
     // only the level changes after the canceller: keep the canceller (and what it learned of the room) and the
     // same output track, rewire after it
-    if (c && !c.frames && c.track === track && c.aec && want.aec && c.dest) {
+    if (c && !c.frames && c.track === track && c.aec && sameRef && c.dest) {
       c.aec.disconnect();
       if (c.level) {
         stopNode(c.level);
@@ -215,7 +230,8 @@ class AudioEngine {
     const nodes: AudioNode[] = [];
     let aec: AudioWorkletNode | null = null;
     let head: AudioNode = src;
-    if (want.aec && this.wasm && this.out) {
+    const refSrc = want.aec ? this.out : want.track ? this.trackBus : null;
+    if (refSrc && this.wasm) {
       aec = this.aecNode(ctx, channels);
       aec.port.onmessage = (e: MessageEvent<EchoStats & { failed?: string }>) => {
         if (e.data.failed) {
@@ -226,12 +242,12 @@ class AudioEngine {
         this.echo.value = e.data;
       };
       head.connect(aec, 0, 0);
-      // the reference: what goes to the speakers, mixed to mono
+      // the reference: what goes to the speakers (or the track alone), mixed to mono
       const mono = ctx.createGain();
       mono.channelCount = 1;
       mono.channelCountMode = 'explicit';
       mono.channelInterpretation = 'speakers';
-      this.out.connect(mono);
+      refSrc.connect(mono);
       mono.connect(aec, 0, 1);
       nodes.push(mono, aec);
       head = aec;
@@ -248,8 +264,20 @@ class AudioEngine {
     nodes.push(dest);
     const output = dest.stream.getAudioTracks()[0];
     output.contentHint = 'music';
-    this.chain = { track, want: { ...want }, src, nodes, aec, level, dest, channels, output };
-    this.aecOn.value = !!aec;
+    this.chain = {
+      track,
+      want: { ...want },
+      src,
+      nodes,
+      aec,
+      refSrc: aec ? refSrc : null,
+      level,
+      dest,
+      channels,
+      output,
+    };
+    // the others' sound goes through the engine only for the canceller that hears everything
+    this.aecOn.value = !!aec && want.aec;
     this.path.value = 'context';
     return output;
   }
@@ -343,7 +371,7 @@ class AudioEngine {
       }
     }
     try {
-      this.out?.disconnect(c.nodes[0]);
+      if (c.refSrc) c.refSrc.disconnect(c.nodes[0]);
     } catch {
       // not connected
     }

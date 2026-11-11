@@ -953,6 +953,8 @@ export class Session {
     // which echo canceller, and the automatic level, follow their settings
     this.disposers.push(effect(() => void this.media.setMusicEcho(settings.value.musicEcho)));
     this.disposers.push(effect(() => void this.media.setAutoLevel(settings.value.autoLevel)));
+    // a backing track loaded here: on speakers, its echo is cancelled
+    this.disposers.push(effect(() => void this.media.setBacking(!!this.backing.track.value)));
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
     this.disposers.push(effect(() => void this.media.setEcho(this.pureEcho.value)));
     // the chosen output for everything: the others' sound (its elements), and the engine (the built-in piano,

@@ -87,11 +87,14 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   processing, so talking stays clear and the piano is not sent twice; it switches back by itself. One switch keeps
   your piano in the microphone too (*Settings → Sound*, or the MIDI panel). It only ever applies on the side whose
   instrument plays through MIDI.
-- **Backing tracks** (turn on in *Settings → Sound*): load an MP3, WAV or FLAC file and it reaches everyone once,
-  then plays on each side from the original file, never through the microphone or the codec. Play, pause, position,
-  speed (pitch kept), key (in semitones) and a repeated passage are shared; the volume is each person's own. Choose
-  who plays or sings along: they hear the track on time, and everyone else hears it later by exactly how long that
-  person's sound takes to reach them, so voice and track arrive together. Best with headphones.
+- **Backing tracks** (the *Track* button): load an MP3, WAV or FLAC file and it reaches everyone once, then plays on
+  each side from the original file, never through the microphone or the codec. Play, pause, position, speed (pitch
+  kept), key (in semitones) and a repeated passage are shared; the volume is each person's own. Speed and key are
+  [Signalsmith Stretch](https://signalsmith-audio.co.uk/code/stretch/), each change scheduled on the audio clock.
+  Choose who plays or sings along: they hear the track on time, and everyone else hears it later by exactly how
+  long that person's sound takes to reach them, so voice and track arrive together (measured within 20 ms at 200 ms
+  each way, see below). On speakers, the track is always taken out of the microphone (a canceller that knows exactly
+  what the track plays), whichever echo cancelling is chosen.
 - **Clip warning**: with automatic gain off, the meter tells you when a forte passage overloads your microphone.
 
 ### Play together over MIDI
@@ -323,6 +326,8 @@ instead, and `?debug` to see the connection log in the console.
 | `npm run typecheck` | TypeScript, strict |
 | `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping and loading order, translations complete |
 | `npm run e2e` | Browser tests: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
+| `npm run e2e -- latency` | The same over a simulated long-distance link (up to 200 ms each way, jitter): backing track and MIDI in time with the other side's sound, measured by ear, and the track's echo removed on speakers |
+| `npm run netsim` | The network simulator on its own, to try the app by hand over a slow link (see `server/netsim.ts`) |
 | `npm run build` | Production build in `dist/` (installable web app with offline support) |
 | `npm run preview` then `E2E_URL=http://localhost:4173/ npm run e2e` | The browser tests against the production build |
 | `npm run icons` | App icons from `tools/brand/mark.svg` |
@@ -361,6 +366,7 @@ account, or your own [coturn](https://github.com/coturn/coturn) server) and eith
 | [`src/app`](src/app) | The session (everything above, wired together), chat, settings, notifications, installation, languages (`i18n.ts`, `fr.ts`) |
 | [`src/ui`](src/ui) | The interface (Preact + signals): lobby, room, chat, keys, MIDI and settings sheets |
 | [`server/relay.ts`](server/relay.ts) | The local relay of the development server |
+| [`server/netsim.ts`](server/netsim.ts) | A network simulator for tests: a TURN relay that delays, jitters and drops each browser's packets |
 | [`public/piano`](public/piano) | The built-in piano's samples |
 | [`tests`](tests) | Unit tests (Vitest) and browser tests (Playwright) |
 | [`tools`](tools) | Build versioning (cache busting), icon and screenshot generation, brand sources |
@@ -392,6 +398,8 @@ expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - Echo cancelling: [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s MDF echo canceller (BSD licence, Xiph.Org and
   Jean-Marc Valin), in `third_party/speexdsp` with its licence and the small changes marked `Sonora Live`;
   `tools/build-aec.sh` rebuilds `src/media/aec.wasm`.
+- Backing track speed and key: [Signalsmith Stretch](https://signalsmith-audio.co.uk/code/stretch/) by Geraint Luff /
+  Signalsmith Audio (MIT).
 - Icons: [Lucide](https://lucide.dev) (ISC).
 - Rendezvous design: [Boom Buds](https://github.com/mayerwin/Boom-Buds).
 - Bluetooth MIDI on Windows: [Perfect Bluetooth MIDI for Windows](https://github.com/mayerwin/Perfect-Bluetooth-MIDI-For-Windows).

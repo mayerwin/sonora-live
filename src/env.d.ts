@@ -15,3 +15,9 @@ declare module 'virtual:sonora-assets' {
   const versions: { piano: string; emoji: Record<string, string> };
   export default versions;
 }
+
+/** Signalsmith Stretch (no types of its own): see src/media/stretch.ts for the part used. */
+declare module 'signalsmith-stretch' {
+  const SignalsmithStretch: unknown;
+  export default SignalsmithStretch;
+}

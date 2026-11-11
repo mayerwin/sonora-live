@@ -369,38 +369,25 @@ export const FR: Record<string, string> = spaced({
   'You can change it back in the Sound tab.': 'Vous pouvez revenir en arrière dans l’onglet Son.',
   muted: 'micro coupé',
   headphones: 'casque',
-  'Instrument and voice: untouched sound, for an acoustic instrument. Voice only: the browser’s speech processing (removes noise and echo, and part of the music).':
-    'Instrument et voix : son intact, pour un instrument acoustique. Voix seulement : le traitement de la parole du navigateur (retire le bruit et l’écho, et une partie de la musique).',
-  Instrument: 'Instrument',
-  'Voice only with MIDI': 'Voix seule avec le MIDI',
   'While the piano plays through MIDI, the microphone carries the voice only (the piano is not heard twice).':
     'Quand le piano passe en MIDI, le micro ne transmet que la voix (le piano n’est pas entendu deux fois).',
-  'Takes the sound of the speakers out of the microphone, so the others do not hear themselves. Auto: on unless headphones are detected. ● it runs now.':
-    'Retire le son des haut-parleurs du micro, pour que les autres ne s’entendent pas eux-mêmes. Auto : activée sauf si un casque est détecté. ● : elle fonctionne en ce moment.',
   'Music-safe': 'Préserve la musique',
-  'Experimental echo cancelling that never turns the playing down while the others play, but may leave some echo on small speakers.':
-    'Annulation d’écho expérimentale qui n’atténue jamais le jeu quand les autres jouent, mais peut laisser un peu d’écho sur de petits haut-parleurs.',
   'Brings a quiet microphone up slowly, from the loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.':
     'Remonte doucement un micro trop faible, d’après les moments les plus forts, et empêche un forte de saturer : un crescendo reste un crescendo.',
   'Send MIDI': 'Envoyer le MIDI',
   'Notes and pedals played on the instrument reach the others.':
     'Les notes et les pédales jouées sur l’instrument arrivent aux autres.',
-  'Play others’ MIDI': 'Jouer le MIDI des autres',
   'Where the others’ MIDI notes sound on this side: Auto (the instrument if one can play them, else the built-in piano), the built-in piano, the instrument, or not at all (then only what the microphone carries is heard).':
     'Où sonnent ici les notes MIDI des autres : Auto (l’instrument s’il peut les jouer, sinon le piano intégré), le piano intégré, l’instrument, ou nulle part (on n’entend alors que ce que transmet le micro).',
   Piano: 'Piano',
   'The built-in piano': 'Le piano intégré',
   'Instr.': 'Instr.',
   'The instrument connected here': 'L’instrument branché ici',
-  'MIDI in time': 'MIDI synchronisé',
-  'MIDI arrives before the sound of the same moment. The others’ notes (keys and sound) wait for their sound, so voice, microphone and MIDI stay together.':
-    'Le MIDI arrive avant le son du même instant. Les notes des autres (touches et son) attendent leur son, pour que voix, micro et MIDI restent ensemble.',
   'Clean noise (for me)': 'Retirer le bruit (pour moi)',
   'Takes the steady background noise (hiss, a fan) out of what you hear from them, for you only. Adds 8 ms.':
     'Retire le bruit de fond constant (souffle, ventilateur) de ce que vous entendez de cette personne, pour vous seulement. Ajoute 8 ms.',
   'Their sound: when it leaves their side, then your buffer; their MIDI waits that long when in time.':
     'Son son : le temps avant qu’il parte de chez elle, puis votre tampon ; son MIDI attend autant quand il est synchronisé.',
-  MIDI: 'MIDI',
   'Changes to someone else’s settings are made on their device, and they are told.':
     'Les changements des réglages de quelqu’un d’autre se font sur son appareil, et il en est informé.',
   'Automatic level': 'Niveau automatique',
@@ -409,15 +396,8 @@ export const FR: Record<string, string> = spaced({
   'Now: {db} dB.': 'Actuellement : {db} dB.',
   'Your microphone exactly as it comes: set its level in your system’s sound settings.':
     'Votre micro tel quel : réglez son niveau dans les réglages son de votre système.',
-  'Now: <b>on</b>, no headphones detected. Choose Off if you wear headphones.':
-    'Actuellement : <b>activée</b>, aucun casque détecté. Choisissez Désactivée si vous portez un casque.',
   'The sound of your speakers is taken out of your microphone: the others never hear themselves.':
     'Le son de vos haut-parleurs est retiré de votre micro : les autres ne s’entendent jamais eux-mêmes.',
-  'Music-safe echo cancelling (experimental)': 'Annulation d’écho préservant la musique (expérimental)',
-  'Never turns your playing down while the others play, but may leave some echo, especially on phone speakers. It learns your room in the first seconds the others play.':
-    'N’atténue jamais votre jeu quand les autres jouent, mais peut laisser un peu d’écho, surtout sur les haut-parleurs d’un téléphone. Elle apprend votre pièce dès les premières secondes où les autres jouent.',
-  'Off: the browser’s echo cancelling, which removes echo reliably but turns your playing down a little while the others play.':
-    'Désactivé : l’annulation d’écho du navigateur, qui retire l’écho de façon fiable mais atténue un peu votre jeu quand les autres jouent.',
   'the browser’s': 'celle du navigateur',
   'Microphone: voice only': 'Micro : voix seulement',
   'Microphone: instrument and voice': 'Micro : instrument et voix',
@@ -499,10 +479,6 @@ export const FR: Record<string, string> = spaced({
   'Copy report': 'Copier le rapport',
   On: 'Activée',
   'Off (headphones)': 'Désactivée (casque)',
-  'Now: <b>off</b>, headphones detected ({name}).': 'Actuellement : <b>désactivée</b>, casque détecté ({name}).',
-  'Nothing is removed: only with headphones, or the others hear themselves and it can howl.':
-    'Rien n’est retiré : seulement avec un casque, sinon les autres s’entendent eux-mêmes et un larsen peut se produire.',
-  'Voice mode always cancels echo.': 'Le mode voix annule toujours l’écho.',
   'Echo cancelling is off: wear headphones, or the others will hear themselves.':
     'L’annulation d’écho est désactivée : portez un casque, sinon les autres s’entendront eux-mêmes.',
   Quality: 'Qualité',
@@ -685,8 +661,41 @@ export const FR: Record<string, string> = spaced({
   'Best with headphones: the track then never reaches your microphone.':
     'Idéal avec un casque : la piste n’atteint alors jamais votre micro.',
   Track: 'Piste',
-  'Hide the backing track': 'Masquer la piste d’accompagnement',
-  'Show the backing track player': 'Afficher le lecteur de piste d’accompagnement',
-  'Load an MP3, WAV or FLAC file: it reaches everyone and plays on each side at full quality, in time with whoever plays or sings along, with a shared speed, key and repeated passage, and your own volume. A track someone else shares always shows.':
-    'Chargez un fichier MP3, WAV ou FLAC : il parvient à tout le monde et est joué de chaque côté en pleine qualité, en rythme avec la personne qui joue ou chante, avec une vitesse, une tonalité et un passage répété communs, et votre propre volume. Une piste partagée par quelqu’un d’autre s’affiche toujours.',
+  'Listening on': 'Écoute sur',
+  Headphones: 'Casque',
+  'Now: <b>headphones</b> ({name}). Nothing reaches your microphone, so nothing is taken out.':
+    'Actuellement : <b>casque</b> ({name}). Rien n’atteint votre micro, donc rien n’est retiré.',
+  'Now: <b>speakers</b>. Choose Headphones if you wear some: then nothing is processed.':
+    'Actuellement : <b>haut-parleurs</b>. Choisissez Casque si vous en portez un : rien n’est alors traité.',
+  'Nothing is taken out of your microphone: only with headphones, or the others hear themselves and it can howl.':
+    'Rien n’est retiré de votre micro : seulement avec un casque, sinon les autres s’entendent eux-mêmes et cela peut siffler.',
+  'Echo cancelling on speakers': 'Annulation d’écho sur haut-parleurs',
+  'Music-safe (experimental)': 'Spéciale musique (expérimentale)',
+  'Music-safe: your playing is never turned down while the others play, but a little echo may remain, especially on phone or laptop speakers. It learns your room in the first seconds the others play.':
+    'Spéciale musique : votre jeu n’est jamais atténué quand les autres jouent, mais un peu d’écho peut rester, surtout sur les haut-parleurs d’un téléphone ou d’un ordinateur portable. Elle apprend votre pièce dans les premières secondes où les autres jouent.',
+  'Standard: the browser’s echo cancelling. It removes echo reliably, but turns your playing down a little while the others play. Try Music-safe if your sustained notes sound cut for the others.':
+    'Standard : l’annulation d’écho du navigateur. Elle retire l’écho de façon fiable, mais atténue un peu votre jeu quand les autres jouent. Essayez Spéciale musique si vos notes tenues paraissent coupées chez les autres.',
+  'Either way, a backing track playing here is always taken out of your microphone.':
+    'Dans les deux cas, une piste d’accompagnement jouée ici est toujours retirée de votre micro.',
+  'Voice only always uses the browser’s echo cancelling.':
+    'Voix seule utilise toujours l’annulation d’écho du navigateur.',
+  'Others’ notes wait for their sound': 'Les notes des autres attendent leur son',
+  'MIDI notes travel faster than the sound of a microphone. On: the others’ notes are held back until their microphone sound arrives, so their piano, their voice and their instrument are heard together. Off: their notes play the moment they arrive, a little before the rest of their sound.':
+    'Les notes MIDI voyagent plus vite que le son d’un micro. Activé : les notes des autres sont retenues jusqu’à l’arrivée du son de leur micro, pour entendre ensemble leur piano, leur voix et leur instrument. Désactivé : leurs notes sont jouées dès leur arrivée, un peu avant le reste de leur son.',
+  'Microphone sends': 'Le micro envoie',
+  'Untouched sound, for an acoustic instrument and the voice.': 'Son intact, pour un instrument acoustique et la voix.',
+  'The browser’s speech processing: removes noise and echo, and part of the music.':
+    'Le traitement de la parole du navigateur : retire le bruit et l’écho, et une partie de la musique.',
+  'Voice only during MIDI': 'Voix seule pendant le MIDI',
+  'Echo cancelling runs now': 'L’annulation d’écho fonctionne en ce moment',
+  'echo cancelled': 'écho annulé',
+  'Speakers unless headphones are detected by their name.': 'Haut-parleurs, sauf si un casque est reconnu à son nom.',
+  'The speakers’ sound is taken out of the microphone, so the others do not hear themselves.':
+    'Le son des haut-parleurs est retiré du micro, pour que les autres ne s’entendent pas eux-mêmes.',
+  'Nothing reaches the microphone: nothing is taken out.': 'Rien n’atteint le micro : rien n’est retiré.',
+  'Standard: the browser’s, removes echo reliably but turns the playing here down a little while the others play. Music-safe (experimental): never turns the playing down, may leave a little echo on small speakers. A backing track is always taken out.':
+    'Standard : celle du navigateur, retire l’écho de façon fiable mais atténue un peu le jeu ici quand les autres jouent. Spéciale musique (expérimentale) : n’atténue jamais le jeu, peut laisser un peu d’écho sur de petits haut-parleurs. Une piste d’accompagnement est toujours retirée.',
+  'Others’ notes on': 'Notes des autres sur',
+  'Notes wait for sound': 'Notes calées sur le son',
+  'their notes wait {ms} ms': 'leurs notes attendent {ms} ms',
 });

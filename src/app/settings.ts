@@ -40,8 +40,6 @@ export interface Settings {
   cleanNoise: string[];
   notifyJoin: boolean;
   chatOpen: boolean;
-  /** show the backing track player (shared, synchronized audio files); a track someone else shares shows anyway */
-  backingTrack: boolean;
   /** this listener's backing track volume (0..1) */
   backingVolume: number;
   midi: {
@@ -83,7 +81,6 @@ export const DEFAULTS: Settings = {
   cleanNoise: [],
   notifyJoin: true,
   chatOpen: true,
-  backingTrack: false,
   backingVolume: 0.8,
   midi: {
     instrument: '',

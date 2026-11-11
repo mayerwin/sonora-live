@@ -40,6 +40,8 @@ export class LocalMedia {
   private musicEcho = false;
   /** the automatic level for music, in pure mode */
   private autoLevel = true;
+  /** a backing track is loaded: on speakers, its echo is cancelled (src/app/backing.ts) */
+  private backing = false;
   private speakerId = '';
   readonly audioProblem = signal<MediaProblem | null>(null);
   readonly videoProblem = signal<MediaProblem | null>(null);
@@ -246,6 +248,14 @@ export class LocalMedia {
     return this.setEcho(this.wantEcho);
   }
 
+  /** A backing track is loaded (or not): on speakers, its echo is taken out of what is sent. */
+  setBacking(on: boolean): Promise<void> {
+    if (on === this.backing) return Promise.resolve();
+    this.backing = on;
+    if (on) engine.ensure();
+    return this.emitAudio();
+  }
+
   /** The automatic level for music, in pure mode. */
   setAutoLevel(on: boolean): Promise<void> {
     this.autoLevel = on;
@@ -322,7 +332,13 @@ export class LocalMedia {
   private async doEmit(): Promise<void> {
     const raw = this.audio.peek();
     let out = raw;
-    const want = { aec: !!raw && this.engineEcho(), level: !!raw && this.autoLevel && this.mode.peek() === 'pure' };
+    const aec = !!raw && this.engineEcho();
+    const want = {
+      aec,
+      level: !!raw && this.autoLevel && this.mode.peek() === 'pure',
+      // on speakers, a backing track: the browser's echo cancelling does not know it, the engine's does
+      track: !!raw && !aec && this.backing && this.wantEcho && !engine.aecUnavailable.peek(),
+    };
     try {
       if (raw) out = await engine.process(raw, want);
     } catch (e) {

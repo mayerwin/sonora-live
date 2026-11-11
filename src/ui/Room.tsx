@@ -74,10 +74,10 @@ const midiActive = computed(
     session.midi.lastLocal.value > 0,
 );
 
-/** The player shows: opened by hand (with the feature on), or by itself while a track is shared, unless hidden. */
-function trackShows(feature: boolean): boolean {
+/** The player shows: opened by hand, or by itself while a track is shared (unless hidden by hand). */
+function trackShows(): boolean {
   const open = trackOpen.value;
-  return trackInPlay.value ? open !== false : feature && open === true;
+  return trackInPlay.value ? open !== false : open === true;
 }
 
 /** a backing track is shared in the lesson (or on its way): the player shows for everyone */
@@ -91,7 +91,7 @@ export function Room() {
   const denied = session.denied.value;
   const s = settings.value;
   const showKeys = keyboardOpen.value || (s.midi.keyboard && midiActive.value);
-  const showTrack = trackShows(s.backingTrack);
+  const showTrack = trackShows();
   // a new track (or none any more): the player shows by itself again
   const trackId = session.backing.shared.value?.id ?? null;
   useEffect(() => {
@@ -372,9 +372,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
   const unread = session.chat.unread.value;
   const midiOn = session.midi.devices.connected.value;
   const sharing = media.extraKind.value === 'screen';
-  // the button: with the feature on, or while someone shares a track (to hide and show it again)
-  const trackFeature = settings.value.backingTrack || trackInPlay.value;
-  const trackShown = trackShows(settings.value.backingTrack);
+  const trackShown = trackShows();
   const toggleTrack = () => (trackOpen.value = !trackShown);
   const open = menu.value;
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -489,17 +487,15 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <Keyboard />
           <span>{t('Keys')}</span>
         </button>
-        {trackFeature && (
-          <button
-            class={`ctl hide-sm ${trackShown ? 'active' : ''}`}
-            onClick={toggleTrack}
-            aria-pressed={trackShown}
-            data-testid="btn-track"
-          >
-            <ListMusic />
-            <span>{t('Track')}</span>
-          </button>
-        )}
+        <button
+          class={`ctl ${trackShown ? 'active' : ''}`}
+          onClick={toggleTrack}
+          aria-pressed={trackShown}
+          data-testid="btn-track"
+        >
+          <ListMusic />
+          <span>{t('Track')}</span>
+        </button>
         {media.canShareScreen ? (
           <button
             class={`ctl hide-sm ${sharing ? 'active' : ''}`}
@@ -607,20 +603,6 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
                   <b>{showKeys ? t('Hide piano keys') : t('Show piano keys')}</b>
                 </span>
               </button>
-              {trackFeature && (
-                <button
-                  class="menu-item"
-                  onClick={() => {
-                    toggleTrack();
-                    menu.value = null;
-                  }}
-                >
-                  <ListMusic />
-                  <span>
-                    <b>{trackShown ? t('Hide the backing track') : t('Backing track')}</b>
-                  </span>
-                </button>
-              )}
               {isMobile && (
                 <button
                   class="menu-item"

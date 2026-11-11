@@ -5,8 +5,6 @@ import {
   correction,
   localTarget,
   MAX_NUDGE,
-  pitchLatency,
-  PitchShifter,
   stepRate,
   timelinePos,
   wrap,
@@ -81,40 +79,5 @@ describe('backing track timeline', () => {
     expect(clockOf(0)).toBe('0:00');
     expect(clockOf(65.9)).toBe('1:05');
     expect(clockOf(NaN)).toBe('0:00');
-  });
-});
-
-describe('pitch shifter', () => {
-  const sr = 48000;
-  const sine = (f: number, n: number) =>
-    Float32Array.from({ length: n }, (_, i) => Math.sin((2 * Math.PI * f * i) / sr));
-  /** frequency from zero crossings */
-  const freq = (x: Float32Array) => {
-    let c = 0;
-    for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) c++;
-    return (c * sr) / x.length;
-  };
-
-  it('keeps the sound unchanged at ratio 1 (delayed only)', () => {
-    const p = new PitchShifter(sr);
-    const out = new Float32Array(sr);
-    p.process(sine(440, sr), out);
-    expect(freq(out.subarray(sr / 2))).toBeCloseTo(440, -1);
-  });
-
-  it('moves the pitch by the ratio, keeping the level', () => {
-    const p = new PitchShifter(sr);
-    p.ratio = 2 ** (7 / 12);
-    const out = new Float32Array(sr);
-    p.process(sine(440, sr), out);
-    const tail = out.subarray(sr / 2);
-    expect(Math.abs(freq(tail) - 440 * 2 ** (7 / 12))).toBeLessThan(15);
-    const rms = Math.sqrt(tail.reduce((a, v) => a + v * v, 0) / tail.length);
-    expect(rms).toBeGreaterThan(0.5);
-    expect(rms).toBeLessThan(0.9);
-  });
-
-  it('adds about 30 ms', () => {
-    expect(pitchLatency(sr)).toBeCloseTo(0.03, 3);
   });
 });

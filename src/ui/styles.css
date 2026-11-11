@@ -3021,9 +3021,9 @@ emoji-picker {
   }
 
   .ctl {
-    min-width: 50px;
+    min-width: 46px;
     height: 52px;
-    padding: 0 4px;
+    padding: 0 3px;
     font-size: 10.5px;
   }
 
@@ -3339,6 +3339,45 @@ button.chip-btn:hover {
   color: var(--gold-ink);
 }
 
+/* a choice across the card, under its group heading (room for whole words) */
+.sub-h {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.sp-seg.sp-wide {
+  display: flex;
+  margin: 2px 0 4px;
+}
+
+.sp-seg.sp-wide button {
+  font-size: 12.5px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-group {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sp-group .sp-live {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--green);
+}
+
 .sp-seg button:disabled,
 .sp-switch:disabled {
   cursor: default;
@@ -3407,4 +3446,23 @@ button.chip-btn:hover {
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--text);
+}
+
+/* the narrowest phones: seven controls in one row (Track among them) */
+@media (max-width: 400px) {
+  .bar {
+    padding-left: 4px;
+    padding-right: 4px;
+    gap: 2px;
+  }
+
+  .bar-group {
+    padding: 3px;
+    gap: 0;
+  }
+
+  .ctl {
+    min-width: 42px;
+    padding: 0 2px;
+  }
 }

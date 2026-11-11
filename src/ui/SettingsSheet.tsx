@@ -25,6 +25,7 @@ import { canPickSpeaker, listDevices, type DeviceLists } from '../media/local.ts
 import { hasBuiltInTurn } from '../net/ice.ts';
 import { LevelBars, Rich, Seg, Sheet, ToggleRow } from './common.tsx';
 import { SoundCheck } from './SoundCheck.tsx';
+import { midiSyncTip } from './SoundPanel.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
 
@@ -176,15 +177,15 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
       </div>
 
       <div class="section">
-        <h3>{t('Echo cancelling')}</h3>
+        <h3>{t('Listening on')}</h3>
         <Seg<EchoSetting>
-          label={t('Echo cancelling')}
+          label={t('Listening on')}
           value={s.echo}
           onChange={(v) => update({ echo: v })}
           options={[
             { value: 'auto', label: t('Auto') },
-            { value: 'on', label: t('On') },
-            { value: 'off', label: t('Off (headphones)') },
+            { value: 'on', label: t('Speakers') },
+            { value: 'off', label: t('Headphones') },
           ]}
         />
         <p class="lead">
@@ -192,32 +193,46 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
             <Rich
               text={
                 media.headphones.value
-                  ? t('Now: <b>off</b>, headphones detected ({name}).', { name: speakerLabel })
-                  : t('Now: <b>on</b>, no headphones detected. Choose Off if you wear headphones.')
+                  ? t('Now: <b>headphones</b> ({name}). Nothing reaches your microphone, so nothing is taken out.', {
+                      name: speakerLabel,
+                    })
+                  : t('Now: <b>speakers</b>. Choose Headphones if you wear some: then nothing is processed.')
               }
             />
           )}
           {s.echo === 'on' &&
             t('The sound of your speakers is taken out of your microphone: the others never hear themselves.')}
           {s.echo === 'off' &&
-            t('Nothing is removed: only with headphones, or the others hear themselves and it can howl.')}{' '}
-          {mode === 'voice' && t('Voice mode always cancels echo.')}
+            t(
+              'Nothing is taken out of your microphone: only with headphones, or the others hear themselves and it can howl.',
+            )}
         </p>
-        {s.echo !== 'off' && mode === 'pure' && (
-          <ToggleRow
-            title={t('Music-safe echo cancelling (experimental)')}
-            sub={
-              s.musicEcho
+        {session.pureEcho.value && mode === 'pure' && (
+          <>
+            <h4 class="sub-h">{t('Echo cancelling on speakers')}</h4>
+            <Seg<'std' | 'music'>
+              label={t('Echo cancelling on speakers')}
+              value={s.musicEcho ? 'music' : 'std'}
+              onChange={(v) => update({ musicEcho: v === 'music' })}
+              options={[
+                { value: 'std', label: t('Standard') },
+                { value: 'music', label: t('Music-safe (experimental)') },
+              ]}
+            />
+            <p class="lead">
+              {s.musicEcho
                 ? t(
-                    'Never turns your playing down while the others play, but may leave some echo, especially on phone speakers. It learns your room in the first seconds the others play.',
+                    'Music-safe: your playing is never turned down while the others play, but a little echo may remain, especially on phone or laptop speakers. It learns your room in the first seconds the others play.',
                   )
                 : t(
-                    'Off: the browser’s echo cancelling, which removes echo reliably but turns your playing down a little while the others play.',
-                  )
-            }
-            checked={s.musicEcho}
-            onChange={(v) => update({ musicEcho: v })}
-          />
+                    'Standard: the browser’s echo cancelling. It removes echo reliably, but turns your playing down a little while the others play. Try Music-safe if your sustained notes sound cut for the others.',
+                  )}{' '}
+              {t('Either way, a backing track playing here is always taken out of your microphone.')}
+            </p>
+          </>
+        )}
+        {session.pureEcho.value && mode === 'voice' && (
+          <p class="lead">{t('Voice only always uses the browser’s echo cancelling.')}</p>
         )}
         {mode === 'pure' && !session.pureEcho.value && !media.headphones.value && (
           <div class="hint hint-warn">
@@ -228,24 +243,22 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
       </div>
 
       <div class="section">
+        <h3>MIDI</h3>
+        <ToggleRow
+          title={t('Others’ notes wait for their sound')}
+          sub={midiSyncTip()}
+          checked={s.midiSync}
+          onChange={(v) => update({ midiSync: v })}
+        />
+      </div>
+
+      <div class="section">
         <h3>{t('Background noise')}</h3>
         <p class="lead" style="margin-top:0">
           {t(
             'Whoever hears it removes it: tap the sound label on someone’s picture to clean the steady noise (hiss, a fan) from what you hear from them.',
           )}
         </p>
-      </div>
-
-      <div class="section">
-        <h3>{t('Backing track')}</h3>
-        <ToggleRow
-          title={t('Show the backing track player')}
-          sub={t(
-            'Load an MP3, WAV or FLAC file: it reaches everyone and plays on each side at full quality, in time with whoever plays or sings along, with a shared speed, key and repeated passage, and your own volume. A track someone else shares always shows.',
-          )}
-          checked={s.backingTrack}
-          onChange={(v) => update({ backingTrack: v })}
-        />
       </div>
 
       <div class="section">

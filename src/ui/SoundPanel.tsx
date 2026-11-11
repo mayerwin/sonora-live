@@ -84,10 +84,12 @@ function Choice<T extends string>(props: {
   label: string;
   options: { value: T; label: string; tip?: string }[];
   disabled?: boolean;
+  /** the full width of the card, under its heading */
+  wide?: boolean;
   onChange: (v: T) => void;
 }) {
   return (
-    <span class="sp-seg" role="group" aria-label={props.label}>
+    <span class={`sp-seg ${props.wide ? 'sp-wide' : ''}`} role="group" aria-label={props.label}>
       {props.options.map((o) => (
         <button
           type="button"
@@ -154,6 +156,17 @@ function theirs(p: PeerView): View {
   };
 }
 
+/** On speakers (or set so): echo cancelling applies. */
+function speakers(v: View): boolean {
+  return v.echo === 'on' || (v.echo === 'auto' && !v.headphones);
+}
+
+/** What “Notes wait for sound” does, in words. */
+export const midiSyncTip = () =>
+  t(
+    'MIDI notes travel faster than the sound of a microphone. On: the others’ notes are held back until their microphone sound arrives, so their piano, their voice and their instrument are heard together. Off: their notes play the moment they arrive, a little before the rest of their sound.',
+  );
+
 function Card({ peer }: { peer: PeerView | null }) {
   const me = !peer;
   const v = me ? mine() : theirs(peer);
@@ -182,88 +195,118 @@ function Card({ peer }: { peer: PeerView | null }) {
         {v.device && <span class="sp-tag sp-ok">{v.device}</span>}
       </header>
 
-      <Row
-        label={t('Microphone')}
-        tip={t(
-          'Instrument and voice: untouched sound, for an acoustic instrument. Voice only: the browser’s speech processing (removes noise and echo, and part of the music).',
-        )}
-      >
-        <Choice<'pure' | 'voice'>
-          label={t('Microphone')}
-          value={v.sound ? (v.sound === 'voice' ? 'voice' : 'pure') : undefined}
-          disabled={locked}
-          onChange={(x) => set({ sound: x === 'voice' ? 'voice' : 'auto' })}
-          options={[
-            { value: 'pure', label: t('Instrument') },
-            { value: 'voice', label: t('Voice') },
-          ]}
-        />
-      </Row>
+      <h4 class="sp-group">{t('Microphone sends')}</h4>
+      <Choice<'pure' | 'voice'>
+        label={t('Microphone sends')}
+        wide
+        value={v.sound ? (v.sound === 'voice' ? 'voice' : 'pure') : undefined}
+        disabled={locked}
+        onChange={(x) => set({ sound: x === 'voice' ? 'voice' : 'auto' })}
+        options={[
+          {
+            value: 'pure',
+            label: t('Instrument and voice'),
+            tip: t('Untouched sound, for an acoustic instrument and the voice.'),
+          },
+          {
+            value: 'voice',
+            label: t('Voice only'),
+            tip: t('The browser’s speech processing: removes noise and echo, and part of the music.'),
+          },
+        ]}
+      />
       {v.sound !== 'voice' && (
         <Row
-          label={t('Voice only with MIDI')}
+          label={t('Voice only during MIDI')}
           tip={t(
             'While the piano plays through MIDI, the microphone carries the voice only (the piano is not heard twice).',
           )}
         >
           <Switch
-            label={t('Voice only with MIDI')}
+            label={t('Voice only during MIDI')}
             on={v.sound === undefined ? undefined : v.sound === 'auto'}
             disabled={locked}
             onChange={(x) => set({ sound: x ? 'auto' : 'pure' })}
           />
         </Row>
       )}
-      <Row
-        label={v.echoOn ? `${t('Echo cancelling')} ●` : t('Echo cancelling')}
-        tip={t(
-          'Takes the sound of the speakers out of the microphone, so the others do not hear themselves. Auto: on unless headphones are detected. ● it runs now.',
-        )}
-      >
-        <Choice<EchoSetting>
-          label={t('Echo cancelling')}
-          value={v.echo}
-          disabled={locked}
-          onChange={(x) => set({ echo: x })}
-          options={[
-            { value: 'auto', label: t('Auto') },
-            { value: 'on', label: t('On') },
-            { value: 'off', label: t('Off') },
-          ]}
-        />
-      </Row>
-      <Row
-        label={t('Music-safe')}
-        tip={t(
-          'Experimental echo cancelling that never turns the playing down while the others play, but may leave some echo on small speakers.',
-        )}
-      >
-        <Switch label={t('Music-safe')} on={v.musicEcho} disabled={locked} onChange={(x) => set({ musicEcho: x })} />
-      </Row>
-      <Row
-        label={t('Automatic level')}
-        tip={t(
-          'Brings a quiet microphone up slowly, from the loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.',
-        )}
-      >
-        <Switch
+      {v.sound !== 'voice' && (
+        <Row
           label={t('Automatic level')}
-          on={v.autoLevel}
-          disabled={locked}
-          onChange={(x) => set({ autoLevel: x })}
-        />
-      </Row>
+          tip={t(
+            'Brings a quiet microphone up slowly, from the loudest moments, and keeps a forte from clipping: a crescendo stays a crescendo.',
+          )}
+        >
+          <Switch
+            label={t('Automatic level')}
+            on={v.autoLevel}
+            disabled={locked}
+            onChange={(x) => set({ autoLevel: x })}
+          />
+        </Row>
+      )}
+
+      <h4 class="sp-group">
+        {t('Listening on')}
+        {v.echoOn && (
+          <span class="sp-live" title={t('Echo cancelling runs now')}>
+            {' '}
+            · {t('echo cancelled')}
+          </span>
+        )}
+      </h4>
+      <Choice<EchoSetting>
+        label={t('Listening on')}
+        wide
+        value={v.echo}
+        disabled={locked}
+        onChange={(x) => set({ echo: x })}
+        options={[
+          {
+            value: 'auto',
+            label: t('Auto'),
+            tip: t('Speakers unless headphones are detected by their name.'),
+          },
+          {
+            value: 'on',
+            label: t('Speakers'),
+            tip: t('The speakers’ sound is taken out of the microphone, so the others do not hear themselves.'),
+          },
+          { value: 'off', label: t('Headphones'), tip: t('Nothing reaches the microphone: nothing is taken out.') },
+        ]}
+      />
+      {speakers(v) && v.sound !== 'voice' && (
+        <Row
+          label={t('Echo cancelling')}
+          tip={t(
+            'Standard: the browser’s, removes echo reliably but turns the playing here down a little while the others play. Music-safe (experimental): never turns the playing down, may leave a little echo on small speakers. A backing track is always taken out.',
+          )}
+        >
+          <Choice<'std' | 'music'>
+            label={t('Echo cancelling')}
+            value={v.musicEcho === undefined ? undefined : v.musicEcho ? 'music' : 'std'}
+            disabled={locked}
+            onChange={(x) => set({ musicEcho: x === 'music' })}
+            options={[
+              { value: 'std', label: t('Standard') },
+              { value: 'music', label: t('Music-safe') },
+            ]}
+          />
+        </Row>
+      )}
+
+      <h4 class="sp-group">MIDI</h4>
       <Row label={t('Send MIDI')} tip={t('Notes and pedals played on the instrument reach the others.')}>
         <Switch label={t('Send MIDI')} on={v.send} disabled={locked} onChange={(x) => set({ send: x })} />
       </Row>
       <Row
-        label={t('Play others’ MIDI')}
+        label={t('Others’ notes on')}
         tip={t(
           'Where the others’ MIDI notes sound on this side: Auto (the instrument if one can play them, else the built-in piano), the built-in piano, the instrument, or not at all (then only what the microphone carries is heard).',
         )}
       >
         <Choice<PlayOn>
-          label={t('Play others’ MIDI')}
+          label={t('Others’ notes on')}
           value={v.playOn}
           disabled={locked}
           onChange={(x) => set({ playOn: x })}
@@ -277,13 +320,12 @@ function Card({ peer }: { peer: PeerView | null }) {
       </Row>
 
       {me ? (
-        <Row
-          label={t('MIDI in time')}
-          tip={t(
-            'MIDI arrives before the sound of the same moment. The others’ notes (keys and sound) wait for their sound, so voice, microphone and MIDI stay together.',
-          )}
-        >
-          <Switch label={t('MIDI in time')} on={settings.value.midiSync} onChange={(x) => update({ midiSync: x })} />
+        <Row label={t('Notes wait for sound')} tip={midiSyncTip()}>
+          <Switch
+            label={t('Notes wait for sound')}
+            on={settings.value.midiSync}
+            onChange={(x) => update({ midiSync: x })}
+          />
         </Row>
       ) : (
         <>
@@ -306,7 +348,7 @@ function Card({ peer }: { peer: PeerView | null }) {
             )}
           >
             {v.sendMs != null && st ? `${t('Sound')} ${v.sendMs} + ${st.bufferMs} ms` : ''}
-            {settings.value.midiSync && delay > 0 ? ` · ${t('MIDI')} +${delay} ms` : ''}
+            {settings.value.midiSync && delay > 0 ? ` · ${t('their notes wait {ms} ms', { ms: delay })}` : ''}
           </p>
         </>
       )}
