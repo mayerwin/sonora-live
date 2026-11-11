@@ -19,6 +19,7 @@
 import { signal } from '@preact/signals';
 import versions from 'virtual:sonora-assets';
 import { engine } from '../media/engine.ts';
+import { isMobile } from '../app/platform.ts';
 
 /** Sampled notes per layer (MIDI numbers), from public/piano. */
 const SAMPLES: Record<LayerName, number[]> = {
@@ -166,6 +167,11 @@ interface PlayerPedals {
   soft: boolean;
 }
 
+/** background loading: the pause after each sample (ms) */
+const GENTLE_GAP_MS = 250;
+/** loading for notes about to be played: the pause after each sample (ms) */
+const URGENT_GAP_MS = 30;
+
 export class Piano {
   readonly loaded = signal(0);
   readonly total = signal(0);
@@ -184,7 +190,9 @@ export class Piano {
   private loaded$: (() => void) | null = null;
   private queue: [LayerName, number][] = [];
   private active = 0;
-  private workers = 2;
+  private workers = 1;
+  /** background loading (entering a lesson): one sample at a time, with a pause after each (pump) */
+  private gentle = true;
   private volume = 0.8;
   private reverbOn = true;
   private wave: PeriodicWave | null = null;
@@ -234,11 +242,17 @@ export class Piano {
 
   /**
    * Start loading the samples. `urgent` when notes are about to be played here: more downloads at once; otherwise
-   * (entering a lesson) two at a time, so the call keeps its bandwidth. The most used layer comes first, spread
+   * (entering a lesson) one at a time with a pause after each, so the call keeps its bandwidth and the audio its
+   * processor time: decoding in bursts starved the audio engine (measured: the sound sent through it dropped out,
+   * and the other side's jitter buffer then grew by over 100 ms for the first half minute of the lesson). The most used layer comes first, spread
    * over the keyboard so that every key soon has a real sample close by. Light connections only get one layer.
    */
   load(urgent = true): Promise<void> {
-    if (urgent) this.workers = 6;
+    if (urgent) {
+      // two at a time, briefly apart: six at once starved the audio for some 150 ms on a 4-core machine
+      this.workers = 1;
+      this.gentle = false;
+    }
     if (!this.loading) {
       const ctx = this.context();
       if (!ctx) return Promise.resolve();
@@ -246,7 +260,10 @@ export class Piano {
       const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
         .connection;
       const light = !!conn?.saveData || /(^|-)2g|3g/.test(conn?.effectiveType ?? '');
-      const layers = light ? LOAD_ORDER.slice(0, 1) : LOAD_ORDER;
+      // all four layers take some 500 MB once decoded: phones, tablets and small computers keep one (about 130)
+      const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+      const small = isMobile || (typeof memory === 'number' && memory <= 4);
+      const layers = light || small ? LOAD_ORDER.slice(0, 1) : LOAD_ORDER;
       for (const l of layers) for (const n of spreadOrder(SAMPLES[l])) this.queue.push([l, n]);
       this.total.value = this.queue.length;
       this.loading = new Promise((resolve) => (this.loaded$ = resolve));
@@ -279,7 +296,7 @@ export class Piano {
           else this.ready.value = true;
           this.loaded$?.();
         }
-        this.pump();
+        setTimeout(() => this.pump(), this.gentle ? GENTLE_GAP_MS : URGENT_GAP_MS);
       });
     }
   }

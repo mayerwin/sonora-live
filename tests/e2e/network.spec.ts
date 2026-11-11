@@ -269,9 +269,10 @@ test('the delay the app shows follows the real mouth-to-ear delay as the network
     { up: 60, down: 60, jitter: 10 },
     { up: 100, down: 100, jitter: 25 },
   ]) {
+    const before = await audioIn(a);
     sim.retune(user, net);
-    // the jitter buffer and the round-trip estimate settle
-    await a.waitForTimeout(6000);
+    // the jitter buffer and the round-trip estimate settle (longer at first: a new call's buffer starts high)
+    await a.waitForTimeout(rows.length ? 6000 : 12_000);
     const lag = await mouthToEar(a, b);
     const shown = await a.evaluate(() => (window as unknown as W).sonora.peers.value[0].stats?.latencyMs ?? 0);
     const midi = await a.evaluate(() => {
@@ -306,6 +307,9 @@ test('the delay the app shows follows the real mouth-to-ear delay as the network
           }),
         ),
       );
+    const after = await audioIn(a);
+    const concealed = (after.concealed - before.concealed) / Math.max(1, after.samples - before.samples);
+    console.log(`${net.up + net.down} ms ±${net.jitter}: ${(concealed * 100).toFixed(2)}% of his sound concealed`);
     rows.push({ net: `${net.up + net.down} ms ±${net.jitter}`, measured: lag, shown, midi });
   }
   // the two pages' clocks are compared through the wall clock, which may be offset by a constant: compare what
@@ -317,14 +321,27 @@ test('the delay the app shows follows the real mouth-to-ear delay as the network
     const real = r.measured - base.measured;
     const shown = r.shown - base.shown;
     console.log(`${r.net} each way: adds ${real} ms measured, ${shown} ms shown; MIDI waits ${r.midi} ms`);
-    // It follows the network, roughly: right after a change the real delay overshoots and moves while the jitter
-    // buffer adapts, and the shown one reads low on degraded links (some 40 ms here, up to 90 ms on CI machines:
-    // an open question). What musicians feel is checked precisely elsewhere (MIDI and track against the sound).
-    expect(Math.abs(shown - real)).toBeLessThan(150);
+    // within some 40 ms here (the real delay moves while the jitter buffer adapts to each change); room for slower
+    // CI machines. What musicians feel is checked precisely elsewhere (MIDI and track against the sound).
+    expect(Math.abs(shown - real)).toBeLessThan(100);
   }
   await a.context().close();
   await b.context().close();
 });
+
+/** Her side's counters of his sound: samples received and samples the jitter buffer had to invent. */
+function audioIn(a: Page): Promise<{ samples: number; concealed: number }> {
+  return a.evaluate(async () => {
+    const w = window as unknown as { sonora: { parts: { links(): { pc: RTCPeerConnection }[] } } };
+    const r = await w.sonora.parts.links()[0].pc.getStats();
+    let out = { samples: 0, concealed: 0 };
+    r.forEach((v: Record<string, unknown>) => {
+      if (v.type === 'inbound-rtp' && v.kind === 'audio')
+        out = { samples: Number(v.totalSamplesReceived ?? 0), concealed: Number(v.concealedSamples ?? 0) };
+    });
+    return out;
+  });
+}
 
 /** His sound's delay to her ears (ms, up to a constant): the same bursts at the same wall-clock moment, into his
  * microphone and as a reference heard at her side. */
@@ -367,3 +384,48 @@ async function mouthToEar(a: Page, b: Page): Promise<number> {
   await a.waitForTimeout(1500);
   return r.lagMs;
 }
+
+test('the sound never drops out while the built-in piano loads (entering a lesson, then someone starts playing)', async () => {
+  test.setTimeout(90_000);
+  // a perfect link: any drop is this side's own doing
+  const a = await simPerson(browser!, 'Clara', { turn: sim.url, settings: { echo: 'off' } });
+  const b = await simPerson(browser!, 'Leo', {
+    turn: sim.url,
+    settings: { echo: 'off', autoLevel: false },
+    hash: await codeOf(a),
+  });
+  await linked(a, 1);
+  await linked(b, 1);
+  // he plays a steady sound
+  await b.evaluate(() => {
+    const w = window as unknown as W;
+    const o = w.__sim.ctx.createOscillator();
+    const g = w.__sim.ctx.createGain();
+    g.gain.value = 0.2;
+    o.connect(g).connect(w.__sim.mic);
+    o.start();
+  });
+  const buffer = async () => {
+    const s = await a.evaluate(() => (window as unknown as W).sonora.peers.value[0].stats);
+    return s?.bufferMs ?? 0;
+  };
+  const start = await audioIn(a);
+  // the first seconds: his piano loads in the background (from 3 s in)
+  await a.waitForTimeout(12_000);
+  const early = await buffer();
+  // then notes are about to be played on his side: his piano loads at once
+  // (it takes longer than the test watches: the page closes before it ends)
+  b.evaluate(() => (window as unknown as W).sonora.midi.piano.load()).catch(() => {});
+  await a.waitForTimeout(10_000);
+  const end = await audioIn(a);
+  const concealed = (end.concealed - start.concealed) / Math.max(1, end.samples - start.samples);
+  const late = await buffer();
+  console.log(
+    `piano loading: ${(concealed * 100).toFixed(2)}% of his sound concealed; her buffer ${early} ms, then ${late} ms`,
+  );
+  // decoding in bursts starved the audio: 1% to 4% concealed, then a jitter buffer of 150 to 200 ms
+  expect(concealed).toBeLessThan(0.005);
+  expect(late).toBeLessThan(110);
+  await a.context().close();
+  await b.context().close();
+});

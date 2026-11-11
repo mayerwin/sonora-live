@@ -46,6 +46,17 @@ export async function simPerson(browser: Browser, name: string, o: SimOptions): 
           if (!sim) {
             const ac = w.sonora.engine.ensure();
             const mic = ac.createGain();
+            // a real microphone's own noise (−80 dBFS): it always delivers sound. With nothing playing into it, the
+            // browser would stop producing frames, and the other side would hear the call drop out
+            const len = ac.sampleRate;
+            const noise = ac.createBuffer(1, len, ac.sampleRate);
+            const d = noise.getChannelData(0);
+            for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 1e-4;
+            const floor = ac.createBufferSource();
+            floor.buffer = noise;
+            floor.loop = true;
+            floor.connect(mic);
+            floor.start();
             sim = w.__sim = { mic, ctx: ac };
           }
           const dest = sim.ctx.createMediaStreamDestination();
