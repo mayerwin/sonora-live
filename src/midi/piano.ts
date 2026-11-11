@@ -190,7 +190,8 @@ export class Piano {
   private loaded$: (() => void) | null = null;
   private queue: [LayerName, number][] = [];
   private active = 0;
-  private workers = 1;
+  /** one sample at a time (see load) */
+  private readonly workers = 1;
   /** background loading (entering a lesson): one sample at a time, with a pause after each (pump) */
   private gentle = true;
   private volume = 0.8;
@@ -241,18 +242,14 @@ export class Piano {
   }
 
   /**
-   * Start loading the samples. `urgent` when notes are about to be played here: more downloads at once; otherwise
-   * (entering a lesson) one at a time with a pause after each, so the call keeps its bandwidth and the audio its
-   * processor time: decoding in bursts starved the audio engine (measured: the sound sent through it dropped out,
-   * and the other side's jitter buffer then grew by over 100 ms for the first half minute of the lesson). The most used layer comes first, spread
-   * over the keyboard so that every key soon has a real sample close by. Light connections only get one layer.
+   * Start loading the samples, one at a time: decoding several at once starved the audio engine (measured: the
+   * sound sent through it dropped out, and the other side's jitter buffer grew by over 100 ms for half a minute).
+   * `urgent` when notes are about to be played here: a short pause after each sample; otherwise (entering a
+   * lesson) a longer one, so the call also keeps its bandwidth. The most used layer comes first, spread over the
+   * keyboard so that every key soon has a real sample close by. Light connections and small devices get one layer.
    */
   load(urgent = true): Promise<void> {
-    if (urgent) {
-      // two at a time, briefly apart: six at once starved the audio for some 150 ms on a 4-core machine
-      this.workers = 1;
-      this.gentle = false;
-    }
+    if (urgent) this.gentle = false;
     if (!this.loading) {
       const ctx = this.context();
       if (!ctx) return Promise.resolve();
