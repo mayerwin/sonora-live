@@ -278,6 +278,34 @@ test('the delay the app shows follows the real mouth-to-ear delay as the network
       const w = window as unknown as W;
       return w.sonora.midi.delayOf(w.sonora.peers.value[0].id);
     });
+    if (process.env.NETSIM_DEBUG)
+      console.log(
+        'stats',
+        JSON.stringify(
+          await a.evaluate(async () => {
+            const w = window as unknown as { sonora: { parts: { links(): { pc: RTCPeerConnection }[] } } };
+            const r = await w.sonora.parts.links()[0].pc.getStats();
+            const out: Record<string, unknown> = {};
+            r.forEach((v: Record<string, unknown>) => {
+              if (v.type === 'inbound-rtp' && v.kind === 'audio')
+                Object.assign(out, {
+                  jbd: v.jitterBufferDelay,
+                  jbt: v.jitterBufferTargetDelay,
+                  jbm: v.jitterBufferMinimumDelay,
+                  jbe: v.jitterBufferEmittedCount,
+                  ins: v.insertedSamplesForDeceleration,
+                  rem: v.removedSamplesForAcceleration,
+                  conceal: v.concealedSamples,
+                });
+              if (v.type === 'media-playout')
+                Object.assign(out, { tpd: v.totalPlayoutDelay, tsc: v.totalSamplesCount });
+              if (v.type === 'remote-inbound-rtp' && v.kind === 'audio') Object.assign(out, { artt: v.roundTripTime });
+              if (v.type === 'candidate-pair' && v.nominated) Object.assign(out, { crtt: v.currentRoundTripTime });
+            });
+            return out;
+          }),
+        ),
+      );
     rows.push({ net: `${net.up + net.down} ms ±${net.jitter}`, measured: lag, shown, midi });
   }
   // the two pages' clocks are compared through the wall clock, which may be offset by a constant: compare what

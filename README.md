@@ -325,9 +325,9 @@ instead, and `?debug` to see the connection log in the console.
 | `npm run dev` | Development server with live reload and the local relay |
 | `npm run typecheck` | TypeScript, strict |
 | `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping and loading order, translations complete |
-| `npm run e2e` | Browser tests: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
-| `npm run e2e -- latency` | The same over a simulated long-distance link (up to 200 ms each way, jitter): backing track and MIDI in time with the other side's sound, measured by ear, and the track's echo removed on speakers |
-| `npm run e2e -- network` | MIDI and the microphone without a track over bad networks: rhythm under jitter, 3% loss, an uneven link, the other side's sound coming back from speakers, the delay shown against the real one as the network worsens |
+| `npm run e2e` | Browser tests, both projects below. `-- --project chromium`: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
+| `npm run e2e -- --project network` | Over simulated networks (`server/netsim.ts`, its own CI job): a long-distance link (up to 200 ms each way, jitter): backing track and MIDI in time with the other side's sound, measured by ear, and the track's echo removed on speakers |
+| | Also MIDI and the microphone without a track over bad networks: rhythm under jitter, 3% loss, an uneven link, the other side's sound coming back from speakers, the delay shown against the real one as the network worsens |
 | `npm run netsim` | The network simulator on its own, to try the app by hand over a slow link (see `server/netsim.ts`) |
 | `npm run build` | Production build in `dist/` (installable web app with offline support) |
 | `npm run preview` then `E2E_URL=http://localhost:4173/ npm run e2e` | The browser tests against the production build |

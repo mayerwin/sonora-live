@@ -16,6 +16,13 @@ import { EchoFilter } from './echo.ts';
 import { Piano } from './piano.ts';
 import { MidiReceiver, MidiSender, NoteState, forwardable, type MidiBytes } from './wire.ts';
 
+const HubTiming = {
+  /** how fast a peer's delay follows a change (ms per ms) */
+  GLIDE: 0.02,
+  /** a change larger than this (ms) applies at once */
+  JUMP: 25,
+};
+
 export type PlayOn = 'auto' | 'instrument' | 'piano' | 'off';
 
 export class MidiHub {
@@ -45,7 +52,8 @@ export class MidiHub {
   private sounding = new NoteState();
   private raf = 0;
   /** per peer: how long their notes wait (ms), the time the last one is due, and what is waiting */
-  private delays = new Map<string, number>();
+  /** each peer's delay: where it is going and where it is now (it glides, see delayNow) */
+  private delays = new Map<string, { target: number; cur: number; at: number }>();
   private lastDue = new Map<string, number>();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; fn: () => void }[]>();
 
@@ -167,11 +175,29 @@ export class MidiHub {
 
   /** Delay peer `id`'s notes by `ms` (0: as they arrive), to keep them in time with their sound. */
   setDelay(id: string, ms: number): void {
-    this.delays.set(id, Math.max(0, Math.min(500, Math.round(ms))));
+    const v = Math.max(0, Math.min(500, Math.round(ms)));
+    const now = performance.now();
+    const d = this.delays.get(id);
+    // the first value at once, and a large change (the start, the network changing): its sound's delay jumps too;
+    // small changes glide (delayNow)
+    if (!d || v === 0 || Math.abs(v - this.delayNow(id, now)) > HubTiming.JUMP)
+      this.delays.set(id, { target: v, cur: v, at: now });
+    else this.delays.set(id, { target: v, cur: this.delayNow(id, now), at: now });
   }
 
   delayOf(id: string): number {
-    return this.delays.get(id) ?? 0;
+    return this.delays.get(id)?.target ?? 0;
+  }
+
+  /**
+   * The delay applied now: changes glide at 20 ms per second (as the sound's jitter buffer stretches or shrinks
+   * its delay), so a new delay never shifts a phrase at once; a step of 10 ms is spread over half a second.
+   */
+  private delayNow(id: string, now = performance.now()): number {
+    const d = this.delays.get(id);
+    if (!d) return 0;
+    const step = (now - d.at) * HubTiming.GLIDE;
+    return d.target > d.cur ? Math.min(d.target, d.cur + step) : Math.max(d.target, d.cur - step);
   }
 
   /**
@@ -181,7 +207,7 @@ export class MidiHub {
    * is: recovered from a later packet).
    */
   private inTime(id: string, late: number, at: number | undefined, fn: () => void): void {
-    const d = this.delays.get(id) ?? 0;
+    const d = this.delayNow(id);
     const now = performance.now();
     const queue = this.pending.get(id) ?? [];
     // a hidden page's timers are slowed down to a second: play at once then, after what was already waiting (in

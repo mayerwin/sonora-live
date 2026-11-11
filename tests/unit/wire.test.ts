@@ -237,15 +237,17 @@ describe('timing (sender clock stamps)', () => {
     expect(p.due(1000, 40)).toBe(1000 + off + 40);
   });
 
-  it('knows nothing before a few packets, and starts over when the sender restarts', () => {
+  it('knows nothing before the first packet, and starts over when the sender restarts', () => {
     const p = new Playout();
-    p.add(100, 0);
     expect(p.due(0, 10)).toBeNull();
+    p.add(100, 0);
+    // from the first packet: its own transit (as playing at arrival would)
+    expect(p.due(0, 10)).toBe(110);
     for (let i = 1; i < 6; i++) p.add(100 + i, i);
     expect(p.offset()).toBe(100);
     // a reload: its clock starts from zero again
     p.add(900_000, 5);
-    expect(p.offset()).toBeNull();
+    expect(p.offset()).toBe(900_000 - 5);
   });
 
   it('an older packet without a stamp still plays (no moment given)', () => {

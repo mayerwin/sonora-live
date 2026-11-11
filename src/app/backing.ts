@@ -522,7 +522,9 @@ export class BackingTrack {
     const cur = p.current;
     // a command (play, seek, speed, key, loop): scheduled as soon as the player can, on the timeline
     if (!cur || heard === null || this.plannedVer !== s.ver) return this.plan(p, s, delay);
-    if (target.wait > 0) return;
+    // not heard yet (scheduled a moment ahead, as the player needs): nothing to correct, nothing to report
+    // (reporting the waiting position as playing would put the others' tracks late)
+    if (target.wait > 0 || p.toPerf(cur.at) > now) return;
     let ahead = target.pos - heard;
     // across the loop's end, the short way round
     if (s.loop) {

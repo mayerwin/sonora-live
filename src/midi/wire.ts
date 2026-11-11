@@ -255,7 +255,8 @@ export class Playout {
   private samples: number[] = [];
   private sorted: number[] | null = null;
   static readonly WINDOW = 96;
-  static readonly MIN_SAMPLES = 4;
+  /** one is enough: the first packet's own transit gives what playing at arrival gave, and the median follows */
+  static readonly MIN_SAMPLES = 1;
 
   /** A packet stamped `sent` (sender clock) arrived at `now` (local clock). */
   add(now: number, sent: number): void {

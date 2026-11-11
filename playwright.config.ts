@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 5179;
+/** the tests over simulated networks: their own project (and CI job), long and timing-sensitive */
+const NETWORK = ['**/latency.spec.ts', '**/network.spec.ts'];
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -24,7 +26,20 @@ export default defineConfig({
       ],
     },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1360, height: 860 } } }],
+  projects: [
+    // the lesson itself
+    {
+      name: 'chromium',
+      testIgnore: NETWORK,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1360, height: 860 } },
+    },
+    // over simulated networks (server/netsim.ts): delay, jitter, loss; timing measured by ear
+    {
+      name: 'network',
+      testMatch: NETWORK,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1360, height: 860 } },
+    },
+  ],
   webServer: process.env.E2E_URL
     ? undefined
     : {
