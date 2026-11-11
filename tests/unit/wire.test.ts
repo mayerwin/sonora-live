@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { LATE_NOTE_MS, MidiReceiver, MidiSender, NoteState, forwardable, type MidiBytes } from '../../src/midi/wire.ts';
+import {
+  LATE_NOTE_MS,
+  MidiReceiver,
+  MidiSender,
+  NoteState,
+  Playout,
+  forwardable,
+  type MidiBytes,
+} from '../../src/midi/wire.ts';
 
 /** A sender driven by a manual clock and timer queue, so loss and timing are deterministic. */
 function rig() {
@@ -148,7 +156,7 @@ describe('MIDI wire protocol', () => {
   it('survives 30% random loss without stuck notes', () => {
     const r = rig();
     let seed = 7;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const deliver = () => {
       for (const p of r.take()) if (rnd() > 0.3) r.receiver.receive(p);
     };
@@ -197,5 +205,56 @@ describe('MIDI wire protocol', () => {
     s.apply([0x91, 60, 0]);
     expect(s.heldCount).toBe(0);
     expect(s.empty).toBe(true);
+  });
+});
+
+describe('timing (sender clock stamps)', () => {
+  it('stamps packets with the sender clock, and tells each event its own moment', () => {
+    const r = rig();
+    const at: (number | undefined)[] = [];
+    const receiver = new MidiReceiver(
+      (_m, _late, t) => at.push(t),
+      () => 0,
+    );
+    r.sender.push(on(60));
+    r.advance(40);
+    r.sender.push(off(60));
+    for (const p of r.take()) receiver.receive(p);
+    // the note at 1000, its release at 1040 (sender clock), whichever packet carried them
+    expect(at).toEqual([1000, 1040]);
+  });
+
+  it('plays at the usual transit, whatever the jitter of each packet', () => {
+    const p = new Playout();
+    // packets sent every 10 ms, transit 50 ms ± up to 30 ms, local clock 5000 ms ahead of the sender's
+    let s = 1;
+    const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 60; i++) p.add(5000 + i * 10 + 50 + rand() * 30, i * 10);
+    const off = p.offset()!;
+    expect(off).toBeGreaterThan(5050);
+    expect(off).toBeLessThan(5080);
+    // an event played at 1000 on the sender's clock, 40 ms after its usual arrival
+    expect(p.due(1000, 40)).toBe(1000 + off + 40);
+  });
+
+  it('knows nothing before a few packets, and starts over when the sender restarts', () => {
+    const p = new Playout();
+    p.add(100, 0);
+    expect(p.due(0, 10)).toBeNull();
+    for (let i = 1; i < 6; i++) p.add(100 + i, i);
+    expect(p.offset()).toBe(100);
+    // a reload: its clock starts from zero again
+    p.add(900_000, 5);
+    expect(p.offset()).toBeNull();
+  });
+
+  it('an older packet without a stamp still plays (no moment given)', () => {
+    const r = rig();
+    const at: (number | undefined)[] = [];
+    const receiver = new MidiReceiver((_m, _late, t) => at.push(t));
+    r.sender.push(on(60));
+    const p = r.take()[0];
+    receiver.receive(p.subarray(0, p.length - 4));
+    expect(at).toEqual([undefined]);
   });
 });

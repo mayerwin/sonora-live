@@ -133,8 +133,8 @@ export class MidiHub {
       let state = this.remote.get(id);
       if (!state) this.remote.set(id, (state = new NoteState()));
       const st = state;
-      r = new MidiReceiver((m, late) =>
-        this.inTime(id, late, () => {
+      r = new MidiReceiver((m, late, at) =>
+        this.inTime(id, late, at, () => {
           st.apply(m);
           if ((m[0] & 0xf0) === 0x90 && m[2] > 0) this.lastRemote.value = performance.now();
           this.bump();
@@ -175,10 +175,12 @@ export class MidiHub {
   }
 
   /**
-   * Run `fn` when peer `id`'s delay has passed, after anything of theirs already waiting (order kept). `late`: how
-   * old the message already is (recovered from a later packet): it waits only what is left of the delay.
+   * Run `fn` when peer `id`'s delay has passed, after anything of theirs already waiting (order kept). With the
+   * sender's moment `at` (stamped packets), the delay counts from its usual arrival, so the network's jitter is
+   * taken out (src/midi/wire.ts, Playout); otherwise from this arrival, minus `late` (how old the message already
+   * is: recovered from a later packet).
    */
-  private inTime(id: string, late: number, fn: () => void): void {
+  private inTime(id: string, late: number, at: number | undefined, fn: () => void): void {
     const d = this.delays.get(id) ?? 0;
     const now = performance.now();
     const queue = this.pending.get(id) ?? [];
@@ -193,7 +195,12 @@ export class MidiHub {
       fn();
       return;
     }
-    const due = Math.max(now + Math.max(0, d - late), this.lastDue.get(id) ?? 0);
+    const planned = d > 0 && at !== undefined ? (this.receivers.get(id)?.playout.due(at, d) ?? null) : null;
+    const due = Math.max(planned ?? now + Math.max(0, d - late), this.lastDue.get(id) ?? 0);
+    if (due <= now && !queue.length) {
+      fn();
+      return;
+    }
     this.lastDue.set(id, due);
     const item = {
       timer: setTimeout(() => {

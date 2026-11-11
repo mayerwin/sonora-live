@@ -192,6 +192,7 @@ interface Allocation {
   relay: Socket;
   relayPort: number;
   profile: LinkProfile;
+  user: string;
   key: Buffer;
   channels: Map<number, string>;
   byPeer: Map<string, number>;
@@ -249,6 +250,8 @@ export interface Netsim {
   close(): Promise<void>;
   /** packets relayed so far (to check the browsers really went through it) */
   readonly relayed: number;
+  /** Change the link of every client using `username` (the network getting worse or better mid-lesson). */
+  retune(username: string, p: Partial<LinkProfile>): void;
 }
 
 /** Start the relay on `port` (0: any free one). */
@@ -257,6 +260,8 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
   const allocs = new Map<string, Allocation>();
   const lanes = new Map<string, { up: Lane; down: Lane }>();
   let relayed = 0;
+  /** links changed while running, by username */
+  const overrides = new Map<string, LinkProfile>();
   /** packets still on their way when the relay closes are dropped */
   let closed = false;
   const keyOf = (r: RemoteInfo) => `${r.address}:${r.port}`;
@@ -381,7 +386,8 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
             client: r,
             relay,
             relayPort,
-            profile: profileOf(user),
+            profile: overrides.get(user) ?? profileOf(user),
+            user,
             key: clientKey,
             channels: new Map(),
             byPeer: new Map(),
@@ -446,6 +452,11 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
         port: p,
         host,
         url: `turn:${host}:${p}?transport=udp`,
+        retune(username, p) {
+          const next = { up: 0, down: 0, jitter: 0, loss: 0, ...p };
+          overrides.set(username, next);
+          for (const a of allocs.values()) if (a.user === username) a.profile = next;
+        },
         get relayed() {
           return relayed;
         },

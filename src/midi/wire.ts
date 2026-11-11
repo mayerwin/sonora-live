@@ -9,9 +9,14 @@
 //     full list of held notes and pedal positions. The receiver releases anything it still holds that the
 //     snapshot does not. Whatever is lost, a note can only hang for about a second.
 //   • A note recovered too late (400 ms) is skipped rather than played out of time; releases always go through.
+//   • Timing: each events packet ends with the sender's clock (ms). The receiver learns the usual transit time
+//     (the median over the last packets) and plays each event at its own moment plus that transit plus the delay
+//     asked for (Playout): the network's jitter does not reach the rhythm, as the sound's jitter buffer does for
+//     the sound. Older receivers ignore the stamp.
 //
 // Packets:
-//   events    [1][lastSeq u32][count u8] then per event, oldest first: [age ms u16][length u8][bytes]
+//   events    [1][lastSeq u32][count u8] then per event, oldest first: [age ms u16][length u8][bytes];
+//             then [sender clock ms u32]
 //   snapshot  [2][seq u32][channels u8] then per channel: [ch][sustain][sostenuto][soft][count][notes...]
 
 export const REDUNDANCY_MS = 250;
@@ -104,7 +109,8 @@ export function forwardable(m: ArrayLike<number>): boolean {
   if (m.length < 2) return false;
   const type = m[0] & 0xf0;
   if (type === 0x80 || type === 0x90) return m.length >= 3 && m[1] < 128 && m[2] < 128;
-  if (type === 0xb0) return m.length >= 3 && (m[1] === 64 || m[1] === 66 || m[1] === 67 || m[1] === 120 || m[1] === 123);
+  if (type === 0xb0)
+    return m.length >= 3 && (m[1] === 64 || m[1] === 66 || m[1] === 67 || m[1] === 120 || m[1] === 123);
   if (type === 0xe0) return m.length >= 3;
   return false;
 }
@@ -169,7 +175,7 @@ export class MidiSender {
   }
 
   private eventsPacket(now: number): Uint8Array {
-    let size = 6;
+    let size = 6 + 4;
     for (const e of this.history) size += 3 + e.data.length;
     const out = new Uint8Array(size);
     const v = new DataView(out.buffer);
@@ -183,6 +189,7 @@ export class MidiSender {
       for (let i = 0; i < e.data.length; i++) out[p + 3 + i] = e.data[i];
       p += 3 + e.data.length;
     }
+    v.setUint32(p, Math.round(now) >>> 0);
     return out;
   }
 
@@ -213,7 +220,14 @@ export class MidiSender {
     const parts: number[] = [T_SNAPSHOT, 0, 0, 0, 0, chans.length];
     for (const ch of chans) {
       const held = this.state.held(ch);
-      parts.push(ch, this.state.pedals[ch * 3], this.state.pedals[ch * 3 + 1], this.state.pedals[ch * 3 + 2], held.length, ...held);
+      parts.push(
+        ch,
+        this.state.pedals[ch * 3],
+        this.state.pedals[ch * 3 + 1],
+        this.state.pedals[ch * 3 + 2],
+        held.length,
+        ...held,
+      );
     }
     const out = new Uint8Array(parts);
     new DataView(out.buffer).setUint32(1, this.seq);
@@ -232,17 +246,66 @@ export class MidiSender {
   }
 }
 
+/**
+ * When to play events of a sender, from their stamps: the usual transit (local arrival − sender clock, the median
+ * of the last packets, which also absorbs the two clocks' offset) added to each event's own moment. Events that
+ * arrive later than that play as soon as they arrive.
+ */
+export class Playout {
+  private samples: number[] = [];
+  private sorted: number[] | null = null;
+  static readonly WINDOW = 96;
+  static readonly MIN_SAMPLES = 4;
+
+  /** A packet stamped `sent` (sender clock) arrived at `now` (local clock). */
+  add(now: number, sent: number): void {
+    const off = now - sent;
+    const med = this.offset();
+    // the sender's clock wrapped or restarted (a reload): start over
+    if (med !== null && Math.abs(off - med) > 10_000) this.samples = [];
+    this.samples.push(off);
+    if (this.samples.length > Playout.WINDOW) this.samples.shift();
+    this.sorted = null;
+  }
+
+  /** The usual transit plus clock offset (ms), or null before enough packets. */
+  offset(): number | null {
+    if (this.samples.length < Playout.MIN_SAMPLES) return null;
+    this.sorted ??= [...this.samples].sort((a, b) => a - b);
+    return this.sorted[this.sorted.length >> 1];
+  }
+
+  /** Local time to play an event of sender time `at`, `delay` ms after its usual arrival; null if unknown yet. */
+  due(at: number, delay: number): number | null {
+    const off = this.offset();
+    return off === null ? null : at + off + delay;
+  }
+
+  reset(): void {
+    this.samples = [];
+    this.sorted = null;
+  }
+}
+
 export class MidiReceiver {
-  /** a message to play now; `late`: how old it is (ms) */
-  deliver: (m: MidiBytes, late: number) => void;
+  /** a message to play now; `late`: how old it is (ms); `at`: when it was played, on the sender's clock (stamped
+   * packets only) */
+  deliver: (m: MidiBytes, late: number, at?: number) => void;
+  /** the sender's timing, from the stamps */
+  readonly playout = new Playout();
+  private clock: () => number;
   private lastSeq = -1;
   /** what this receiver has sounded (to release it on snapshots and resets) */
   readonly state = new NoteState();
   /** counters for the connection panel and tests */
   readonly counters = { events: 0, duplicates: 0, recovered: 0, skippedLate: 0, reconciled: 0, gaps: 0 };
 
-  constructor(deliver: (m: MidiBytes, late: number) => void) {
+  constructor(
+    deliver: (m: MidiBytes, late: number, at?: number) => void,
+    clock: () => number = () => performance.now(),
+  ) {
     this.deliver = deliver;
+    this.clock = clock;
   }
 
   receive(packet: ArrayBuffer | Uint8Array): void {
@@ -273,6 +336,9 @@ export class MidiReceiver {
       evs.push({ seq: (last - (count - 1 - i)) >>> 0, age, data: Array.from(b.subarray(p + 3, p + 3 + len)) });
       p += 3 + len;
     }
+    // the sender's clock (newer senders)
+    const sent = p + 4 <= b.length ? v.getUint32(p) : undefined;
+    if (sent !== undefined) this.playout.add(this.clock(), sent);
     let first = true;
     for (const e of evs) {
       if (!this.after(e.seq, this.lastSeq)) {
@@ -284,11 +350,11 @@ export class MidiReceiver {
       const isLast = e === evs[evs.length - 1];
       if (!isLast) this.counters.recovered++;
       this.lastSeq = e.seq;
-      this.apply(e.data, e.age);
+      this.apply(e.data, e.age, sent === undefined ? undefined : sent - e.age);
     }
   }
 
-  private apply(m: MidiBytes, late: number): void {
+  private apply(m: MidiBytes, late: number, at?: number): void {
     const type = m[0] & 0xf0;
     const noteOn = type === 0x90 && m[2] > 0;
     if (noteOn && late > LATE_NOTE_MS) {
@@ -301,7 +367,7 @@ export class MidiReceiver {
     }
     this.counters.events++;
     this.state.apply(m);
-    this.deliver(m, late);
+    this.deliver(m, late, at);
   }
 
   private onSnapshot(b: Uint8Array, v: DataView): void {
@@ -335,7 +401,7 @@ export class MidiReceiver {
       for (let k = 0; k < 3; k++) {
         const have = this.state.pedals[ch * 3 + k];
         const target = want.pedals[ch * 3 + k];
-        if ((have >= 64) !== (target >= 64) || (k === 0 && Math.abs(have - target) > 8)) {
+        if (have >= 64 !== target >= 64 || (k === 0 && Math.abs(have - target) > 8)) {
           this.counters.reconciled++;
           const m = [0xb0 | ch, PEDAL_CC[k], target];
           this.state.apply(m);
@@ -352,5 +418,6 @@ export class MidiReceiver {
       this.deliver(m, 0);
     }
     this.lastSeq = -1;
+    this.playout.reset();
   }
 }
