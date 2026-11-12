@@ -31,8 +31,13 @@ export class LocalMedia {
   /** the browser's own echo cancelling is on in the current track (voice mode; pure mode where the engine
    * cannot run) */
   private trackEcho = false;
-  /** the sound plays on headphones, as far as the output's name tells (no echo to cancel then) */
+  /** the sound plays on headphones (no echo to cancel then): as the person said for this output, else as far as
+   * its name tells (browsers do not say) */
   readonly headphones = signal(false);
+  /** the output in use, by name ('' before permission) */
+  readonly outputLabel = signal('');
+  /** what the person said this output is (remembered by name), if anything */
+  knownOutput: (label: string) => 'headphones' | 'speakers' | undefined = () => undefined;
   /** cancel echo in pure mode (voice mode always does) */
   private wantEcho = true;
   /** the music-safe echo canceller (the engine's, linear: never ducks, may leave some echo) rather than the
@@ -292,7 +297,10 @@ export class LocalMedia {
       speakers.find((d) => d.deviceId === this.speakerId) ??
       speakers.find((d) => d.deviceId === 'default') ??
       speakers[0];
-    this.headphones.value = !!out && looksLikeHeadphones(out.label);
+    const label = out?.label ?? '';
+    this.outputLabel.value = label;
+    const known = label ? this.knownOutput(label) : undefined;
+    this.headphones.value = known ? known === 'headphones' : !!out && looksLikeHeadphones(label);
   }
 
   restartVideo(camId = this.camId, quality = this.quality): Promise<void> {

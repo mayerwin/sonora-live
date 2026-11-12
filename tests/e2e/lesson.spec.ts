@@ -270,7 +270,7 @@ test('auto sound switches the microphone to voice while MIDI carries the instrum
     ).sonora.midi.devices.connected.value = true;
   });
   await expect.poll(ec, { timeout: 10_000 }).toBe(true);
-  await expect(a.getByTestId('btn-sound')).toContainText('Voice');
+  await expect(a.getByTestId('btn-sound')).toContainText('voice');
   // and the student sees the teacher's instrument
   await expect(b.getByTestId('tile')).toContainText('Test Piano');
 
@@ -344,8 +344,8 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
     .toContainEqual([0x90, 48, 70]);
 
   // both pianos travel as MIDI now: microphones switch to voice mode (Auto)
-  await expect(a.getByTestId('btn-sound')).toContainText('Voice');
-  await expect(b.getByTestId('btn-sound')).toContainText('Voice');
+  await expect(a.getByTestId('btn-sound')).toContainText('voice');
+  await expect(b.getByTestId('btn-sound')).toContainText('voice');
 
   await a.context().close();
   await b.context().close();
@@ -794,7 +794,7 @@ test('on a phone, the sound menu opens once (from More)', async ({ browser }) =>
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
   await enter(a);
   await a.getByTestId('btn-more').click();
-  await a.locator('.menu-item', { hasText: 'Microphone:' }).click();
+  await a.locator('.menu-item', { hasText: 'Sound:' }).click();
   await expect(a.getByRole('menuitemradio', { name: /Voice only/ })).toHaveCount(1);
   await expect(a.locator('.menu')).toHaveCount(1);
   await ctx.close();
@@ -998,4 +998,64 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();
+});
+
+test('headphones or speakers: asked in the lobby, one tap in the bar, remembered for that output', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  type S = {
+    sonora: {
+      listening: { value: string };
+      media: {
+        outputLabel: { value: string };
+        sentAudio: { value: MediaStreamTrack | null };
+        audio: { value: MediaStreamTrack | null };
+      };
+      engine: { path: { value: string } };
+    };
+  };
+  const now = () =>
+    a.evaluate(() => {
+      const w = window as unknown as S;
+      const m = w.sonora.media;
+      return {
+        listening: w.sonora.listening.value,
+        processed: !!m.sentAudio.value && m.sentAudio.value !== m.audio.value,
+      };
+    });
+  // the lobby asks (the fake output's name says nothing: speakers is the guess)
+  const q = a.getByTestId('listen-q');
+  await expect(q).toContainText('Wearing headphones?');
+  await expect(q).toContainText('Guessed');
+  await q.getByRole('button', { name: 'Yes' }).click();
+  await expect.poll(async () => (await now()).listening).toBe('headphones');
+  await expect(q).not.toContainText('Guessed');
+  // remembered for this output, by its name
+  const saved = await a.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('sonora.settings.v1')!);
+    return { echo: s.echo, outputs: s.outputs };
+  });
+  const label = await a.evaluate(() => (window as unknown as S).sonora.media.outputLabel.value);
+  expect(label).not.toBe('');
+  expect(saved).toEqual({ echo: 'auto', outputs: { [label]: 'headphones' } });
+  await enter(a);
+  // in the lesson: the bar says so; nothing is processed (no echo cancelling, no automatic level)
+  await expect(a.getByTestId('btn-sound')).toContainText('Headphones');
+  await expect.poll(async () => (await now()).processed).toBe(false);
+  // speakers: the echo is taken out, the level comes back
+  await a.getByTestId('btn-sound').click();
+  await expect(a.getByTestId('sound-menu')).toContainText(`Remembered for ${label}`);
+  await a.getByRole('menuitemradio', { name: /Speakers/ }).click();
+  await expect(a.getByTestId('btn-sound')).toContainText('Speakers');
+  await expect.poll(async () => (await now()).processed).toBe(true);
+  // voice only, and back
+  await a.getByTestId('btn-sound').click();
+  await a.getByRole('menuitemradio', { name: /Voice only/ }).click();
+  await expect(a.getByTestId('btn-sound')).toContainText('Voice');
+  await a.getByTestId('btn-sound').click();
+  await a.getByRole('menuitemradio', { name: /Headphones/ }).click();
+  await expect(a.getByTestId('btn-sound')).toContainText('Headphones');
+  await expect.poll(async () => (await now()).processed).toBe(false);
+  await a.context().close();
 });

@@ -230,7 +230,7 @@ function Card({ peer }: { peer: PeerView | null }) {
           />
         </Row>
       )}
-      {v.sound !== 'voice' && (
+      {v.sound !== 'voice' && speakers(v) && (
         <Row
           label={t('Automatic level')}
           tip={t(
@@ -265,7 +265,7 @@ function Card({ peer }: { peer: PeerView | null }) {
           {
             value: 'auto',
             label: t('Auto'),
-            tip: t('Speakers unless headphones are detected by their name.'),
+            tip: t('As said for this output, else guessed from its name (browsers do not tell).'),
           },
           {
             value: 'on',

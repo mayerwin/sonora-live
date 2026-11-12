@@ -902,6 +902,33 @@ a:hover {
   text-transform: uppercase;
 }
 
+.menu-note {
+  margin: 4px 10px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.menu-note .link-btn {
+  font-size: 12px;
+}
+
+.listen-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.listen-q small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
 .link-btn {
   color: var(--text-2);
   font-weight: 600;

@@ -53,11 +53,16 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **Pure sound by default**: no noise suppression, no automatic gain, stereo when your microphone or interface has
   it. Every pedal, pianissimo and long decay arrives as played, the way [Cleanfeed](https://cleanfeed.net) treats
   broadcast audio.
+- **Headphones or speakers, one tap**: the lobby asks *Wearing headphones?* and the *Sound* button in the control
+  bar always shows the answer (Headphones, Speakers, or Voice only). Headphones means studio sound: nothing processed
+  at all, the lowest delay. Browsers do not tell headphones from speakers, so the first answer is a guess from the
+  output's name; once chosen, it is remembered for that output (an audio interface, the laptop's speakers) and
+  switches by itself when you plug in or out.
 - **Echo cancelling on speakers**: the browser's own by default (it removes echo reliably, with its noise
   suppression and automatic gain left off), or, as an experimental option, a music-safe one: the app subtracts what
   its own speakers play from the microphone (a linear echo canceller, [SpeexDSP](https://gitlab.xiph.org/xiph/speexdsp)'s
   MDF compiled to WebAssembly, full band at 48 kHz, in an AudioWorklet, no added delay) and never turns your playing
-  down, but may leave some echo on small speakers. With headphones (detected, or chosen in *Settings → Sound*),
+  down, but may leave some echo on small speakers. With headphones (chosen in the lobby or the *Sound* button, or guessed from the output's name),
   nothing is processed at all.
 - **Automatic level for music**: like a sound engineer setting the input gain once: slow, from the loudest moments
   of the last seconds, with a soft limiter; a quiet microphone is brought up, a crescendo stays a crescendo.

@@ -157,9 +157,9 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
             onChange={(v) => update({ sound: v ? 'auto' : 'pure' })}
           />
         )}
-        {mode === 'pure' && (
+        {mode === 'pure' && session.listening.value === 'speakers' && (
           <ToggleRow
-            title={t('Automatic level')}
+            title={t('Automatic level (on speakers)')}
             sub={
               s.autoLevel
                 ? t(

@@ -28,11 +28,11 @@ import {
   WifiOff,
   X,
   Speech,
-  Sparkles,
+  Headphones,
 } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
 import { installUpdate } from '../app/update.ts';
-import { settings, update, updateMidi, type SoundSetting } from '../app/settings.ts';
+import { settings, update, updateMidi } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { SignalBars } from './common.tsx';
@@ -342,33 +342,52 @@ function Reactions() {
   );
 }
 
-const soundOptions = (): { value: SoundSetting; title: string; sub: string; icon: typeof AudioWaveform }[] => [
+type SoundChoice = 'headphones' | 'speakers' | 'voice';
+
+/** The sound modes of the control bar: the one choice most people need. */
+const soundChoices = (): { value: SoundChoice; title: string; sub: string; icon: typeof AudioWaveform }[] => [
   {
-    value: 'auto',
-    title: t('Instrument and voice (recommended)'),
-    sub: t('Untouched sound; voice only while your piano plays through MIDI.'),
-    icon: Sparkles,
+    value: 'headphones',
+    title: t('Headphones'),
+    sub: t('Studio sound: nothing processed, the lowest delay.'),
+    icon: Headphones,
   },
   {
-    value: 'pure',
-    title: t('Instrument and voice, always'),
-    sub: t('Your piano’s sound through the microphone too, even while it plays through MIDI.'),
-    icon: AudioWaveform,
+    value: 'speakers',
+    title: t('Speakers'),
+    sub: t('The others’ sound is taken out of your microphone, so they never hear themselves.'),
+    icon: Volume2,
   },
   {
     value: 'voice',
     title: t('Voice only'),
-    sub: t('Speech processing: removes noise and echo (and some of the music).'),
+    sub: t('Speech processing, for talking in a noisy room (it takes part of the music out).'),
     icon: Speech,
   },
 ];
+
+/** The sound mode now: voice only when chosen, else what this side listens on. */
+const soundChoice = computed<SoundChoice>(() => (settings.value.sound === 'voice' ? 'voice' : session.listening.value));
+
+/** Where the headphones / speakers answer comes from, in a few words. */
+function listeningNote(): string {
+  const s = settings.value;
+  const label = session.media.outputLabel.value;
+  if (s.echo !== 'auto') return t('Chosen for every output (Settings → Sound).');
+  if (!label) return t('Guessed: browsers do not say whether it is headphones. Choose to be sure.');
+  return s.outputs[label]
+    ? t('Remembered for {name}.', { name: label })
+    : t('Guessed from its name ({name}): browsers do not say whether it is headphones. Choose to be sure.', {
+        name: label,
+      });
+}
 
 function ControlBar({ showKeys }: { showKeys: boolean }) {
   const media = session.media;
   const mic = media.micOn.value;
   const cam = media.camOn.value;
   const mode = session.soundMode.value;
-  const setting = settings.value.sound;
+  const choice = soundChoice.value;
   const unread = session.chat.unread.value;
   const midiOn = session.midi.devices.connected.value;
   const sharing = media.extraKind.value === 'screen';
@@ -391,14 +410,15 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
   }, [open, confirmLeave]);
 
   const soundMenu = (
-    <div class="menu" role="menu" style="min-width:300px">
-      {soundOptions().map((o) => (
+    <div class="menu" role="menu" style="min-width:300px" data-testid="sound-menu">
+      {soundChoices().map((o) => (
         <button
           class="menu-item"
           role="menuitemradio"
-          aria-checked={setting === o.value}
+          aria-checked={choice === o.value}
           onClick={() => {
-            update({ sound: o.value });
+            if (o.value === 'voice') update({ sound: 'voice' });
+            else session.setListening(o.value);
             menu.value = null;
           }}
         >
@@ -407,9 +427,21 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
             <b>{o.title}</b>
             <small>{o.sub}</small>
           </span>
-          {setting === o.value && <Check size={16} />}
+          {choice === o.value && <Check size={16} />}
         </button>
       ))}
+      <p class="menu-note">
+        {listeningNote()}{' '}
+        <button
+          class="link-btn"
+          onClick={() => {
+            menu.value = null;
+            openSettings('audio');
+          }}
+        >
+          {t('More in Settings')}
+        </button>
+      </p>
     </div>
   );
 
@@ -446,17 +478,18 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
         </button>
         <div style="position:relative" class="hide-sm-wrap">
           <button
-            class={`ctl hide-sm ${mode === 'pure' ? 'active' : ''}`}
+            class="ctl hide-sm"
             onClick={() => toggleMenu('sound')}
             aria-haspopup="menu"
             aria-expanded={open === 'sound'}
             title={t('Sound mode')}
             data-testid="btn-sound"
           >
-            {mode === 'pure' ? <AudioWaveform /> : <Speech />}
+            {choice === 'headphones' ? <Headphones /> : choice === 'speakers' ? <Volume2 /> : <Speech />}
             <span>
-              {mode === 'pure' ? t('Pure') : t('Voice')}
-              <span class="lbl-long">{setting === 'auto' ? ` · ${t('auto')}` : ''}</span>
+              {choice === 'headphones' ? t('Headphones') : choice === 'speakers' ? t('Speakers') : t('Voice')}
+              {/* voice only for a moment, while the piano plays through MIDI */}
+              <span class="lbl-long">{choice !== 'voice' && mode === 'voice' ? ` · ${t('voice')}` : ''}</span>
             </span>
           </button>
           {open === 'sound' && soundMenu}
@@ -582,12 +615,19 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
                 ))}
               </div>
               <button class="menu-item" onClick={() => toggleMenu('sound-more')}>
-                {mode === 'pure' ? <AudioWaveform /> : <Speech />}
+                {choice === 'headphones' ? <Headphones /> : choice === 'speakers' ? <Volume2 /> : <Speech />}
                 <span>
                   <b>
-                    {t('Microphone: {mode}', { mode: mode === 'pure' ? t('instrument and voice') : t('voice only') })}
+                    {t('Sound: {mode}', {
+                      mode:
+                        choice === 'headphones'
+                          ? t('headphones')
+                          : choice === 'speakers'
+                            ? t('speakers')
+                            : t('voice only'),
+                    })}
                   </b>
-                  <small>{setting === 'auto' ? t('Auto · tap to change') : t('Manual · tap to change')}</small>
+                  <small>{t('Tap to change')}</small>
                 </span>
               </button>
               <button

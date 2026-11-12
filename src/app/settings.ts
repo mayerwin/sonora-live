@@ -18,8 +18,11 @@ export interface Settings {
   /** echo cancelling in pure sound: the music-safe one (linear, never ducks, may leave some echo) rather than the
    * browser's (robust; ducks what is played here while the others play) */
   musicEcho: boolean;
-  /** automatic level for music in pure sound (slow, keeps crescendos) */
+  /** automatic level for music in pure sound, on speakers (slow, keeps crescendos); with headphones nothing is
+   * processed */
   autoLevel: boolean;
+  /** what each sound output is, as the person said (by its name): browsers do not tell headphones from speakers */
+  outputs: Record<string, 'headphones' | 'speakers'>;
   /** the others' MIDI waits for their sound (keys, notes, voice and microphone in time) */
   midiSync: boolean;
   audioQuality: AudioQuality;
@@ -66,6 +69,7 @@ export const DEFAULTS: Settings = {
   echo: 'auto',
   musicEcho: false,
   autoLevel: true,
+  outputs: {},
   midiSync: true,
   audioQuality: 'high',
   videoQuality: 'hd',

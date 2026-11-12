@@ -26,7 +26,7 @@ import { browserName, os, REPO_URL } from '../app/platform.ts';
 import type { Picture } from '../media/picture.ts';
 import { listDevices, type DeviceLists, type MediaProblem } from '../media/local.ts';
 import { normalizeRoomCode, prettyCode } from '../net/code.ts';
-import { LevelBars, Qr, VideoView } from './common.tsx';
+import { LevelBars, Qr, Seg, VideoView } from './common.tsx';
 import { GitHubIcon, initials, Logo, RoleIcon, Wordmark } from './icons.tsx';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
@@ -344,6 +344,7 @@ export function Lobby() {
               )}
             </div>
           )}
+          {!watching() && <ListeningQuestion />}
           <div class="features">
             <span>
               <AudioWaveform /> {t('Pure instrument sound')}
@@ -502,6 +503,36 @@ export function Lobby() {
           {t('Privacy')}
         </a>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Headphones or speakers: the one sound question that matters (browsers do not tell). Pre-filled from the output's
+ * name, remembered for that output once answered.
+ */
+function ListeningQuestion() {
+  const value = session.listening.value;
+  const label = session.media.outputLabel.value;
+  const known = !!label && !!settings.value.outputs[label];
+  return (
+    <div class="listen-q" data-testid="listen-q">
+      <span>{t('Wearing headphones?')}</span>
+      <Seg<'headphones' | 'speakers'>
+        label={t('Wearing headphones?')}
+        value={value}
+        onChange={(v) => session.setListening(v)}
+        options={[
+          { value: 'headphones', label: t('Yes') },
+          { value: 'speakers', label: t('No, speakers') },
+        ]}
+      />
+      <small>
+        {value === 'headphones'
+          ? t('Studio sound: nothing processed, the lowest delay.')
+          : t('The others’ sound is taken out of your microphone, so they never hear themselves.')}{' '}
+        {!known && t('Guessed: browsers do not say. Answer once, it is remembered for this output.')}
+      </small>
     </div>
   );
 }

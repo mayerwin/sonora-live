@@ -119,7 +119,7 @@ describe('languages', () => {
       expect(tn(0, '{n} person', '{n} people')).toBe('0 personne');
       expect(tn(1, '{n} person', '{n} people')).toBe('1 personne');
       expect(tn(2, '{n} person', '{n} people')).toBe('2 personnes');
-      expect(t('Microphone: {mode}', { mode: 'voix seulement' })).toBe('Micro : voix seulement');
+      expect(t('Sound: {mode}', { mode: 'casque' })).toBe('Son\u00a0: casque');
     } finally {
       lang.value = before;
     }

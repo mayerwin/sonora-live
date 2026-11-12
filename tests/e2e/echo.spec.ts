@@ -167,7 +167,10 @@ test('in a lesson on speakers: the browser’s echo cancelling by default, the m
     .toBeGreaterThan(20);
   // the music-safe one: the capture untouched, cancelled by the engine, the other's sound through it
   await a.getByTestId('btn-settings').click();
-  await a.getByRole('group', { name: 'Echo cancelling on speakers' }).getByRole('button', { name: 'Music-safe (experimental)' }).click();
+  await a
+    .getByRole('group', { name: 'Echo cancelling on speakers' })
+    .getByRole('button', { name: 'Music-safe (experimental)' })
+    .click();
   await expect
     .poll(state, { timeout: 15_000 })
     .toEqual({ captureEcho: false, processed: true, cancelling: true, echo: true, routed: true });
@@ -181,11 +184,11 @@ test('in a lesson on speakers: the browser’s echo cancelling by default, the m
       timeout: 15_000,
     })
     .toBeGreaterThan(20);
-  // headphones: no cancelling at all
+  // headphones: nothing processed at all (no cancelling, no automatic level)
   await a.getByRole('group', { name: 'Listening on' }).getByRole('button', { name: 'Headphones' }).click();
   await expect
     .poll(state)
-    .toEqual({ captureEcho: false, processed: true, cancelling: false, echo: false, routed: false });
+    .toEqual({ captureEcho: false, processed: false, cancelling: false, echo: false, routed: false });
   expect(errors).toEqual([]);
   await a.context().close();
   await b.context().close();

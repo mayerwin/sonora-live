@@ -142,6 +142,27 @@ export class Session {
     const e = settings.value.echo;
     return e === 'on' || (e === 'auto' && !this.media.headphones.value);
   });
+  /** how this side listens, as the control bar shows it (detected by the output's name until chosen) */
+  readonly listening = computed<'headphones' | 'speakers'>(() => (this.pureEcho.value ? 'speakers' : 'headphones'));
+
+  /**
+   * The one choice most people need. Headphones: studio sound, nothing processed (no echo cancelling, no automatic
+   * level; noise suppression and automatic gain are never on for music). Speakers: the others' sound is taken out
+   * of the microphone, and a quiet laptop microphone is brought up. Either leaves voice-only mode. Remembered for
+   * the output in use (browsers do not tell headphones from speakers: its name is all there is to go by).
+   */
+  setListening(m: 'headphones' | 'speakers'): void {
+    const s = settings.peek();
+    const sound = s.sound === 'voice' ? 'auto' : s.sound;
+    const label = this.media.outputLabel.peek();
+    if (label) {
+      // remembered for this output: plugging in or out switches by itself
+      update({ outputs: { ...s.outputs, [label]: m }, echo: 'auto', sound });
+      void this.media.checkOutput();
+    } else {
+      update({ echo: m === 'headphones' ? 'off' : 'on', sound });
+    }
+  }
 
   private relay: Relay;
   private room: Room;
@@ -220,6 +241,7 @@ export class Session {
       for (const l of this.parts.links()) l.sendMidi(p);
     };
     this.media.onTrack = (slot, track) => this.sendTrack(slot, track);
+    this.media.knownOutput = (label) => settings.peek().outputs[label];
   }
 
   get selfId(): string {
@@ -952,7 +974,10 @@ export class Session {
     );
     // which echo canceller, and the automatic level, follow their settings
     this.disposers.push(effect(() => void this.media.setMusicEcho(settings.value.musicEcho)));
-    this.disposers.push(effect(() => void this.media.setAutoLevel(settings.value.autoLevel)));
+    // the automatic level runs on speakers only: with headphones, nothing is processed
+    this.disposers.push(
+      effect(() => void this.media.setAutoLevel(settings.value.autoLevel && this.listening.value === 'speakers')),
+    );
     // a backing track loaded here: on speakers, its echo is cancelled
     this.disposers.push(effect(() => void this.media.setBacking(!!this.backing.track.value)));
     // echo cancelling in pure sound follows its setting and the output (headphones or not)

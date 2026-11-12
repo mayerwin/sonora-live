@@ -92,8 +92,6 @@ export const FR: Record<string, string> = spaced({
   'Start a new room instead': 'Créer plutôt une nouvelle salle',
   You: 'Vous',
   Voice: 'Voix',
-  'Speech processing: removes noise and echo (and some of the music).':
-    'Traitement de la parole : supprime le bruit et l’écho (et un peu de la musique).',
   'Lesson controls': 'Commandes du cours',
   'Mute microphone': 'Couper le micro',
   'Unmute microphone': 'Rétablir le micro',
@@ -104,7 +102,6 @@ export const FR: Record<string, string> = spaced({
   Camera: 'Caméra',
   'Sound mode': 'Mode de son',
   Pure: 'Pur',
-  auto: 'auto',
   'MIDI instrument': 'Instrument MIDI',
   Keys: 'Clavier',
   Stop: 'Arrêter',
@@ -115,8 +112,6 @@ export const FR: Record<string, string> = spaced({
   Chat: 'Discussion',
   Settings: 'Réglages',
   More: 'Plus',
-  'Auto · tap to change': 'Auto · touchez pour changer',
-  'Manual · tap to change': 'Manuel · touchez pour changer',
   'Hide piano keys': 'Masquer le clavier',
   'Show piano keys': 'Afficher le clavier',
   'Switch camera': 'Changer de caméra',
@@ -438,14 +433,6 @@ export const FR: Record<string, string> = spaced({
     'En tant qu’observateur, vous ne pouvez changer que ce que vous entendez.',
   '{name} uses an older version: reload it to change their microphone from here.':
     '{name} utilise une ancienne version : qu’il recharge la page pour que vous puissiez régler son micro d’ici.',
-  'Instrument and voice (recommended)': 'Instrument et voix (recommandé)',
-  'Untouched sound; voice only while your piano plays through MIDI.':
-    'Son intact ; voix seulement quand votre piano passe en MIDI.',
-  'Instrument and voice, always': 'Instrument et voix, toujours',
-  'Your piano’s sound through the microphone too, even while it plays through MIDI.':
-    'Le son de votre piano passe aussi par le micro, même quand il passe en MIDI.',
-  'Microphone: {mode}': 'Micro : {mode}',
-  'instrument and voice': 'instrument et voix',
   'voice only': 'voix seulement',
   'Your microphone': 'Votre micro',
   'What the others hear from you. They can change it too, since they hear it.':
@@ -689,7 +676,6 @@ export const FR: Record<string, string> = spaced({
   'Voice only during MIDI': 'Voix seule pendant le MIDI',
   'Echo cancelling runs now': 'L’annulation d’écho fonctionne en ce moment',
   'echo cancelled': 'écho annulé',
-  'Speakers unless headphones are detected by their name.': 'Haut-parleurs, sauf si un casque est reconnu à son nom.',
   'The speakers’ sound is taken out of the microphone, so the others do not hear themselves.':
     'Le son des haut-parleurs est retiré du micro, pour que les autres ne s’entendent pas eux-mêmes.',
   'Nothing reaches the microphone: nothing is taken out.': 'Rien n’atteint le micro : rien n’est retiré.',
@@ -698,4 +684,28 @@ export const FR: Record<string, string> = spaced({
   'Others’ notes on': 'Notes des autres sur',
   'Notes wait for sound': 'Notes calées sur le son',
   'their notes wait {ms} ms': 'leurs notes attendent {ms} ms',
+  'Wearing headphones?': 'Vous portez un casque ?',
+  Yes: 'Oui',
+  'No, speakers': 'Non, haut-parleurs',
+  'Studio sound: nothing processed, the lowest delay.': 'Son studio : aucun traitement, le délai le plus court.',
+  'The others’ sound is taken out of your microphone, so they never hear themselves.':
+    'Le son des autres est retiré de votre micro : ils ne s’entendent jamais eux-mêmes.',
+  'Guessed: browsers do not say. Answer once, it is remembered for this output.':
+    'Deviné : les navigateurs ne le disent pas. Répondez une fois, c’est retenu pour cette sortie.',
+  'Speech processing, for talking in a noisy room (it takes part of the music out).':
+    'Traitement de la parole, pour parler dans une pièce bruyante (il retire une partie de la musique).',
+  'Chosen for every output (Settings → Sound).': 'Choisi pour toutes les sorties (Réglages → Son).',
+  'Guessed: browsers do not say whether it is headphones. Choose to be sure.':
+    'Deviné : les navigateurs ne disent pas s’il s’agit d’un casque. Choisissez pour en être sûr.',
+  'Remembered for {name}.': 'Retenu pour {name}.',
+  'Guessed from its name ({name}): browsers do not say whether it is headphones. Choose to be sure.':
+    'Deviné d’après son nom ({name}) : les navigateurs ne disent pas s’il s’agit d’un casque. Choisissez pour en être sûr.',
+  'More in Settings': 'Plus dans les réglages',
+  voice: 'voix',
+  'Sound: {mode}': 'Son : {mode}',
+  speakers: 'haut-parleurs',
+  'Tap to change': 'Touchez pour changer',
+  'Automatic level (on speakers)': 'Niveau automatique (sur haut-parleurs)',
+  'As said for this output, else guessed from its name (browsers do not tell).':
+    'Comme indiqué pour cette sortie, sinon deviné d’après son nom (les navigateurs ne le disent pas).',
 });
