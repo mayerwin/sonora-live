@@ -78,15 +78,15 @@ test('backing track at 200 ms each way: the teacher hears the student sing in ti
     .getByTestId('backing-track')
     .locator('input[type=file]')
     .setInputFiles({ name: 'bursts.wav', mimeType: 'audio/wav', buffer: burstsWav(40) });
-  // loaded on both sides (the student plays along by default: the one who did not load it)
+  // loaded on both sides
   // 4 MB over a 400 ms round trip: about 20 s
   for (const p of [a, b])
     await expect
       .poll(() => p.evaluate(() => (window as unknown as W).sonora.backing.duration.value), { timeout: 60_000 })
       .toBeGreaterThan(30);
-  // the student sings exactly what he hears
+  // the student sings exactly what he hears; he presses Play, so the track is in time with him
   await micHears(b, 'trackBus');
-  await a.getByTestId('track-play').click();
+  await b.getByTestId('backing-track').getByTestId('track-play').click();
   await expect.poll(() => b.evaluate(() => (window as unknown as W).sonora.backing.sounding.value)).toBe(true);
   // the jitter buffer and the delay estimate settle
   await a.waitForTimeout(5000);

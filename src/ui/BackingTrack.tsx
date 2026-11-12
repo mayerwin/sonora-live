@@ -215,7 +215,7 @@ export function BackingPlayer() {
               <label
                 class="track-ctl"
                 title={t(
-                  'Who plays or sings along hears the track on time; the others hear it a little later, in time with them.',
+                  'Who plays or sings along hears the track on time; the others hear it a little later, in time with them. Whoever presses Play is chosen; change it here.',
                 )}
               >
                 <span class="lbl">{t('In time with')}</span>

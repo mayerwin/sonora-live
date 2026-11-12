@@ -651,8 +651,8 @@ export const FR: Record<string, string> = spaced({
   'The passage starts here': 'Le passage commence ici',
   'The passage ends here': 'Le passage finit ici',
   'No repeat': 'Ne plus répéter',
-  'Who plays or sings along hears the track on time; the others hear it a little later, in time with them.':
-    'Qui joue ou chante avec la piste l’entend à l’heure ; les autres l’entendent un peu plus tard, en rythme avec cette personne.',
+  'Who plays or sings along hears the track on time; the others hear it a little later, in time with them. Whoever presses Play is chosen; change it here.':
+    'Qui joue ou chante avec la piste l’entend à l’heure ; les autres l’entendent un peu plus tard, en rythme avec cette personne. La personne qui appuie sur Lecture est choisie ; vous pouvez la changer ici.',
   'In time with': 'En rythme avec',
   'Someone who left': 'Quelqu’un qui est parti',
   '+{ms} ms here': '+{ms} ms ici',

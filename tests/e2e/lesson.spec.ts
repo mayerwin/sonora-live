@@ -962,14 +962,19 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   const leoId = await b.evaluate(() => (window as unknown as W).sonora.selfId);
   expect((await state(a)).shared?.ref).toBe(leoId);
 
+  // whoever presses Play plays along: she does, so the track is in time with her, for both
   await a.getByTestId('track-play').click();
+  const claraId = await a.evaluate(() => (window as unknown as W).sonora.selfId);
+  await expect.poll(async () => (await state(b)).shared?.ref).toBe(claraId);
+  await expect(playerB.locator('select')).toHaveValue(claraId);
   await expect.poll(async () => (await state(a)).sounding).toBe(true);
   await expect.poll(async () => (await state(b)).sounding).toBe(true);
   await a.waitForTimeout(3000);
   const [sa, sb] = await Promise.all([state(a), state(b)]);
   expect(sa.pos).toBeGreaterThan(2);
-  // the teacher is behind the student by about her delay (timing measured precisely in latency.spec.ts)
-  expect(Math.abs(sb.pos - sa.pos - sa.delay / 1000)).toBeLessThan(0.25);
+  // the student is behind the teacher by about his delay (timing measured precisely in latency.spec.ts)
+  expect(sa.delay).toBe(0);
+  expect(Math.abs(sa.pos - sb.pos - sb.delay / 1000)).toBeLessThan(0.25);
 
   // speed and key are shared
   await a.getByRole('button', { name: 'Slower' }).click();
@@ -982,6 +987,10 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   await playerB.getByTestId('track-play').click();
   await expect.poll(async () => (await state(a)).shared?.playing).toBe(false);
   await expect.poll(async () => (await state(a)).sounding).toBe(false);
+  // he presses Play: now it is in time with him
+  await playerB.getByTestId('track-play').click();
+  await expect.poll(async () => (await state(a)).shared?.ref).toBe(leoId);
+  await expect.poll(async () => (await state(a)).shared?.playing).toBe(true);
 
   // removed for everyone
   await a.getByRole('button', { name: 'Remove the track for everyone' }).click();

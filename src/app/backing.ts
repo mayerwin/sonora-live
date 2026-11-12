@@ -176,7 +176,9 @@ export class BackingTrack {
     const dur = this.duration.peek();
     // from the start again once at the end
     const from = dur > 0 && s.pos >= dur - 0.05 ? (s.loop?.a ?? 0) : s.pos;
-    this.change({ playing: true, pos: from, anchor: performance.now() + LEAD_MS });
+    // whoever presses Play is about to sing or play along: the others hear the track in time with them (the
+    // selector stays to change it by hand)
+    this.change({ playing: true, pos: from, anchor: performance.now() + LEAD_MS, ref: this.host.selfId() });
   }
 
   pause(): void {
@@ -249,7 +251,8 @@ export class BackingTrack {
     this.reconcile();
   }
 
-  /** Who plays along by default: someone else (a teacher loads the track their student sings to). */
+  /** Who plays along until someone presses Play (who then does): someone else (a teacher loads the track their
+   * student sings to). */
   private defaultRef(): string {
     const other = this.host
       .peers()
