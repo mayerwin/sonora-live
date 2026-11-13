@@ -258,13 +258,16 @@ test('auto sound switches the microphone to voice while MIDI carries the instrum
   await enter(b);
   await connected(a, 1);
 
+  // voice processing on the microphone: its noise suppression on, where the microphone has any (Firefox's fake
+  // one has none: then the app's own mode says it)
   const ec = () =>
-    a.evaluate(
-      () =>
-        (
-          window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }
-        ).sonora.media.audio.value.getSettings().noiseSuppression,
-    );
+    a.evaluate(() => {
+      const m = (
+        window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack }; mode: { value: string } } } }
+      ).sonora.media;
+      const caps = m.audio.value.getCapabilities?.().noiseSuppression as unknown as boolean[] | undefined;
+      return caps?.includes?.(true) === false ? m.mode.value === 'voice' : m.audio.value.getSettings().noiseSuppression;
+    });
   expect(await ec()).toBe(false);
   // pretend an instrument is plugged in (no MIDI hardware in CI)
   await a.evaluate(() => {
