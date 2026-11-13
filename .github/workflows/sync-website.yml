@@ -1,4 +1,4 @@
-name: Sync website to sonora-live.github.io
+name: Deploy
 
 # Builds Sonora Live and mirrors the output into the sonora-live/sonora-live.github.io repo
 # every time main changes. The website repo is a user/org Pages repo, so GitHub Pages serves

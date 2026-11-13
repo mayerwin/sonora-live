@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/pages.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/pages.yml/badge.svg" alt="Deploy"></a>
+  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/sonora-live/sonora-live/actions/workflows/sync-website.yml"><img src="https://github.com/sonora-live/sonora-live/actions/workflows/sync-website.yml/badge.svg?branch=main" alt="Deploy"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f5b544" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/PWA-installable-52d6b4" alt="Installable web app">
 </p>
@@ -386,9 +386,12 @@ instead, and `?debug` to see the connection log in the console.
 
 ### Publish on GitHub Pages
 
-The workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds and publishes the site at every push
-to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The build uses
-relative URLs, so it also works from any sub-folder or a custom domain.
+The workflow in [`.github/workflows/sync-website.yml`](.github/workflows/sync-website.yml) checks, tests and builds
+the app at every push to `main`, and publishes the build to the
+[sonora-live.github.io](https://github.com/sonora-live/sonora-live.github.io) repository, which GitHub Pages serves at
+https://sonora-live.github.io/ (the old `/sonora-live/` address redirects there). One-time setup: a fine-grained token
+with read and write access to that repository's contents, saved here as the `WEBSITE_DEPLOY_TOKEN` secret. The build
+uses relative URLs, so it also works from any sub-folder or a custom domain.
 
 Releases reach everyone without a forced refresh, although GitHub Pages caches every file for 10 minutes and the app
 keeps an offline copy: every file's URL changes with its content (Vite's hashed names, and `?v=<hash>` on the icons,
