@@ -12,3 +12,18 @@ export function workerTicker(ms: number, fn: () => void): () => void {
   w.postMessage(ms);
   return () => w.terminate();
 }
+
+const firefox = typeof navigator !== 'undefined' && /Firefox\//.test(navigator.userAgent);
+
+/**
+ * A canvas as a video track, with a frame each time it is drawn (`frame()` after drawing). Chromium: frames pushed
+ * one by one (captureStream(0) + requestFrame), so a tab in the background keeps its frame rate. Firefox does not
+ * encode pushed frames (a recording got nothing until it stopped): there the canvas is captured at `fps`.
+ */
+export function canvasTrack(canvas: HTMLCanvasElement, fps: number): { track: MediaStreamTrack; frame: () => void } {
+  if (firefox) {
+    return { track: canvas.captureStream(fps).getVideoTracks()[0], frame: () => {} };
+  }
+  const track = canvas.captureStream(0).getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+  return { track, frame: () => track.requestFrame?.() };
+}

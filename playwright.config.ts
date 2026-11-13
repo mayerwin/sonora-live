@@ -50,6 +50,8 @@ export default defineConfig({
               viewport: { width: 1360, height: 860 },
               // Firefox does not take Chromium's permissions: its own fake camera and microphone, no prompt
               permissions: [],
+              // with a display (DISPLAY, e.g. Xvfb), windowed: headless Firefox has no WebGL without a GPU
+              headless: !process.env.DISPLAY,
               launchOptions: {
                 firefoxUserPrefs: {
                   'media.navigator.streams.fake': true,
@@ -58,6 +60,10 @@ export default defineConfig({
                   'media.autoplay.block-webaudio': false,
                   'permissions.default.microphone': 1,
                   'permissions.default.camera': 1,
+                  // WebGL without a graphics processor (the background blur's model needs it)
+                  'webgl.force-enabled': true,
+                  'webgl.disabled': false,
+                  'gfx.webrender.software': true,
                 },
               },
             },

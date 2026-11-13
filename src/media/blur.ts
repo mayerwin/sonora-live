@@ -3,7 +3,7 @@
 // is found in each frame by MediaPipe's selfie segmentation (Apache-2.0; its model and WebAssembly are served with
 // the app, loaded the first time blur is turned on) and drawn sharp over a blurred copy of the picture.
 
-import { workerTicker } from './ticker.ts';
+import { canvasTrack, workerTicker } from './ticker.ts';
 
 import solutionUrl from '@mediapipe/selfie_segmentation/selfie_segmentation.js?url';
 import binarypbUrl from '@mediapipe/selfie_segmentation/selfie_segmentation.binarypb?url';
@@ -74,6 +74,7 @@ export async function setSystemBlur(track: MediaStreamTrack, on: boolean): Promi
 /** A camera with its background blurred: `track` is what to send. */
 export class Blurred {
   readonly track: MediaStreamTrack;
+  private pushFrame: () => void;
   private canvas = document.createElement('canvas');
   private g: CanvasRenderingContext2D;
   private video = document.createElement('video');
@@ -103,8 +104,9 @@ export class Blurred {
     this.canvas.height = st.height ?? 720;
     this.g = this.canvas.getContext('2d')!;
     // a frame each time one is drawn (a stream that captures on its own stops while the tab is in the background)
-    const stream = this.canvas.captureStream(0);
-    this.track = stream.getVideoTracks()[0];
+    const c = canvasTrack(this.canvas, st.frameRate ?? 30);
+    this.track = c.track;
+    this.pushFrame = c.frame;
     this.track.contentHint = 'motion';
     this.video.muted = true;
     this.video.playsInline = true;
@@ -151,7 +153,7 @@ export class Blurred {
     }
     if (this.mask.width) this.draw(this.video, this.mask);
     else this.g.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
-    (this.track as CanvasCaptureMediaStreamTrack).requestFrame?.();
+    this.pushFrame();
     const now = performance.now();
     if (!this.busy && this.seg && now >= this.nextSeg) void this.segment(now);
   }

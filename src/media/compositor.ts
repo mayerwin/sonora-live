@@ -2,7 +2,7 @@
 // as the lesson is, with names. Driven by a worker's timer: a page in the background has its own timers slowed to
 // once a second, a worker's are not, so the recording keeps its frame rate when the tab is hidden.
 
-import { workerTicker } from './ticker.ts';
+import { canvasTrack, workerTicker } from './ticker.ts';
 
 export interface CompSource {
   /** what to draw: a video (a camera, a screen) or a canvas (the score); none (or no picture yet): their initial */
@@ -64,7 +64,7 @@ export class Compositor {
   readonly stream: MediaStream;
   private g: CanvasRenderingContext2D;
   private stopTicker: (() => void) | null = null;
-  private track: CanvasCaptureMediaStreamTrack;
+  private pushFrame: () => void;
 
   constructor(
     width: number,
@@ -77,8 +77,9 @@ export class Compositor {
     this.canvas.height = height;
     this.g = this.canvas.getContext('2d', { alpha: false })!;
     // frames only when drawn: the worker's tick decides the rate
-    this.stream = this.canvas.captureStream(0);
-    this.track = this.stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+    const c = canvasTrack(this.canvas, fps);
+    this.pushFrame = c.frame;
+    this.stream = new MediaStream([c.track]);
   }
 
   start(): void {
@@ -106,7 +107,7 @@ export class Compositor {
       h,
     );
     list.forEach((s, i) => this.tile(s, rects[i]));
-    this.track.requestFrame?.();
+    this.pushFrame();
   }
 
   private tile(s: CompSource, r: Rect): void {

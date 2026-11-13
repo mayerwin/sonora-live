@@ -148,8 +148,9 @@ export class RecWriter {
   constructor(readonly meta: RecMeta) {}
 
   async open(): Promise<void> {
-    // ask the browser to keep this site's storage (no eviction under pressure), where it can
-    await navigator.storage?.persist?.().catch(() => false);
+    // ask the browser to keep this site's storage (no eviction under pressure), where it can; never waited for:
+    // Firefox asks the person, and a recording must start at once
+    void navigator.storage?.persist?.().catch(() => false);
     await store().saveMeta(this.meta);
   }
 
