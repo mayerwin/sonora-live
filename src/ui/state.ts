@@ -28,7 +28,7 @@ export const metroOpen = signal<boolean | null>(null);
 export const tunerOpen = signal(false);
 /** the Music strip opened from the bar (it also shows while any of its tools does) */
 export const musicOpen = signal(false);
-export const menu = signal<'sound' | 'sound-more' | 'react' | 'more' | null>(null);
+export const menu = signal<'sound' | 'sound-more' | 'react' | 'more' | 'rec' | 'rec-more' | null>(null);
 // 'sound': the sound menu under its own button; 'sound-more': the same, opened from More (small screens)
 
 export function openSettings(tab: SettingsTab = 'audio'): void {

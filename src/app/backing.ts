@@ -85,6 +85,8 @@ export interface BackingHost {
   sendFile(meta: TrackMeta, blob: Blob, to?: string): void;
   /** a line in the chat */
   note(text: string): void;
+  /** `id` may change the shared tools (not when the host holds them) */
+  mayControl(id: string): boolean;
 }
 
 interface Track extends TrackMeta {
@@ -124,7 +126,7 @@ export class BackingTrack {
 
   /** Can this side change the track (musicians)? */
   get canControl(): boolean {
-    return !this.host.observer();
+    return !this.host.observer() && this.host.mayControl(this.host.selfId());
   }
 
   /** Load a file from this device and share it with everyone. */
@@ -309,6 +311,8 @@ export class BackingTrack {
     const ver = Number(msg.ver);
     const by = typeof msg.by === 'string' ? msg.by : '';
     if (id === undefined || !Number.isFinite(ver) || !by) return;
+    // the host holds the controls: a change by anyone else does not count
+    if (!this.host.mayControl(by)) return;
     const cur = this.shared.peek();
     if (cur && (ver < cur.ver || (ver === cur.ver && by <= cur.by))) return;
     const rate = Number(msg.rate);

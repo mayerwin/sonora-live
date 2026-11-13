@@ -27,6 +27,7 @@ import {
   X,
   Speech,
   Headphones,
+  Circle,
 } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
 import { installUpdate } from '../app/update.ts';
@@ -44,6 +45,14 @@ import { MidiSheet } from './MidiSheet.tsx';
 import { SettingsSheet } from './SettingsSheet.tsx';
 import { LockSheet, ShareSheet } from './ShareSheet.tsx';
 import { t } from '../app/i18n.ts';
+import { RecChip, RecordMenu, RecoverBanner, clock } from './Record.tsx';
+import { ScoreView, scoreShown } from './Score.tsx';
+
+/** MediaRecorder and a canvas's stream: every current browser (not some embedded web views) */
+const canRecord =
+  typeof MediaRecorder !== 'undefined' &&
+  typeof HTMLCanvasElement !== 'undefined' &&
+  'captureStream' in HTMLCanvasElement.prototype;
 
 /** Lights up while notes flow, in either direction. */
 function MidiLed({ on }: { on: boolean }) {
@@ -67,6 +76,7 @@ export function Room() {
   const peers = session.peers.value;
   const rp = session.roomPhase.value;
   const denied = session.denied.value;
+  const withScore = scoreShown.value && !denied && rp !== 'joining';
 
   useEffect(() => {
     chatOpenTracker();
@@ -76,14 +86,17 @@ export function Room() {
     <div class="room" data-chat={chatOpen.value} data-testid="room">
       <div class="atmos" />
       <TopBar />
-      <main class="stage">
+      <main class={`stage ${withScore ? 'with-score' : ''}`}>
         <Banners />
+        {withScore && <ScoreView />}
         {denied ? (
           <Knocking />
         ) : rp === 'joining' ? (
           <Joining />
         ) : peers.filter((p) => !p.quiet).length === 0 ? (
-          <Waiting />
+          withScore ? null : (
+            <Waiting />
+          )
         ) : (
           <TileGrid />
         )}
@@ -170,6 +183,7 @@ function TopBar() {
         </span>
         <span class="txt">{policy.locked ? t('locked') : t('open')}</span>
       </button>
+      <RecChip />
       <span class="spacer" />
       {stats.length > 0 && (
         <button class="net-chip" onClick={() => openSettings('connection')} title={t('Connection details')}>
@@ -190,6 +204,7 @@ function Banners() {
   const policy = session.policy.value;
   return (
     <div class="banner-stack">
+      <RecoverBanner />
       {needsTap && (
         <div class="banner">
           <Volume2 />
@@ -356,6 +371,7 @@ function ControlBar() {
   const music = stripShown.value;
   const open = menu.value;
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const recording = session.recorder.state.value !== 'idle';
   const toggleMenu = (m: typeof open) => (menu.value = open === m ? null : m);
 
   useEffect(() => {
@@ -493,6 +509,21 @@ function ControlBar() {
             <span>{t('Flip')}</span>
           </button>
         ) : null}
+        {canRecord && (
+          <div style="position:relative" class="hide-sm-wrap">
+            <button
+              class={`ctl hide-sm ${recording ? 'rec-on' : ''}`}
+              onClick={() => toggleMenu('rec')}
+              aria-haspopup="dialog"
+              aria-expanded={open === 'rec'}
+              data-testid="btn-rec"
+            >
+              <Circle fill={recording ? 'currentColor' : 'none'} />
+              <span>{recording ? clock(session.recorder.elapsed.value) : t('Record')}</span>
+            </button>
+            {open === 'rec' && <RecordMenu />}
+          </div>
+        )}
         <button
           class={`ctl ${chatOpen.value ? 'active' : ''}`}
           onClick={() => {
@@ -564,6 +595,19 @@ function ControlBar() {
                   <small>{t('Keys, backing track, metronome and tuner')}</small>
                 </span>
               </button>
+              {canRecord && (
+                <button class="menu-item" onClick={() => toggleMenu('rec-more')} data-testid="more-rec">
+                  <Circle fill={recording ? 'currentColor' : 'none'} />
+                  <span>
+                    <b>
+                      {recording
+                        ? t('Recording · {time}', { time: clock(session.recorder.elapsed.value) })
+                        : t('Record the lesson')}
+                    </b>
+                    <small>{t('Saved on this device')}</small>
+                  </span>
+                </button>
+              )}
               {isMobile && (
                 <button
                   class="menu-item"
@@ -605,6 +649,7 @@ function ControlBar() {
             </div>
           )}
           {open === 'sound-more' && soundMenu}
+          {open === 'rec-more' && <RecordMenu right />}
         </div>
       </div>
 

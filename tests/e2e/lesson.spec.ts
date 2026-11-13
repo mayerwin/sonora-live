@@ -1122,3 +1122,251 @@ test('the Music strip: a shared metronome, started by one, heard and changed by 
   await a.context().close();
   await b.context().close();
 });
+
+/** A saved file, opened in the page: its length, picture size and how loud its sound is. */
+async function probe(page: Page, file: string, mime: string) {
+  const b64 = (await import('node:fs')).readFileSync(file).toString('base64');
+  return page.evaluate(
+    async ({ b64, mime }) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: mime });
+      const el = document.createElement(mime.startsWith('audio') ? 'audio' : 'video') as HTMLVideoElement;
+      el.muted = true;
+      el.src = URL.createObjectURL(blob);
+      await new Promise((r, j) => {
+        el.onloadedmetadata = r;
+        el.onerror = () => j(new Error('cannot open'));
+      });
+      let rms = -1;
+      try {
+        const ctx = new OfflineAudioContext(1, 48000, 48000);
+        const buf = await ctx.decodeAudioData(bytes.buffer.slice(0));
+        const d = buf.getChannelData(0);
+        let s = 0;
+        for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+        rms = Math.sqrt(s / d.length);
+      } catch {
+        // a video container the decoder does not open: the length and picture are checked
+      }
+      // a frame from the middle, to look at (test-results/recording-frame.jpg)
+      let frame = '';
+      if (el.videoWidth) {
+        el.currentTime = Math.min(2, el.duration / 2);
+        await new Promise((r) => (el.onseeked = r));
+        const c = document.createElement('canvas');
+        c.width = el.videoWidth;
+        c.height = el.videoHeight;
+        c.getContext('2d')!.drawImage(el, 0, 0);
+        frame = c.toDataURL('image/jpeg', 0.85);
+      }
+      return {
+        duration: el.duration,
+        width: el.videoWidth ?? 0,
+        height: el.videoHeight ?? 0,
+        rms,
+        size: bytes.length,
+        frame,
+      };
+    },
+    { b64, mime },
+  );
+}
+
+test('recording the lesson: everyone is told, the video and each voice are saved, an interrupted one is offered back', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const teacher = await person(browser, 'Clara', 'teacher');
+  await enter(teacher);
+  const student = await person(browser, 'Leo', 'student', await codeOf(teacher));
+  await enter(student);
+  await connected(teacher, 1);
+  await connected(student, 1);
+
+  await teacher.getByTestId('btn-rec').click();
+  await expect(teacher.getByTestId('rec-menu')).toBeVisible();
+  await teacher.getByTestId('rec-menu').locator('.row-toggle').click();
+  await teacher.getByTestId('rec-start').click();
+  await expect(teacher.getByTestId('rec-chip')).toBeVisible();
+  // the student is told, in the top bar and the chat
+  await expect(student.getByTestId('rec-chip')).toContainText('Clara is recording');
+  await teacher.waitForTimeout(4500);
+
+  const downloads: { name: string; path: string }[] = [];
+  teacher.on('download', async (d) => downloads.push({ name: d.suggestedFilename(), path: (await d.path()) ?? '' }));
+  await teacher.getByTestId('rec-chip').click();
+  await expect.poll(() => downloads.filter((d) => d.path).length, { timeout: 20_000 }).toBe(3);
+  await expect(student.getByTestId('rec-chip')).toHaveCount(0);
+
+  const lesson = downloads.find((d) => !d.name.includes(' - '))!;
+  expect(lesson.name).toMatch(/^Lesson \d{4}-\d\d-\d\d \d\d\.\d\d\.(mp4|webm)$/);
+  const v = await probe(teacher, lesson.path, lesson.name.endsWith('mp4') ? 'video/mp4' : 'video/webm');
+  const fs = await import('node:fs');
+  fs.mkdirSync('test-results', { recursive: true });
+  fs.writeFileSync('test-results/recording-frame.jpg', Buffer.from(v.frame.split(',')[1], 'base64'));
+  console.log('lesson file', { ...v, frame: undefined });
+  expect(v.width).toBe(1280);
+  // everyone's sound, mixed
+  expect(v.rms).toBeGreaterThan(0.001);
+  expect(v.height).toBe(720);
+  // its length is written in the file (WebM from MediaRecorder has none until fixed)
+  expect(v.duration).toBeGreaterThan(3.5);
+  expect(v.duration).toBeLessThan(7);
+
+  const voices = downloads.filter((d) => d.name.includes(' - ')).map((d) => d.name);
+  expect(voices.some((n) => n.includes(' - Clara.'))).toBe(true);
+  expect(voices.some((n) => n.includes(' - Leo.'))).toBe(true);
+  for (const d of downloads.filter((x) => x.name.includes(' - '))) {
+    const a = await probe(teacher, d.path, d.name.endsWith('m4a') ? 'audio/mp4' : 'audio/webm');
+    console.log('voice file', d.name, { ...a, frame: undefined });
+    expect(a.duration).toBeGreaterThan(3);
+    // the fake microphones beep: each voice carries sound
+    expect(a.rms).toBeGreaterThan(0.001);
+  }
+
+  // kept on this device, to save again
+  await teacher.getByTestId('btn-settings').click();
+  await teacher.getByRole('tab', { name: 'Room' }).click();
+  await expect(teacher.getByTestId('rec-list').locator('li')).toHaveCount(1);
+  await teacher.keyboard.press('Escape');
+
+  // the tab closes in the middle of a recording: the next visit offers what was saved
+  await student.getByTestId('btn-rec').click();
+  await student.getByTestId('rec-start').click();
+  await expect(teacher.getByTestId('rec-chip')).toContainText('Leo is recording');
+  await student.waitForTimeout(3500);
+  await student.reload();
+  await expect(student.getByTestId('rec-recover')).toBeVisible({ timeout: 20_000 });
+  const saved = student.waitForEvent('download');
+  await student.getByTestId('rec-recover-save').click();
+  const d = await saved;
+  const r = await probe(student, (await d.path())!, d.suggestedFilename().endsWith('mp4') ? 'video/mp4' : 'video/webm');
+  console.log('recovered file', { ...r, frame: undefined });
+  expect(r.width).toBe(1280);
+  expect(r.duration).toBeGreaterThan(2);
+  await expect(student.getByTestId('rec-recover')).toHaveCount(0);
+});
+
+test('the host (who opened the room) can hold the shared controls; a reload keeps it, leaving releases it', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type M = { sonora: { metronome: { shared: { value: { running: boolean; bpm: number } } } } };
+  const metro = (p: Page) => p.evaluate(() => (window as unknown as M).sonora.metronome.shared.value);
+
+  // only the one who opened the room has the switch
+  await b.getByTestId('lock-chip').click();
+  await expect(b.getByTestId('host-section')).toContainText('Clara opened this room');
+  await b.keyboard.press('Escape');
+  await a.getByTestId('lock-chip').click();
+  await a.getByTestId('host-section').locator('.row-toggle').click();
+  await a.keyboard.press('Escape');
+  await expect(b.locator('.toast.info')).toContainText('Clara holds the shared controls');
+
+  // he cannot start the metronome, record or change her sound; she can
+  await openTool(b, 'metronome');
+  await expect(b.getByTestId('held-note')).toBeVisible();
+  await expect(b.getByTestId('metro-play')).toBeDisabled();
+  await b.getByTestId('btn-rec').click();
+  await expect(b.getByTestId('rec-menu').getByTestId('held-note')).toBeVisible();
+  await expect(b.getByTestId('rec-start')).toHaveCount(0);
+  await b.keyboard.press('Escape');
+  await openTool(a, 'metronome');
+  await a.getByTestId('metro-play').click();
+  await expect.poll(async () => (await metro(b)).running).toBe(true);
+
+  // her reload: still the host, still holding them
+  await a.reload();
+  await expect(a.getByTestId('room')).toBeVisible({ timeout: 20_000 });
+  await connected(a, 1);
+  await expect(b.getByTestId('metro-play')).toBeDisabled();
+  await a.getByTestId('lock-chip').click();
+  await expect(a.getByTestId('host-section').locator('input[type=checkbox], [role=switch]').first()).toBeChecked();
+  await a.keyboard.press('Escape');
+
+  // she leaves: released, he can use everything
+  await a.getByTestId('btn-leave').click();
+  await a.getByTestId('confirm-leave').click();
+  await expect(b.getByTestId('metro-play')).toBeEnabled({ timeout: 20_000 });
+  await b.getByTestId('metro-play').click();
+  await expect.poll(async () => (await metro(b)).running).toBe(false);
+});
+
+test('a shared score: same page for everyone, ink seen by all, undo, and saved with the annotations', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { PDFDocument, PDFName, StandardFonts } = await import('pdf-lib');
+  const src = await PDFDocument.create();
+  const font = await src.embedFont(StandardFonts.Helvetica);
+  for (const title of ['Page one', 'Page two'])
+    src.addPage([595, 842]).drawText(title, { x: 60, y: 760, size: 28, font });
+  const pdf = Buffer.from(await src.save());
+
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type S = { sonora: { score: { ink: { value: { by: string; page: number }[] } }; selfId: string } };
+  const ink = (p: Page) => p.evaluate(() => (window as unknown as S).sonora.score.ink.value.map((k) => k.page));
+
+  await a.getByTestId('btn-music').click();
+  const chooser = a.waitForEvent('filechooser');
+  await a.getByTestId('chip-score').click();
+  await (await chooser).setFiles({ name: 'Etude.pdf', mimeType: 'application/pdf', buffer: pdf });
+  // it opens by itself on his side, on the same page
+  await expect(a.getByTestId('score-page')).toHaveText('1 of 2');
+  await expect(b.getByTestId('score')).toBeVisible({ timeout: 20_000 });
+  await expect(b.getByTestId('score-page')).toHaveText('1 of 2', { timeout: 20_000 });
+  await a.getByRole('button', { name: 'Next page' }).click();
+  await expect(b.getByTestId('score-page')).toHaveText('2 of 2');
+
+  // he circles something: she sees it
+  await b.getByTestId('ink-pen').click();
+  const box = (await b.getByTestId('score-ink').boundingBox())!;
+  await b.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await b.mouse.down();
+  for (let i = 1; i <= 12; i++) {
+    const ang = (i / 12) * Math.PI * 2;
+    await b.mouse.move(
+      box.x + box.width * (0.3 + 0.05 * Math.cos(ang)),
+      box.y + box.height * (0.3 + 0.05 * Math.sin(ang)),
+    );
+  }
+  await b.mouse.up();
+  await expect.poll(() => ink(a)).toEqual([1]);
+  // she writes a word
+  await a.getByTestId('ink-text').click();
+  const abox = (await a.getByTestId('score-ink').boundingBox())!;
+  await a.mouse.click(abox.x + abox.width * 0.5, abox.y + abox.height * 0.6);
+  await a.getByTestId('score-text').fill('rit.');
+  await a.getByTestId('score-text').press('Enter');
+  await expect.poll(() => ink(b)).toEqual([1, 1]);
+  // his undo takes back his stroke only
+  await b.getByTestId('ink-undo').click();
+  await expect.poll(() => ink(a)).toEqual([1]);
+
+  // saved: the same two pages, with the ink laid on the second
+  const saved = a.waitForEvent('download');
+  await a.getByTestId('score-save').click();
+  const d = await saved;
+  expect(d.suggestedFilename()).toBe('Etude (annotated).pdf');
+  const out = await PDFDocument.load((await import('node:fs')).readFileSync((await d.path())!));
+  expect(out.getPageCount()).toBe(2);
+  // the ink is a picture laid on the page it was drawn on, and only there
+  const images = (i: number) => out.getPage(i).node.Resources()?.lookup(PDFName.of('XObject'))?.toString() ?? '';
+  expect(images(1)).toMatch(/Image|\d+ 0 R/);
+  expect(images(0)).not.toMatch(/\d+ 0 R/);
+
+  // closed for everyone by the one who opened it
+  await a.getByTestId('score-close').click();
+  await expect(b.getByTestId('score')).toHaveCount(0);
+});

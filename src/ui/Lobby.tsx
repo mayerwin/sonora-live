@@ -1,4 +1,5 @@
 import { useComputed, useSignal } from '@preact/signals';
+import { RecoverBanner } from './Record.tsx';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
   ArrowRight,
@@ -202,6 +203,9 @@ export function Lobby() {
         </div>
       </header>
 
+      <div class="lobby-banner">
+        <RecoverBanner />
+      </div>
       <main class="lobby-main">
         <section class="lobby-hero">
           {fresh ? (

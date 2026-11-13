@@ -23,6 +23,10 @@ export interface Settings {
   autoLevel: boolean;
   /** the metronome this device starts with (tempo, bar, subdivision, accent) and its own volume */
   metronome: { bpm: number; beats: number; sub: 1 | 2 | 3 | 4; accent: boolean; volume: number; countIn: boolean };
+  /** recording: picture size, and a separate sound file for each person too */
+  record: { quality: '720p' | '1080p'; voices: boolean };
+  /** in rooms one opens: hold the shared controls (remembered from the last time) */
+  holdControls: boolean;
   /** the sound check's measurements: the delay beyond what the browser reports (ms), per output and microphone */
   calibration: Record<string, number>;
   /** the tuner's reference pitch for A4 (Hz) */
@@ -79,6 +83,8 @@ export const DEFAULTS: Settings = {
   tunerA4: 440,
   calibration: {},
   metronome: { bpm: 100, beats: 4, sub: 1, accent: true, volume: 0.7, countIn: false },
+  record: { quality: '720p', voices: false },
+  holdControls: false,
   midiSync: true,
   audioQuality: 'high',
   videoQuality: 'hd',
@@ -121,6 +127,7 @@ function load(): Settings {
       ...s,
       midi: { ...DEFAULTS.midi, ...(s.midi ?? {}) },
       metronome: { ...DEFAULTS.metronome, ...(s.metronome ?? {}) },
+      record: { ...DEFAULTS.record, ...(s.record ?? {}) },
       turn: { ...DEFAULTS.turn, ...(s.turn ?? {}) },
     };
   } catch {

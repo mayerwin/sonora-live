@@ -22,6 +22,7 @@ import { settings, update } from '../app/settings.ts';
 import { t } from '../app/i18n.ts';
 import { clockOf, MIN_LOOP_S, stepRate } from '../media/backing-core.ts';
 import { trackOpen } from './state.ts';
+import { HeldNote } from './Host.tsx';
 
 const ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac,.aif,.aiff';
 
@@ -34,7 +35,9 @@ export function BackingPlayer() {
   const pos = b.position.value;
   const peers = session.peers.value;
   const vol = settings.value.backingVolume;
-  const can = b.canControl;
+  // (read here so the panel follows the host taking or giving back the controls)
+  const held = session.controlsHeld.value;
+  const can = b.canControl && !held;
   const self = session.selfId;
   const file = useRef<HTMLInputElement>(null);
   const active = !!tr && !!s && s.id === tr.id;
@@ -64,6 +67,7 @@ export function BackingPlayer() {
           (e.currentTarget as HTMLInputElement).value = '';
         }}
       />
+      <HeldNote />
       <div class="track-row">
         <FileMusic class="track-ico" />
         <div class="track-name" title={tr?.name}>

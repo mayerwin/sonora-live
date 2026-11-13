@@ -217,6 +217,11 @@ export class Piano {
     return ctx;
   }
 
+  /** Where the piano's sound leaves it (for a recording), once it has a context. */
+  output(): AudioNode | null {
+    return this.ctx ? this.master : null;
+  }
+
   private build(ctx: AudioContext, out: AudioNode): void {
     // no compressor: it would delay every note (its look-ahead, about 6 ms) and squeeze the dynamics; the
     // engine's output keeps the headroom (a soft clip at −1 dB, no delay)

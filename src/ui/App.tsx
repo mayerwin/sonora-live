@@ -13,7 +13,10 @@ export function App() {
   // leaving the page by accident in the middle of a lesson
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (session.phase.peek() === 'room' && session.peers.peek().length > 0) {
+      if (
+        (session.phase.peek() === 'room' && session.peers.peek().length > 0) ||
+        session.recorder.state.peek() !== 'idle'
+      ) {
         e.preventDefault();
         e.returnValue = '';
       }

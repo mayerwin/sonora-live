@@ -167,8 +167,9 @@ export class MidiDevices {
       list
         .filter((p) => `port:${instrumentKey(p.name ?? '')}` === key)
         // "FP-30X" before "MIDIIN2 (FP-30X)": the main port of the instrument
-        .sort((a, b) => Number(/midi(in|out)\d/i.test(a.name ?? '')) - Number(/midi(in|out)\d/i.test(b.name ?? '')))[0] ??
-      null;
+        .sort(
+          (a, b) => Number(/midi(in|out)\d/i.test(a.name ?? '')) - Number(/midi(in|out)\d/i.test(b.name ?? '')),
+        )[0] ?? null;
     const input = match(inputs);
     const output = match(outputs);
     if (input !== this.input) {

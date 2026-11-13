@@ -64,7 +64,7 @@ export class Metronome {
   }
 
   get canControl(): boolean {
-    return !this.host.observer();
+    return !this.host.observer() && this.host.mayControl(this.host.selfId());
   }
 
   // ============================================================================================ commands
@@ -169,6 +169,8 @@ export class Metronome {
     const ver = Number(msg.ver);
     const by = typeof msg.by === 'string' ? msg.by : '';
     if (!Number.isFinite(ver) || !by) return;
+    // the host holds the controls: a change by anyone else does not count
+    if (!this.host.mayControl(by)) return;
     const cur = this.shared.peek();
     if (ver < cur.ver || (ver === cur.ver && by <= cur.by)) return;
     const sub = Number(msg.sub);

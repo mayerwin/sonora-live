@@ -37,6 +37,10 @@ export interface Policy {
   /** version: the highest wins when members disagree (ties: the larger author id) */
   ver: number;
   by: string;
+  /** who opened the room (whoever shared its code): the host, the same after a reload (a tab keeps its id) */
+  host: string;
+  /** the host holds the shared controls (the track, the metronome, recording, others' sound) while present */
+  controls: boolean;
 }
 
 export type DenyReason = 'full' | 'version';
@@ -443,6 +447,8 @@ export function validPolicy(x: unknown): Policy | null {
     limit: Math.max(2, Math.min(12, Math.round(p.limit))),
     ver: p.ver,
     by: String(p.by ?? ''),
+    host: String(p.host ?? p.by ?? ''),
+    controls: p.controls === true,
   };
 }
 

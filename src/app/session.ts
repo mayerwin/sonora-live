@@ -27,6 +27,8 @@ import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { BackingTrack, MAX_TRACK_BYTES, type BackingHost, type TrackMeta } from './backing.ts';
 import { Metronome } from './metronome.ts';
+import { Recorder } from './recorder.ts';
+import { MAX_SCORE_BYTES, Score, type ScoreMeta } from './score.ts';
 import { runSoundCheck, type CheckResult } from '../media/soundcheck.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
@@ -76,7 +78,14 @@ const STATS_EVERY_MS = 1000;
 
 function initialPolicy(selfId: string): Policy {
   const s = settings.peek();
-  return { locked: s.lockRooms, limit: Math.max(2, s.roomLimit), ver: 0, by: selfId };
+  return {
+    locked: s.lockRooms,
+    limit: Math.max(2, s.roomLimit),
+    ver: 0,
+    by: selfId,
+    host: selfId,
+    controls: s.holdControls,
+  };
 }
 
 export class Session {
@@ -100,11 +109,42 @@ export class Session {
     },
     sendFile: (meta, blob, to) => this.sendTrackFile(meta, blob, to),
     note: (text) => this.chat.system(text),
+    mayControl: (id) => this.mayControl(id),
   };
   /** the backing track everyone plays in time (src/app/backing.ts) */
   readonly backing = new BackingTrack(this.toolHost);
   /** the shared metronome (src/app/metronome.ts) */
   readonly metronome = new Metronome(this.toolHost);
+  /** the shared score with everyone's ink (src/app/score.ts) */
+  readonly score = new Score({
+    ...this.toolHost,
+    sendFile: (meta, blob, to) => this.sendScoreFile(meta, blob, to),
+  });
+  /** recording the lesson on this device (src/app/recorder.ts) */
+  readonly recorder = new Recorder({
+    selfId: () => this.selfId,
+    selfName: () => this.self.peek().name,
+    peers: () => this.peers.value,
+    camera: () => (this.media.camOn.value ? this.media.video.value : null),
+    extra: () => {
+      const tr = this.media.extra.value;
+      const kind = this.media.extraKind.value;
+      return tr && kind ? { track: tr, kind } : null;
+    },
+    mic: () => (this.media.micOn.value ? (this.media.sentAudio.value ?? this.media.audio.value) : null),
+    context: () => {
+      const ctx = engine.ensure();
+      // the piano joins the mix only once it has sounded here (its nodes exist from then on)
+      this.midi.piano.context();
+      return ctx;
+    },
+    localSources: () => [this.midi.piano.output(), engine.trackBus].filter((n): n is AudioNode => !!n),
+    send: (msg) => {
+      for (const l of this.parts.links()) l.sendControl(msg);
+    },
+    note: (text) => this.chat.system(text),
+    allowed: () => this.mayControl(this.selfId),
+  });
 
   /** lobby: choosing name and role; room: in the lesson; left: after leaving */
   readonly phase = signal<'lobby' | 'room' | 'left'>('lobby');
@@ -183,7 +223,15 @@ export class Session {
   /** what each person is sending over the file channel now: a chat file or the backing track */
   private fileIn = new Map<
     string,
-    { kind: 'chat' | 'track'; id: string; chunks: BlobPart[]; got: number; size: number; mime: string; name: string }
+    {
+      kind: 'chat' | 'track' | 'score';
+      id: string;
+      chunks: BlobPart[];
+      got: number;
+      size: number;
+      mime: string;
+      name: string;
+    }
   >();
   private fileOutQueue = Promise.resolve();
   private iceCache: RTCIceServer[] | null = null;
@@ -309,6 +357,8 @@ export class Session {
       if (!document.hidden && this.phase.peek() === 'room') void this.lockScreen();
     });
     void this.warmIce();
+    // recordings kept on this device (one interrupted by a closed tab is offered back)
+    void this.recorder.refresh();
     // any tap may be the one a browser waits for to start audio processing (Safari)
     const tap = () => this.media.unlockAudio();
     window.addEventListener('pointerdown', tap, { capture: true, passive: true });
@@ -505,6 +555,8 @@ export class Session {
     }
     this.noteLesson();
     this.markInLesson(false);
+    // a recording in progress is closed and saved
+    void this.recorder.stop();
     this.sayBye();
     this.parts.clear();
     this.room.leave(false);
@@ -514,6 +566,7 @@ export class Session {
     this.meter.detach();
     this.chat.clear();
     this.backing.clear();
+    this.score.clear();
     this.metronome.clear();
     this.knocks.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
@@ -578,13 +631,43 @@ export class Session {
     this.knocks.value = this.knocks.peek().filter((k) => k.id !== info.id);
   }
 
-  setPolicy(p: { locked: boolean; limit: number }): void {
+  /** Who opened the room: the one who may hold the shared controls. */
+  readonly isHost = computed(() => this.policy.value.host === this.id.value);
+  /** The host holds the shared controls and is here: this side may only change its own things. */
+  readonly controlsHeld = computed(() => {
+    const p = this.policy.value;
+    return p.controls && p.host !== this.id.value && this.peers.value.some((x) => x.id === p.host);
+  });
+  /** The host's name, while here. */
+  readonly hostName = computed(() => {
+    const p = this.policy.value;
+    if (p.host === this.id.value) return this.self.value.name;
+    return this.peers.value.find((x) => x.id === p.host)?.info.name ?? null;
+  });
+
+  /**
+   * May `id` change the shared tools (the backing track, the metronome, recording, someone else's sound)? Anyone,
+   * unless the host holds the controls: then only the host, while present (it is released when they leave).
+   */
+  mayControl(id: string): boolean {
+    const p = this.policy.peek();
+    if (!p.controls || id === p.host) return true;
+    const hostHere = p.host === this.selfId || this.peers.peek().some((x) => x.id === p.host);
+    return !hostHere;
+  }
+
+  setPolicy(p: { locked: boolean; limit: number; controls?: boolean }): void {
     const cur = this.policy.peek();
+    // the room's rules are the host's while they hold the controls; holding them is theirs alone
+    if (!this.mayControl(this.selfId)) return;
+    const controls = this.isHost.peek() && p.controls !== undefined ? p.controls : cur.controls;
     const next: Policy = {
       locked: p.locked,
       limit: Math.max(2, Math.min(12, p.limit)),
       ver: cur.ver + 1,
       by: this.selfId,
+      host: cur.host,
+      controls,
     };
     this.policy.value = next;
     for (const l of this.parts.links()) l.sendControl({ t: 'policy', policy: next });
@@ -653,7 +736,9 @@ export class Session {
     this.sendRoster();
     this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
     this.backing.onConnected(link.id);
+    this.score.onConnected(link.id);
     this.metronome.onConnected(link.id);
+    this.recorder.onConnected((m) => link.sendControl(m));
   }
 
   /** The other side introduced itself for the first time: now we can say who joined. */
@@ -692,6 +777,8 @@ export class Session {
     if (f?.kind === 'chat') this.chat.updateFile(f.id, { progress: 1, failed: true });
     this.fileIn.delete(id);
     this.backing.peerGone(id);
+    this.score.peerGone(id);
+    this.recorder.peerGone(id);
     engine.playRemote(id, null);
     const el = this.audioEls.get(id);
     if (el) {
@@ -1096,7 +1183,19 @@ export class Session {
         const p = validPolicy(msg.policy);
         if (!p) return;
         const cur = this.policy.peek();
-        const next = newerPolicy(cur, p);
+        let next = newerPolicy(cur, p);
+        // only the host takes or gives back the controls (an older version, or someone else, cannot)
+        if (next !== cur && next.controls !== cur.controls && next.by !== cur.host)
+          next = { ...next, controls: cur.controls, host: cur.host };
+        if (next !== cur && next.controls !== cur.controls) {
+          toast({
+            kind: 'info',
+            title: next.controls
+              ? t('{name} holds the shared controls', { name: this.hostName.peek() ?? t('The host') })
+              : t('Everyone can use the shared controls again'),
+            body: next.controls ? t('The track, the metronome and recording.') : undefined,
+          });
+        }
         if (next !== cur && (next.locked !== cur.locked || next.limit !== cur.limit)) {
           const who = this.peers.peek().find((x) => x.id === next.by)?.info.name ?? t('Someone');
           toast({
@@ -1157,6 +1256,13 @@ export class Session {
       case 'mt':
         this.metronome.onControl(id, msg);
         break;
+      case 'rec':
+        this.recorder.onControl(id, msg);
+        break;
+      case 'sc':
+      case 'sc-ink':
+        this.score.onControl(id, msg);
+        break;
     }
   }
 
@@ -1165,7 +1271,7 @@ export class Session {
    * MIDI): applied on their device, which shows who changed what. Musicians only (an observer only listens).
    */
   setTheirSound(id: string, patch: TheirSettings): void {
-    if (watching()) return;
+    if (watching() || !this.mayControl(this.selfId)) return;
     const link = this.parts.link(id);
     if (!link) return;
     link.sendControl({ t: 'sound', ...patch });
@@ -1174,7 +1280,7 @@ export class Session {
   /** Someone changed this side's sound settings. */
   private onSoundChange(id: string, msg: Record<string, unknown>): void {
     const by = this.peers.peek().find((p) => p.id === id);
-    if (!by || by.info.role === 'observer') return;
+    if (!by || by.info.role === 'observer' || !this.mayControl(id)) return;
     const cur = settings.peek();
     const name = by.info.name;
     const said: string[] = [];
@@ -1376,6 +1482,12 @@ export class Session {
   }
 
   /** The backing track's file, to everyone or to one person. */
+  private sendScoreFile(meta: ScoreMeta, blob: Blob, to?: string): void {
+    const links = this.parts.links().filter((l) => l.file.readyState === 'open' && (!to || l.id === to));
+    if (!links.length) return;
+    this.pushFile(links, { t: 'score', ...meta }, blob, () => {});
+  }
+
   private sendTrackFile(meta: TrackMeta, blob: Blob, to?: string): void {
     const links = this.parts.links().filter((l) => l.file.readyState === 'open' && (!to || l.id === to));
     if (!links.length) return;
@@ -1451,12 +1563,25 @@ export class Session {
         };
         this.fileIn.set(from, { kind: 'track', ...meta, chunks: [], got: 0 });
         this.backing.receiving(from, meta);
+      } else if (m.t === 'score' && typeof m.id === 'string') {
+        const meta: ScoreMeta = {
+          id: m.id.slice(0, 40),
+          name: String(m.name ?? 'score').slice(0, 120),
+          size: Math.min(MAX_SCORE_BYTES, Number(m.size) || 0),
+          mime: safeMime(String(m.mime || '')),
+        };
+        this.fileIn.set(from, { kind: 'score', ...meta, chunks: [], got: 0 });
+        this.score.receiving(from, meta);
       } else if (m.t === 'end') {
         const f = this.fileIn.get(from);
         if (!f || f.id !== m.id) return;
         this.fileIn.delete(from);
         const ok = f.got >= f.size;
         const blob = new Blob(f.chunks, { type: f.mime });
+        if (f.kind === 'score') {
+          this.score.received(from, { id: f.id, name: f.name, size: f.size, mime: f.mime }, ok ? blob : null);
+          return;
+        }
         if (f.kind === 'track') {
           this.backing.received(from, { id: f.id, name: f.name, size: f.size, mime: f.mime }, ok ? blob : null);
           return;
@@ -1467,11 +1592,13 @@ export class Session {
     }
     const f = this.fileIn.get(from);
     if (!f) return;
-    if (f.got + data.byteLength > (f.kind === 'track' ? MAX_TRACK_BYTES : MAX_FILE_BYTES)) return;
+    const max = f.kind === 'track' ? MAX_TRACK_BYTES : f.kind === 'score' ? MAX_SCORE_BYTES : MAX_FILE_BYTES;
+    if (f.got + data.byteLength > max) return;
     f.chunks.push(data);
     f.got += data.byteLength;
     const p = f.size ? Math.min(0.99, f.got / f.size) : 0;
     if (f.kind === 'track') this.backing.progress(from, p);
+    else if (f.kind === 'score') this.score.progress(from, p);
     else if (f.size) this.chat.updateFile(f.id, { progress: p });
   }
 

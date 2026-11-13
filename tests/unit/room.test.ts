@@ -15,25 +15,29 @@ class Member {
   admittedAgain: string[] = [];
 
   constructor(name: string, id = newPeerId(), limit = 2) {
-    this.policy = { locked: true, limit, ver: 0, by: id };
-    this.room = new Room(new MemoryRelay(), { id, name, role: 'player', since: 0 }, {
-      members: () => [this.room.self, ...this.peers.values()],
-      busy: () => false,
-      policy: () => this.policy,
-      onWelcome: (members, policy) => {
-        this.policy = policy;
-        this.denied = null;
-        for (const m of members) if (m.id !== this.id) link(this, all.get(m.id)!);
+    this.policy = { locked: true, limit, ver: 0, by: id, host: id, controls: false };
+    this.room = new Room(
+      new MemoryRelay(),
+      { id, name, role: 'player', since: 0 },
+      {
+        members: () => [this.room.self, ...this.peers.values()],
+        busy: () => false,
+        policy: () => this.policy,
+        onWelcome: (members, policy) => {
+          this.policy = policy;
+          this.denied = null;
+          for (const m of members) if (m.id !== this.id) link(this, all.get(m.id)!);
+        },
+        onDeny: (reason) => (this.denied = reason),
+        onFounded: () => {},
+        onAdmitted: (info, again) => {
+          if (again) this.admittedAgain.push(info.id);
+        },
+        onKnock: (info) => this.knocks.push(info.name),
+        onSignal: () => {},
+        onBye: (from) => this.peers.delete(from),
       },
-      onDeny: (reason) => (this.denied = reason),
-      onFounded: () => {},
-      onAdmitted: (info, again) => {
-        if (again) this.admittedAgain.push(info.id);
-      },
-      onKnock: (info) => this.knocks.push(info.name),
-      onSignal: () => {},
-      onBye: (from) => this.peers.delete(from),
-    });
+    );
     all.set(id, this);
   }
 
@@ -104,7 +108,7 @@ describe('room rendezvous', () => {
     expect(b.knocks).toContain('Cleo'); // every member sees the knock
     expect(c.peers.size).toBe(0);
     // let in: the room grows by one, the knocker's next hello is welcomed
-    a.policy = { locked: true, limit: 3, ver: 1, by: a.id };
+    a.policy = { locked: true, limit: 3, ver: 1, by: a.id, host: a.id, controls: false };
     b.policy = a.policy;
     await until(() => c.peers.size === 2);
     expect(c.room.phase).toBe('in');

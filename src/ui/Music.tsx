@@ -2,9 +2,11 @@
 // Tuner) opens their panels; several can be open at once, the keys at the bottom like a real keyboard. A tool someone
 // starts (a track, the metronome) opens by itself for everyone; a dot shows which tools are in use.
 
+import { HeldNote } from './Host.tsx';
 import { computed } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
+  FileText,
   Gauge,
   KeyboardMusic,
   ListMusic,
@@ -22,6 +24,7 @@ import { MAX_BPM, MIN_BPM, tapTempo, type MetronomeSetup } from '../media/metron
 import { detectPitch, nearestNote } from '../media/pitch.ts';
 import { engine } from '../media/engine.ts';
 import { BackingPlayer } from './BackingTrack.tsx';
+import { pickScore, scoreHidden, scoreShown } from './Score.tsx';
 import { noteName, PianoKeys } from './Keyboard.tsx';
 import { keyboardOpen, metroOpen, musicOpen, trackOpen, tunerOpen } from './state.ts';
 
@@ -89,7 +92,7 @@ export function MusicStrip() {
   }, [running]);
   const bt = session.backing.shared.value;
   const chips: {
-    id: 'track' | 'metronome' | 'tuner' | 'keys';
+    id: 'track' | 'metronome' | 'tuner' | 'keys' | 'score';
     label: string;
     icon: typeof Play;
     on: boolean;
@@ -123,6 +126,18 @@ export function MusicStrip() {
       toggle: () => (tunerOpen.value = !s.tuner),
     },
     { id: 'keys', label: t('Keys'), icon: KeyboardMusic, on: s.keys, busy: false, toggle: () => setKeys(!s.keys) },
+    {
+      id: 'score',
+      label: t('Score'),
+      icon: FileText,
+      on: scoreShown.value,
+      busy: !!session.score.shared.value?.id,
+      // open one (shared with everyone), or show and hide the one open
+      toggle: () => {
+        if (session.score.shared.peek()?.id) scoreHidden.value = !scoreHidden.peek();
+        else pickScore();
+      },
+    },
   ];
   return (
     <section class="music" aria-label={t('Music tools')} data-testid="music">
@@ -175,7 +190,8 @@ function MetronomePanel() {
   const m = session.metronome;
   const s = m.shared.value;
   const lit = m.lit.value;
-  const can = m.canControl;
+  const held = session.controlsHeld.value;
+  const can = m.canControl && !held;
   const self = session.selfId;
   const peers = session.peers.value;
   const vol = settings.value.metronome.volume;
@@ -197,6 +213,7 @@ function MetronomePanel() {
   };
   return (
     <div class="tool metro" data-testid="metronome">
+      <HeldNote />
       <div class="tool-row">
         <button
           type="button"

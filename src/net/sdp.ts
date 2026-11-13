@@ -51,7 +51,12 @@ export function tuneOpus(sdp: string, tuning: OpusTuning = DEFAULT_TUNING): stri
     if (l.startsWith('m=')) {
       flushAudio();
       inAudio = l.startsWith('m=audio');
-      audioHasOpus = inAudio && l.split(' ').slice(3).some((pt) => opusPts.has(pt.trim()));
+      audioHasOpus =
+        inAudio &&
+        l
+          .split(' ')
+          .slice(3)
+          .some((pt) => opusPts.has(pt.trim()));
       ptimeWritten = false;
       fmtpSeen.clear();
       out.push(l);

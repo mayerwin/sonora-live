@@ -171,7 +171,8 @@ function Card({ peer }: { peer: PeerView | null }) {
   const me = !peer;
   const v = me ? mine() : theirs(peer);
   // an observer only changes what they hear; nobody changes an observer's microphone from here
-  const locked = !me && (watching() || peer.info.role === 'observer');
+  // nor anyone's while the host holds the shared controls (the host still can)
+  const locked = !me && (watching() || peer.info.role === 'observer' || session.controlsHeld.value);
   const set = (patch: TheirSettings) => {
     if (me) {
       const { playOn, send, ...rest } = patch;

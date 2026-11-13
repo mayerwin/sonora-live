@@ -29,6 +29,7 @@ import { SoundCheckButton } from './Check.tsx';
 import { midiSyncTip } from './SoundPanel.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
+import { RecordingsSection } from './Record.tsx';
 
 const tabs = (): { id: SettingsTab; label: string }[] => [
   { id: 'audio', label: t('Sound') },
@@ -460,6 +461,7 @@ function RoomTab() {
           }}
         />
       </div>
+      <RecordingsSection />
       <div class="section">
         <h3>{t('Notifications')}</h3>
         <ToggleRow

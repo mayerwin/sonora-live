@@ -1,4 +1,5 @@
 import { Copy, Eye, Lock, LockOpen, Minus, Plus, Share2, Users } from 'lucide-preact';
+import { HostSection } from './Host.tsx';
 import { session } from '../app/session.ts';
 import { update } from '../app/settings.ts';
 import { prettyCode } from '../net/code.ts';
@@ -73,6 +74,7 @@ export function ShareSheet() {
 export function LockSheet() {
   const policy = session.policy.value;
   const count = 1 + session.peers.value.length;
+  const held = session.controlsHeld.value;
   const set = (locked: boolean, limit: number) => {
     session.setPolicy({ locked, limit });
     update({ lockRooms: locked, roomLimit: limit });
@@ -83,6 +85,7 @@ export function LockSheet() {
       icon={policy.locked ? <Lock /> : <LockOpen />}
       onClose={() => (sheet.value = null)}
     >
+      <HostSection />
       <ToggleRow
         title={t('Limit the room to {n} people', { n: policy.limit })}
         sub={
@@ -91,9 +94,10 @@ export function LockSheet() {
             : t('Anyone with the link or the code can join.')
         }
         checked={policy.locked}
+        disabled={held}
         onChange={(v) => set(v, policy.limit)}
       />
-      <div class="row-toggle" style={policy.locked ? undefined : 'opacity:.45;pointer-events:none'}>
+      <div class="row-toggle" style={policy.locked && !held ? undefined : 'opacity:.45;pointer-events:none'}>
         <Users size={20} color="var(--muted)" />
         <div class="grow">
           <div class="row-title">{t('Room size')}</div>
@@ -122,9 +126,11 @@ export function LockSheet() {
         </button>
       </div>
       <p style="margin:0;color:var(--muted);font-size:13.5px">
-        {t(
-          'Everyone in the room can change this. Rooms are private by design: the code is only known to the people you send it to, and everything travels end-to-end encrypted.',
-        )}
+        {held
+          ? t('The host decides who can join while holding the controls.')
+          : t(
+              'Everyone in the room can change this. Rooms are private by design: the code is only known to the people you send it to, and everything travels end-to-end encrypted.',
+            )}
       </p>
     </Sheet>
   );
