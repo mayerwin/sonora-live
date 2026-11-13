@@ -97,9 +97,12 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   kept), key (in semitones) and a repeated passage are shared; the volume is each person's own. Speed and key are
   [Signalsmith Stretch](https://signalsmith-audio.co.uk/code/stretch/), each change scheduled on the audio clock.
   Choose who plays or sings along: they hear the track on time, and everyone else hears it later by exactly how
-  long that person's sound takes to reach them, so voice and track arrive together (measured within 20 ms at 200 ms
+  long that person's sound takes to reach them, so voice and track arrive together (measured within 25 ms at 200 ms
   each way, see below). On speakers, the track is always taken out of the microphone (a canceller that knows exactly
   what the track plays), whichever echo cancelling is chosen.
+- **YouTube together**: paste a link in the Track panel and everyone watches it in time, on the same shared timeline
+  as a backing track: Play, seeking and speed are shared, and each side plays it as late as the sound of whoever
+  pressed Play reaches it (measured: within 5 ms of that delay).
 - **Clip warning**: with automatic gain off, the meter tells you when a forte passage overloads your microphone.
 
 ### Play together over MIDI
@@ -110,7 +113,8 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **No instrument on the other side?** It plays on the **built-in concert grand**: a Steinway sampled in four velocity
   layers, with real damper behaviour (the top octave and a half rings on, as on a grand), half-pedalling,
   re-striking, a touch of concert-hall reverb, and a limiter so a fortissimo chord with the pedal down never
-  distorts.
+  distorts. It can also be an **electric piano, an organ or strings**, synthesised on the spot: each player's choice
+  travels with their notes, so the others hear it as they chose.
 - **An 88-key display** shows everyone's notes and pedals in their colour. Click, touch, or use the computer keyboard
   (A W S E D… like a DAW) to play to the other side without an instrument.
 - **Loss-proof**: MIDI travels unordered and unacknowledged like game inputs, with redundancy and state snapshots, so a
@@ -128,25 +132,43 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **Join notifications**, on by default: a soft chime, a toast, a system notification when the tab is in the
   background (the browser asks for it when you open a room or copy its link), a counter in the tab title, and a
   vibration on phones.
-- **Musicians and observers**: everyone who opens the room's link plays and talks, with nothing to choose; a parent,
-  a guest or a phone used as a second camera gets the observer's link instead (from the share sheet), and comes in to
-  watch and listen. On the keys and in the chat you are in gold and the others in their own colour.
-- **No host**: anyone can leave or reload without ending the lesson. A reload rejoins as the same person, even in a full
-  room, and two people opening the same link at the same moment always find each other.
+- **Musicians and observers**: everyone who opens the room's link plays and talks, with nothing to choose; a parent
+  or a guest gets the observer's link instead (from the share sheet), and comes in to watch and listen. On the keys
+  and in the chat you are in gold and the others in their own colour.
+- **Nobody is needed to keep the room open**: anyone can leave or reload without ending the lesson. A reload rejoins
+  as the same person, even in a full room, and two people opening the same link at the same moment always find each
+  other. Whoever opened the room (and shared its code) can **hold the shared controls**: the track, the metronome,
+  recording, the others' sound settings and the room's size are then theirs alone, while everyone keeps their own
+  microphone, camera and volume. It survives their reload and is released the moment they leave.
 
 ### Everything a lesson needs
 
 - **Chat** with the full emoji picker, links, typing indicator, and **files sent directly** (sheet music as PDF,
   MusicXML or a photo, up to 50 MB): drop them on the chat or paste a picture.
 - **Reactions** (👏 🎵 🔥…) floating over the video.
-- **Share your screen** (a score editor, a PDF) or **add a second camera** pointed at the keys. Or scan the room's QR
-  code with a phone and use it as an overhead camera.
+- **A shared score**: open a PDF or a photo of the page and everyone sees it large, on the same page, and writes on it
+  (a pen, a highlighter, text) in their own colour, seen while it is drawn, with the writer's name at the pen's tip.
+  Undo, an eraser, your own zoom, and a PDF saved with everyone's annotations (pdf.js and pdf-lib, loaded only then).
+- **Record the lesson** on your own device: everyone's picture laid out as on screen (a shared screen or the score
+  large) with everyone's sound, written a second at a time into the browser's storage, so a closed tab or a crash
+  loses at most a second and the next visit offers the recording back. MP4 where the browser records H.264, WebM
+  otherwise; optionally each person's sound in a file of its own, for editing. Everyone sees a red chip while anyone
+  records.
+- **A phone as a camera**: scan a QR code and the phone becomes your camera on the hands, the bow or the pedals: no
+  sound, nothing to set up, shown next to you, up to four. It joins a full room without taking a place.
+- **Share your screen with its sound** (a video, a recording, a score editor): the sound goes out in stereo on a
+  channel of its own; a shared tab's sound plays here through the echo canceller, so it is never sent twice. Or add
+  a second camera on the same computer.
+- **A library on your device**: the tracks and scores of past lessons, one tap to open them again for everyone.
+- **Background blur**, keyboard shortcuts (press `?`), and an optional **lesson timer** with a chime five minutes
+  before the end.
 - **Connection panel**: the path (direct or relayed), round trip, estimated delay of the other side's sound, jitter
   buffer, bitrate, codec, packet loss, resolution.
 - **Installable** as an app on every platform (it then opens in its own window and starts offline), screen kept awake
   during the lesson, preferences remembered.
-- **In English and French** (*en français*), following the browser's language, with a switch in the lobby and in
-  Settings → General. Emoji search and note names follow too (do3 for middle C in French).
+- **In English, French, Spanish, German, Italian and Portuguese**, following the browser's language, with a switch in
+  the lobby and in Settings → General (only the language in use is loaded). Emoji search and note names follow too
+  (do3 for middle C in French and Italian, H for B in German).
 - **Always the latest version**, with no refresh to force: a new release loads by itself in the lobby, and never
   interrupts a lesson (it waits until you are back in the lobby).
 
@@ -242,7 +264,8 @@ connection by themselves.
 
 - **Direct WebRTC** between the browsers (STUN to find a path through routers; an optional TURN relay for networks
   that block direct paths). Audio, video, chat and MIDI share one encrypted connection (DTLS-SRTP / SCTP).
-- **Fixed media layout**: audio, camera and an extra video slot (screen or second camera) are negotiated once.
+- **Fixed media layout**: audio, camera, an extra video slot (screen or second camera) and the shared screen's sound
+  are negotiated once.
   Muting, switching devices or sound modes, turning the camera off and sharing the screen are all
   `RTCRtpSender.replaceTrack`: no renegotiation, no glitch.
 - **Opus settings** go into the session description each side sends (how it wants to *receive*): `stereo=1`,
@@ -256,6 +279,18 @@ connection by themselves.
 - **Recovery**: a dropped connection (Wi-Fi change, a laptop waking up) is restarted with an ICE restart instead of
   being rebuilt; signaling uses the direct channel when it works and the brokers otherwise.
 - Remote sound plays from a plain `<audio>` element: nothing between the network and your ears.
+
+Measured by the browser tests over the network simulator (the numbers each run prints):
+
+| Situation | Result |
+| --- | --- |
+| Backing track, 200 ms each way, the student sings along | his voice and the track reach the teacher together, within 25 ms |
+| Shared metronome, 200 ms each way | his playing lands on her clicks within 2 ms |
+| MIDI under 0 to 30 ms of jitter | the rhythm as heard stays within 3 ms |
+| MIDI with 3 % loss and jitter | no note lost, none left hanging |
+| A 700 kbit/s link each way | his sound keeps its 190 kbit/s, 0.4 % concealed; his picture adapts (about 300 kbit/s) |
+| Echo on speakers, 200 ms each way | the music-safe canceller takes 16 to 23 dB out |
+| Sound check | tells speakers from headphones, and measures a Bluetooth headset's extra delay |
 
 What to expect: about **10 ms** (capture) + **10 ms** (one Opus frame) + **half the network round trip** + **20–40 ms**
 (jitter buffer) + **~10 ms** (playout). Within a country, typically 50–100 ms: perfect for a lesson's back and forth.
@@ -302,7 +337,9 @@ response adds a little air, slightly more while the sustain pedal lets the strin
 
 ## Privacy
 
-- **No account, no server in the middle, no recording, no analytics.** The page is static files on GitHub Pages.
+- **No account, no server in the middle, no analytics.** The page is static files on GitHub Pages.
+- Recordings, the library of tracks and scores, and annotated scores stay **on your device** (the browser's own
+  storage); nothing is uploaded. Everyone in the lesson is told while someone records.
 - Audio, video, chat, files and MIDI go **directly between the browsers**, encrypted by WebRTC (DTLS-SRTP).
 - The handshake that lets you find each other passes through public MQTT brokers, **encrypted with a key made from the
   room code**; the brokers see neither the code nor the content.
@@ -330,8 +367,8 @@ instead, and `?debug` to see the connection log in the console.
 | `npm run dev` | Development server with live reload and the local relay |
 | `npm run typecheck` | TypeScript, strict |
 | `npm test` | Unit tests: room rendezvous, MIDI wire protocol under loss, BLE-MIDI parser, echo filter, Opus tuning, piano mapping and loading order, translations complete |
-| `npm run e2e` | Browser tests, both projects below. `-- --project chromium`: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave) |
-| `npm run e2e -- --project network` | Over simulated networks (`server/netsim.ts`, its own CI job): a long-distance link (up to 200 ms each way, jitter): backing track and MIDI in time with the other side's sound, measured by ear, and the track's echo removed on speakers |
+| `npm run e2e` | Browser tests, both projects below. `-- --project chromium`: real WebRTC between Chromium instances (meet, stereo Opus in 10 ms frames, chat, MIDI to the other side's instrument without echo, lock and knock, reload, simultaneous join, auto voice mode, leave, recording and its recovery, the score with ink saved as PDF, the host's controls, a phone as a camera, a screen's sound, background blur, YouTube in time, shortcuts, six languages) |
+| `npm run e2e -- --project network` | Over simulated networks (`server/netsim.ts`, its own CI job): delay, jitter, loss and capacity. A long-distance link (up to 200 ms each way, jitter): backing track, metronome and MIDI in time with the other side's sound, measured by ear, and the track's echo removed on speakers; a narrow link: the sound kept whole while the picture gives way |
 | | Also MIDI and the microphone without a track over bad networks: rhythm under jitter, 3% loss, an uneven link, the other side's sound coming back from speakers, the delay shown against the real one as the network worsens |
 | `npm run netsim` | The network simulator on its own, to try the app by hand over a slow link (see `server/netsim.ts`) |
 | `npm run build` | Production build in `dist/` (installable web app with offline support) |
@@ -406,6 +443,11 @@ expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
   `tools/build-aec.sh` rebuilds `src/media/aec.wasm`.
 - Backing track speed and key: [Signalsmith Stretch](https://signalsmith-audio.co.uk/code/stretch/) by Geraint Luff /
   Signalsmith Audio (MIT).
+- Scores: [pdf.js](https://mozilla.github.io/pdf.js/) by Mozilla (Apache-2.0) to show them,
+  [pdf-lib](https://pdf-lib.js.org) by Andrew Dillon (MIT) to save them annotated.
+- Background blur: [MediaPipe Selfie Segmentation](https://github.com/google-ai-edge/mediapipe) by Google (Apache-2.0).
+- Recordings' length in WebM: [fix-webm-duration](https://github.com/yusitnikov/fix-webm-duration) by Yuri Sitnikov
+  (MIT).
 - Icons: [Lucide](https://lucide.dev) (ISC).
 - Rendezvous design: [Boom Buds](https://github.com/mayerwin/Boom-Buds).
 - Bluetooth MIDI on Windows: [Perfect Bluetooth MIDI for Windows](https://github.com/mayerwin/Perfect-Bluetooth-MIDI-For-Windows).
