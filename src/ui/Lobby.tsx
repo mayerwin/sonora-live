@@ -32,7 +32,7 @@ import { SoundCheckButton } from './Check.tsx';
 import { GitHubIcon, initials, Logo, RoleIcon, Wordmark } from './icons.tsx';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
-import { capital, lang, LANGUAGES, t } from '../app/i18n.ts';
+import { capital, lang, LANGUAGES, t, type Lang } from '../app/i18n.ts';
 
 export function problemText(p: MediaProblem, what: 'camera' | 'microphone'): string {
   const cam = what === 'camera';
@@ -187,16 +187,22 @@ export function Lobby() {
               <Download /> {t('Install app')}
             </button>
           )}
-          {LANGUAGES.filter((l) => l.value !== lang.value).map((l) => (
-            <button
-              class="btn btn-sm btn-ghost"
-              lang={l.value}
-              onClick={() => update({ language: l.value })}
+          {/* one button: the language in use; the system's own list opens on it (each name in its language) */}
+          <label class="btn btn-sm btn-ghost lang-pick" title={t('Language')}>
+            <Languages /> {LANGUAGES.find((l) => l.value === lang.value)?.name}
+            <select
+              aria-label={t('Language')}
+              value={lang.value}
+              onChange={(e) => update({ language: (e.currentTarget as HTMLSelectElement).value as Lang })}
               data-testid="lobby-language"
             >
-              <Languages /> {l.name}
-            </button>
-          ))}
+              {LANGUAGES.map((l) => (
+                <option value={l.value} lang={l.value}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <a class="icon-btn" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('Source code on GitHub')}>
             <GitHubIcon />
           </a>

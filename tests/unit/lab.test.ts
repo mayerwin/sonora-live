@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { analyze, SR, wav } from '../../src/lab/analyze.ts';
 
 const sine = (f: number, a: number, s: number, from = 0, to = s) =>
-  Float32Array.from({ length: s * SR }, (_, i) => (i >= from * SR && i < to * SR ? a * Math.sin((2 * Math.PI * f * i) / SR) : 0));
+  Float32Array.from({ length: s * SR }, (_, i) =>
+    i >= from * SR && i < to * SR ? a * Math.sin((2 * Math.PI * f * i) / SR) : 0,
+  );
 const add = (...xs: Float32Array[]) => xs[0].map((_, i) => xs.reduce((s, x) => s + x[i], 0));
 const scale = (x: Float32Array, g: number) => x.map((v) => v * g);
 

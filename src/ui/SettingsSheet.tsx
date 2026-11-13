@@ -641,15 +641,18 @@ function AboutTab() {
         <h3>
           <Languages size={16} style="vertical-align:-3px" /> {t('Language')}
         </h3>
-        <Seg<LanguageSetting>
-          label={t('Language')}
+        <select
+          class="select"
+          aria-label={t('Language')}
           value={pref}
-          onChange={(v) => update({ language: v })}
-          options={[
-            { value: 'auto', label: t('Automatic'), title: t('The language of this browser') },
-            ...LANGUAGES.map((l) => ({ value: l.value, label: l.name })),
-          ]}
-        />
+          onChange={(e) => update({ language: (e.currentTarget as HTMLSelectElement).value as LanguageSetting })}
+          data-testid="language"
+        >
+          <option value="auto">{t('Automatic')}</option>
+          {LANGUAGES.map((l) => (
+            <option value={l.value}>{l.name}</option>
+          ))}
+        </select>
         {pref === 'auto' && (
           <p class="lead" style="font-size:13px">
             {t('Following this browser: {language}.', {

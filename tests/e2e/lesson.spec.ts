@@ -528,7 +528,12 @@ test('speaks French when the browser does, animates normally, and switches langu
   // Settings → General → English
   await page.getByTestId('btn-settings').click();
   await page.getByRole('tab', { name: 'Général' }).click();
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByTestId('language').selectOption('en');
+  await expect(page.getByRole('tab', { name: 'General' })).toBeVisible();
+  // and German: loaded when chosen, the whole page at once
+  await page.getByTestId('language').selectOption('de');
+  await expect(page.getByRole('tab', { name: 'Allgemein' })).toBeVisible();
+  await page.getByTestId('language').selectOption('en');
   await expect(page.getByRole('tab', { name: 'General' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.keyboard.press('Escape');

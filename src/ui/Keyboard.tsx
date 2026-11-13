@@ -6,18 +6,28 @@ import { Keyboard as KeyboardIcon, X } from 'lucide-preact';
 import { session } from '../app/session.ts';
 import { settings, updateMidi } from '../app/settings.ts';
 import { isTouch } from '../app/platform.ts';
-import { lang, t } from '../app/i18n.ts';
+import { lang, t, type Lang } from '../app/i18n.ts';
 
 const LOW = 21;
 const HIGH = 108;
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-const NAMES_FR = ['do', 'do♯', 'ré', 'ré♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'];
+/** the names musicians use in each language: solfège in the Romance languages, H for B in German */
+const NAMES_BY: Partial<Record<Lang, string[]>> = {
+  fr: ['do', 'do♯', 'ré', 'ré♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'],
+  es: ['do', 'do♯', 're', 're♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'],
+  it: ['do', 'do♯', 're', 're♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'],
+  pt: ['dó', 'dó♯', 'ré', 'ré♯', 'mi', 'fá', 'fá♯', 'sol', 'sol♯', 'lá', 'lá♯', 'si'],
+  de: ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'H'],
+};
+/** French and Italian count the octaves from one lower (middle C is do3) */
+const LOWER_OCTAVE = new Set<Lang>(['fr', 'it']);
 
-/** A note's name: C4 for middle C in English, do3 in French (the octaves are counted from one lower). */
+/** A note's name: C4 for middle C in English, do3 in French and Italian, do4 in Spanish, C4 in German. */
 export function noteName(note: number): string {
-  const octave = Math.floor(note / 12) - 1;
-  return lang.value === 'fr' ? `${NAMES_FR[note % 12]}${octave - 1}` : `${NAMES[note % 12]}${octave}`;
+  const l = lang.value;
+  const octave = Math.floor(note / 12) - 1 - (LOWER_OCTAVE.has(l) ? 1 : 0);
+  return `${(NAMES_BY[l] ?? NAMES)[note % 12]}${octave}`;
 }
 
 /** Computer keys -> semitones from the octave's C (by physical position: works on AZERTY and QWERTZ too). */

@@ -8,6 +8,7 @@ import { setupPwa } from './app/pwa.ts';
 import { watchForUpdates } from './app/update.ts';
 import { App } from './ui/App.tsx';
 import { Lab } from './lab/Lab.tsx';
+import { langReady } from './app/i18n.ts';
 
 if (new URLSearchParams(location.search).has('lab')) {
   // the sound lab: measurements on this device, no lesson
@@ -17,9 +18,12 @@ if (new URLSearchParams(location.search).has('lab')) {
   // a page served from a cache right after a release reloads before anything else
   watchForUpdates(() => session.phase.value);
   session.boot();
-  render(<App />, document.getElementById('app')!);
-  document.getElementById('boot')?.remove();
-  setupPwa();
+  // the first paint in the right language (its dictionary is a small file of its own)
+  void langReady.then(() => {
+    render(<App />, document.getElementById('app')!);
+    document.getElementById('boot')?.remove();
+    setupPwa();
+  });
 }
 
 // development and tests: reach the session from the console

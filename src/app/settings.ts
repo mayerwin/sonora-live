@@ -11,7 +11,7 @@ export type EchoSetting = 'auto' | 'on' | 'off';
 
 export interface Settings {
   /** 'auto': the browser's language */
-  language: 'auto' | 'en' | 'fr';
+  language: 'auto' | 'en' | 'fr' | 'es' | 'de' | 'it' | 'pt';
   name: string;
   sound: SoundSetting;
   echo: EchoSetting;

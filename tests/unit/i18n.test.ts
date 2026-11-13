@@ -2,7 +2,19 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FR } from '../../src/app/fr.ts';
-import { browserLang, lang, t, tn } from '../../src/app/i18n.ts';
+import { ES } from '../../src/app/es.ts';
+import { DE } from '../../src/app/de.ts';
+import { IT } from '../../src/app/it.ts';
+import { PT } from '../../src/app/pt.ts';
+import { browserLang, lang, loadLang, t, tn } from '../../src/app/i18n.ts';
+
+const DICTS: Record<string, Record<string, string>> = {
+  French: FR,
+  Spanish: ES,
+  German: DE,
+  Italian: IT,
+  Portuguese: PT,
+};
 
 /** Every source file of the app. */
 function sources(dir = 'src'): string[] {
@@ -35,7 +47,7 @@ function literal(src: string, i: number): { text: string; end: number } | null {
 function used(): Map<string, string> {
   const found = new Map<string, string>();
   for (const file of sources()) {
-    if (file.endsWith('fr.ts')) continue;
+    if (/src\/app\/(fr|es|de|it|pt)\.ts$/.test(file)) continue;
     const src = readFileSync(file, 'utf8');
     for (const m of src.matchAll(/(?<![\w.])(t|tn)\(/g)) {
       let i = m.index! + m[0].length;
@@ -65,7 +77,7 @@ function used(): Map<string, string> {
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 const markup = (s: string) => [...s.matchAll(/<\/?(b|code|a)>/g)].map((m) => m[0]);
 
-describe('French translation', () => {
+describe('translations', () => {
   const strings = used();
 
   it('finds the strings in the code', () => {
@@ -74,21 +86,26 @@ describe('French translation', () => {
     expect(strings.has('{n} people')).toBe(true);
   });
 
-  it('translates every string the code shows', () => {
-    const missing = [...strings].filter(([s]) => !(s in FR)).map(([s, file]) => `${file}: ${s}`);
-    expect(missing).toEqual([]);
-  });
+  for (const [name, dict] of Object.entries(DICTS)) {
+    describe(name, () => {
+      it('translates every string the code shows', () => {
+        const missing = [...strings].filter(([s]) => !(s in dict)).map(([s, file]) => `${file}: ${s}`);
+        expect(missing).toEqual([]);
+      });
 
-  it('has no translation left over from text the code no longer shows', () => {
-    expect(Object.keys(FR).filter((k) => !strings.has(k))).toEqual([]);
-  });
+      it('has no translation left over from text the code no longer shows', () => {
+        expect(Object.keys(dict).filter((k) => !strings.has(k))).toEqual([]);
+      });
 
-  it('keeps the placeholders and the markup of each string', () => {
-    for (const [en, fr] of Object.entries(FR)) {
-      expect(placeholders(fr), en).toEqual(placeholders(en));
-      expect(markup(fr), en).toEqual(markup(en));
-    }
-  });
+      it('keeps the placeholders and the markup of each string, and leaves none empty', () => {
+        for (const [en, tr] of Object.entries(dict)) {
+          expect(placeholders(tr), en).toEqual(placeholders(en));
+          expect(markup(tr), en).toEqual(markup(en));
+          expect(tr.trim(), en).not.toBe('');
+        }
+      });
+    });
+  }
 
   it('follows French typography: no plain space before a colon, a question mark or a percent sign', () => {
     for (const fr of Object.values(FR)) expect(fr).not.toMatch(/ [:;?!%»]/);
@@ -99,13 +116,16 @@ describe('languages', () => {
   it('picks the first language of the browser that Sonora Live speaks', () => {
     expect(browserLang(['fr-FR', 'en-US'])).toBe('fr');
     expect(browserLang(['fr-CA'])).toBe('fr');
-    expect(browserLang(['de-DE', 'en-GB', 'fr'])).toBe('en');
-    expect(browserLang(['de-DE', 'fr'])).toBe('fr');
+    expect(browserLang(['de-DE', 'en-GB', 'fr'])).toBe('de');
+    expect(browserLang(['pt-BR'])).toBe('pt');
+    expect(browserLang(['nl-NL', 'it'])).toBe('it');
+    expect(browserLang(['es-419'])).toBe('es');
     expect(browserLang(['ja'])).toBe('en');
     expect(browserLang([])).toBe('en');
   });
 
-  it('translates, fills placeholders and uses each language’s plural rules', () => {
+  it('translates, fills placeholders and uses each language’s plural rules', async () => {
+    await Promise.all((['fr', 'de'] as const).map(loadLang));
     const before = lang.peek();
     try {
       lang.value = 'en';
@@ -120,6 +140,9 @@ describe('languages', () => {
       expect(tn(1, '{n} person', '{n} people')).toBe('1 personne');
       expect(tn(2, '{n} person', '{n} people')).toBe('2 personnes');
       expect(t('Sound: {mode}', { mode: 'casque' })).toBe('Son\u00a0: casque');
+      lang.value = 'de';
+      expect(tn(1, '{n} person', '{n} people')).toMatch(/^1 /);
+      expect(t('Leave')).not.toBe('Leave');
     } finally {
       lang.value = before;
     }

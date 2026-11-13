@@ -524,7 +524,6 @@ export const FR: Record<string, string> = spaced({
   'Save (used for new connections)': 'Enregistrer (pour les nouvelles connexions)',
   Language: 'Langue',
   Automatic: 'Automatique',
-  'The language of this browser': 'La langue de ce navigateur',
   'Following this browser: {language}.': 'Selon ce navigateur : {language}.',
   'Remote music lessons that sound like the room. Peer-to-peer video, pure instrument sound and two-way MIDI, in the browser. Free and open source (MIT).':
     'Des cours de musique à distance qui sonnent comme dans la pièce. Vidéo de pair à pair, son pur de l’instrument et MIDI dans les deux sens, dans le navigateur. Gratuit et open source (MIT).',

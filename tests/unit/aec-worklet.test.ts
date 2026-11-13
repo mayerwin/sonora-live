@@ -73,7 +73,8 @@ describe('echo canceller worklet', () => {
       reductionDb: number | null;
     }[];
     const last = stats[stats.length - 1];
-    if (process.env.AEC_DEBUG) console.log(stats.map((s) => `${s.delayMs.toFixed(0)}ms/${s.reductionDb?.toFixed(1)}dB`).join(" "));
+    if (process.env.AEC_DEBUG)
+      console.log(stats.map((s) => `${s.delayMs.toFixed(0)}ms/${s.reductionDb?.toFixed(1)}dB`).join(' '));
     // measured: the 400 ms, less the margin kept for the filter
     expect(last.delayMs).toBeGreaterThan(360);
     expect(last.delayMs).toBeLessThan(401);

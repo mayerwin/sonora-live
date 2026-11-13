@@ -594,6 +594,20 @@ a:hover {
   gap: 18px;
 }
 
+.lang-pick {
+  position: relative;
+  cursor: pointer;
+}
+
+/* the native list, invisible over the button: the platform's own picker on phones */
+.lang-pick select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+
 .lobby-top {
   display: flex;
   align-items: center;

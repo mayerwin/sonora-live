@@ -1,21 +1,56 @@
-// Languages: English, the text written in the code, and French. The browser's language decides, unless one is
-// chosen in Settings. Strings are looked up by their English text (as gettext does), so the code stays readable;
-// a unit test checks that every string the code passes to t() or tn() has its translation.
+// Languages: English, the text written in the code, then French, Spanish, German, Italian and Portuguese. The
+// browser's language decides, unless one is chosen in Settings. Strings are looked up by their English text (as
+// gettext does), so the code stays readable; a unit test checks that every string the code passes to t() or tn() has
+// its translation in each language. Only the language in use is loaded (main.tsx waits for it before the first paint).
 
 import { effect, signal } from '@preact/signals';
 import { settings } from './settings.ts';
-import { FR } from './fr.ts';
 
-export type Lang = 'en' | 'fr';
+export type Lang = 'en' | 'fr' | 'es' | 'de' | 'it' | 'pt';
 export type LanguageSetting = 'auto' | Lang;
 
 /** Each language in its own words. */
 export const LANGUAGES: { value: Lang; name: string }[] = [
   { value: 'en', name: 'English' },
   { value: 'fr', name: 'Français' },
+  { value: 'es', name: 'Español' },
+  { value: 'de', name: 'Deutsch' },
+  { value: 'it', name: 'Italiano' },
+  { value: 'pt', name: 'Português' },
 ];
 
-const DICTS: Record<Lang, Record<string, string> | null> = { en: null, fr: FR };
+const CODES = new Set<string>(LANGUAGES.map((l) => l.value));
+
+const LOADERS: Record<Exclude<Lang, 'en'>, () => Promise<Record<string, string>>> = {
+  fr: () => import('./fr.ts').then((m) => m.FR),
+  es: () => import('./es.ts').then((m) => m.ES),
+  de: () => import('./de.ts').then((m) => m.DE),
+  it: () => import('./it.ts').then((m) => m.IT),
+  pt: () => import('./pt.ts').then((m) => m.PT),
+};
+
+/** the dictionaries loaded so far (a new one re-renders what is on screen) */
+const dicts = signal<Partial<Record<Lang, Record<string, string>>>>({});
+const loading = new Map<Lang, Promise<void>>();
+
+/** Load a language's dictionary (once). */
+export function loadLang(l: Lang): Promise<void> {
+  if (l === 'en' || dicts.peek()[l]) return Promise.resolve();
+  let p = loading.get(l);
+  if (!p) {
+    p = LOADERS[l]().then(
+      (d) => {
+        dicts.value = { ...dicts.peek(), [l]: d };
+      },
+      () => {
+        // offline before it was ever cached: English until it can load
+        loading.delete(l);
+      },
+    );
+    loading.set(l, p);
+  }
+  return p;
+}
 
 /** The first of the browser's preferred languages that Sonora Live speaks. */
 export function browserLang(
@@ -27,17 +62,24 @@ export function browserLang(
 ): Lang {
   for (const p of prefs) {
     const base = (p ?? '').toLowerCase().split('-')[0];
-    if (base === 'fr' || base === 'en') return base;
+    if (CODES.has(base)) return base as Lang;
   }
   return 'en';
 }
 
-const resolve = (s: LanguageSetting | undefined): Lang => (s === 'en' || s === 'fr' ? s : browserLang());
+const resolve = (s: LanguageSetting | undefined): Lang => (s && s !== 'auto' && CODES.has(s) ? s : browserLang());
 
 export const lang = signal<Lang>(resolve(settings.peek().language));
 
+/** The language in use, loaded: what the first paint waits for. */
+export const langReady: Promise<void> = loadLang(lang.peek());
+
 effect(() => {
   lang.value = resolve(settings.value.language);
+});
+
+effect(() => {
+  void loadLang(lang.value);
   if (typeof document !== 'undefined') document.documentElement.lang = lang.value;
 });
 
@@ -49,7 +91,7 @@ function fill(s: string, vars: Vars): string {
 
 /** The text in the current language; `{name}` placeholders are filled from `vars`. */
 export function t(text: string, vars?: Vars): string {
-  const s = DICTS[lang.value]?.[text] ?? text;
+  const s = dicts.value[lang.value]?.[text] ?? text;
   return vars ? fill(s, vars) : s;
 }
 
