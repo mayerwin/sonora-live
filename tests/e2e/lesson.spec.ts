@@ -82,14 +82,20 @@ test('teacher and student meet, with pure stereo Opus in 10 ms frames', async ({
 
   // pure sound: no processing on the microphone
   const settings = await teacher.evaluate(() => {
-    const s = (
-      window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }
-    ).sonora.media.audio.value.getSettings();
-    return { ec: s.echoCancellation, ns: s.noiseSuppression, agc: s.autoGainControl };
+    const t = (window as unknown as { sonora: { media: { audio: { value: MediaStreamTrack } } } }).sonora.media.audio
+      .value;
+    const s = t.getSettings();
+    const caps = t.getCapabilities?.().echoCancellation as unknown as boolean[] | undefined;
+    return {
+      ec: s.echoCancellation,
+      ns: s.noiseSuppression,
+      agc: s.autoGainControl,
+      canEc: caps?.includes?.(true) ?? true,
+    };
   });
   // pure: no noise suppression, no automatic volume (the app's own, music-friendly level runs instead); on
-  // speakers, the browser's echo cancelling
-  expect(settings).toEqual({ ec: true, ns: false, agc: false });
+  // speakers, the browser's echo cancelling (a microphone that cannot: the music-safe one, tested in echo.spec.ts)
+  expect(settings).toEqual({ ec: settings.canEc, ns: false, agc: false, canEc: settings.canEc });
 
   // stereo Opus, ~192 kbps, 100 packets per second (10 ms frames), direct path
   await expect
