@@ -92,7 +92,6 @@ export const IT: Record<string, string> = {
   'Sound mode': 'Modalità audio',
   Pure: 'Puro',
   'MIDI instrument': 'Strumento MIDI',
-  Keys: 'Tastiera',
   Stop: 'Ferma',
   Share: 'Condividi',
   Flip: 'Capovolgi',
@@ -182,8 +181,6 @@ export const IT: Record<string, string> = {
   'Your name': 'Il tuo nome',
   'e.g. Clara': 'es. Clara',
   'Enter the room': 'Entra nella stanza',
-  'Headphones give the purest sound, wired if you can (Bluetooth adds delay). On speakers, the echo is cancelled.':
-    'Le cuffie danno il suono più puro, meglio se con il filo (il Bluetooth aggiunge ritardo). Con gli altoparlanti l’eco viene cancellata.',
   Use: 'Usa',
   'Have a code? Join another room': 'Hai un codice? Entra in un’altra stanza',
   'No account. No server sees your lesson.': 'Nessun account. Nessun server vede la tua lezione.',
@@ -671,8 +668,6 @@ export const IT: Record<string, string> = {
   'Studio sound: nothing processed, the lowest delay.': 'Suono da studio: nessuna elaborazione, il ritardo più basso.',
   'The others’ sound is taken out of your microphone, so they never hear themselves.':
     'L’audio degli altri viene tolto dal tuo microfono, così non sentono mai sé stessi.',
-  'Guessed: browsers do not say. Answer once, it is remembered for this output.':
-    'Ipotesi: i browser non lo dicono. Rispondi una volta e lo ricordiamo per questa uscita.',
   'Speech processing, for talking in a noisy room (it takes part of the music out).':
     'Elaborazione vocale, per parlare in una stanza rumorosa (toglie parte della musica).',
   'Chosen for every output (Settings → Sound).': 'Scelto per tutte le uscite (Impostazioni → Audio).',
@@ -717,10 +712,8 @@ export const IT: Record<string, string> = {
   'Metronome volume, on this device only': 'Volume del metronomo, solo su questo dispositivo',
   'Cents off the note': 'Cent di scarto dalla nota',
   'Play or sing a note': 'Suona o canta una nota',
-  'Turn on your microphone to tune': 'Accendi il microfono per accordare',
   'The pitch of A4 your ensemble tunes to': 'L’altezza del La4 su cui si accorda il tuo gruppo',
   'Reference pitch of A4': 'Altezza di riferimento del La4',
-  'Keys, backing track, metronome and tuner': 'Tastiera, base musicale, metronomo e accordatore',
   Music: 'Musica',
   'Listening…': 'In ascolto…',
   'Two short sweeps from your speakers: if your microphone hears them, you are on speakers. Takes 2 seconds.':
@@ -880,7 +873,6 @@ export const IT: Record<string, string> = {
   'Headphones are best: a browser cannot take YouTube’s sound out of the microphone.':
     'Meglio le cuffie: un browser non può togliere l’audio di YouTube dal microfono.',
   'Hide the video': 'Nascondi il video',
-  'How your playing sounds, here and for the others': 'Come suona ciò che suoni, qui e per gli altri',
   'Lesson length': 'Durata della lezione',
   'Lesson time': 'Tempo della lezione',
   'Lesson timer': 'Timer della lezione',
@@ -898,7 +890,6 @@ export const IT: Record<string, string> = {
   'Position in the video': 'Posizione nel video',
   Recent: 'Recenti',
   'Show the lesson timer': 'Mostra il timer della lezione',
-  'Sound of what you play': 'Suono di ciò che suoni',
   'Start again from now': 'Ricomincia da adesso',
   Strings: 'Archi',
   'The lesson ends at {time}.': 'La lezione finisce alle {time}.',
@@ -914,4 +905,18 @@ export const IT: Record<string, string> = {
     '{n} file, {size}: le tracce e gli spartiti delle tue lezioni, conservati qui da riaprire con un tocco. Mai caricati online.',
   '{n} min': '{n} min',
   '{n} minutes: the lesson’s length.': '{n} minuti: la durata della lezione.',
+  'Piano, track, score, metronome and tuner': 'Pianoforte, traccia, spartito, metronomo e accordatore',
+  'A YouTube video, watched together in time': 'Un video YouTube, guardato insieme a tempo',
+  'On the built-in instrument, here and for the others. Your own instrument keeps its sound.':
+    'Sullo strumento integrato, qui e per gli altri. Il tuo strumento mantiene il suo suono.',
+  'Your playing sounds as': 'Ciò che suoni ha il suono di',
+  'The microphone could not be opened for the tuner.': 'Impossibile aprire il microfono per l’accordatore.',
+  'You stopped recording: {file} is saved on this device.':
+    'Hai interrotto la registrazione: {file} è salvato su questo dispositivo.',
+  'This recording was saved without its sound. Try again; if it happens again, try another browser.':
+    'Questa registrazione è stata salvata senza audio. Riprova; se succede di nuovo, prova un altro browser.',
+  'Show fewer': 'Mostra meno',
+  'Show all {n}': 'Mostra tutti e {n}',
+  'Studio sound: nothing processed, the lowest delay. Wired is best: Bluetooth adds some.':
+    'Suono da studio: nessuna elaborazione, il ritardo minimo. Meglio con il cavo: il Bluetooth ne aggiunge un po’.',
 };

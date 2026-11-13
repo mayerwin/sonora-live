@@ -91,7 +91,6 @@ export const DE: Record<string, string> = {
   'Sound mode': 'Klangmodus',
   Pure: 'Pur',
   'MIDI instrument': 'MIDI-Instrument',
-  Keys: 'Tasten',
   Stop: 'Stopp',
   Share: 'Teilen',
   Flip: 'Wenden',
@@ -181,8 +180,6 @@ export const DE: Record<string, string> = {
   'Your name': 'Dein Name',
   'e.g. Clara': 'z. B. Clara',
   'Enter the room': 'Raum betreten',
-  'Headphones give the purest sound, wired if you can (Bluetooth adds delay). On speakers, the echo is cancelled.':
-    'Kopfhörer klingen am reinsten, am besten mit Kabel (Bluetooth verzögert). Über Lautsprecher wird das Echo unterdrückt.',
   Use: 'Los',
   'Have a code? Join another room': 'Du hast einen Code? Anderem Raum beitreten',
   'No account. No server sees your lesson.': 'Kein Konto. Kein Server sieht deinen Unterricht.',
@@ -670,8 +667,6 @@ export const DE: Record<string, string> = {
   'Studio sound: nothing processed, the lowest delay.': 'Studioklang: keine Bearbeitung, geringste Verzögerung.',
   'The others’ sound is taken out of your microphone, so they never hear themselves.':
     'Der Ton der anderen wird aus deinem Mikrofon herausgerechnet, damit sie sich nie selbst hören.',
-  'Guessed: browsers do not say. Answer once, it is remembered for this output.':
-    'Geschätzt: Browser verraten das nicht. Antworte einmal, dann wird es für diesen Ausgang gemerkt.',
   'Speech processing, for talking in a noisy room (it takes part of the music out).':
     'Sprachverarbeitung, zum Reden in einem lauten Raum (nimmt einen Teil der Musik weg).',
   'Chosen for every output (Settings → Sound).': 'Für alle Ausgänge gewählt (Einstellungen → Ton).',
@@ -717,10 +712,8 @@ export const DE: Record<string, string> = {
   'Metronome volume, on this device only': 'Lautstärke des Metronoms, nur auf diesem Gerät',
   'Cents off the note': 'Abweichung vom Ton in Cent',
   'Play or sing a note': 'Spiel oder sing einen Ton',
-  'Turn on your microphone to tune': 'Schalte dein Mikrofon ein, um zu stimmen',
   'The pitch of A4 your ensemble tunes to': 'Die Tonhöhe des a¹, auf die dein Ensemble stimmt',
   'Reference pitch of A4': 'Kammerton a¹',
-  'Keys, backing track, metronome and tuner': 'Tasten, Begleitspur, Metronom und Stimmgerät',
   Music: 'Musik',
   'Listening…': 'Höre zu…',
   'Two short sweeps from your speakers: if your microphone hears them, you are on speakers. Takes 2 seconds.':
@@ -881,7 +874,6 @@ export const DE: Record<string, string> = {
   'Headphones are best: a browser cannot take YouTube’s sound out of the microphone.':
     'Am besten mit Kopfhörern: Ein Browser kann den Ton von YouTube nicht aus dem Mikrofon herausnehmen.',
   'Hide the video': 'Video ausblenden',
-  'How your playing sounds, here and for the others': 'Wie dein Spiel klingt, hier und bei den anderen',
   'Lesson length': 'Unterrichtsdauer',
   'Lesson time': 'Unterrichtszeit',
   'Lesson timer': 'Unterrichts-Timer',
@@ -899,7 +891,6 @@ export const DE: Record<string, string> = {
   'Position in the video': 'Position im Video',
   Recent: 'Zuletzt',
   'Show the lesson timer': 'Unterrichts-Timer anzeigen',
-  'Sound of what you play': 'Klang deines Spiels',
   'Start again from now': 'Ab jetzt neu starten',
   Strings: 'Streicher',
   'The lesson ends at {time}.': 'Der Unterricht endet um {time}.',
@@ -915,4 +906,18 @@ export const DE: Record<string, string> = {
     '{n} Dateien, {size}: die Spuren und Noten deines Unterrichts, hier aufbewahrt, mit einem Tipp wieder offen. Nie hochgeladen.',
   '{n} min': '{n} Min.',
   '{n} minutes: the lesson’s length.': '{n} Minuten: die Länge des Unterrichts.',
+  'Piano, track, score, metronome and tuner': 'Klavier, Spur, Noten, Metronom und Stimmgerät',
+  'A YouTube video, watched together in time': 'Ein YouTube-Video, gemeinsam im Takt angeschaut',
+  'On the built-in instrument, here and for the others. Your own instrument keeps its sound.':
+    'Auf dem eingebauten Instrument, hier und bei den anderen. Dein eigenes Instrument behält seinen Klang.',
+  'Your playing sounds as': 'Dein Spiel klingt wie',
+  'The microphone could not be opened for the tuner.': 'Das Mikrofon ließ sich für das Stimmgerät nicht öffnen.',
+  'You stopped recording: {file} is saved on this device.':
+    'Du hast die Aufnahme beendet: {file} ist auf diesem Gerät gespeichert.',
+  'This recording was saved without its sound. Try again; if it happens again, try another browser.':
+    'Diese Aufnahme wurde ohne Ton gespeichert. Versuch es noch einmal; passiert es wieder, nimm einen anderen Browser.',
+  'Show fewer': 'Weniger anzeigen',
+  'Show all {n}': 'Alle {n} anzeigen',
+  'Studio sound: nothing processed, the lowest delay. Wired is best: Bluetooth adds some.':
+    'Studioklang: nichts wird bearbeitet, die kürzeste Verzögerung. Am besten mit Kabel: Bluetooth fügt etwas hinzu.',
 };

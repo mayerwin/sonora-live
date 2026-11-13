@@ -8,7 +8,6 @@ import {
   Download,
   FlipHorizontal2,
   Languages,
-  Headphones,
   Mic,
   MicOff,
   Piano,
@@ -130,8 +129,9 @@ export function Lobby() {
         ?.query({ name })
         .then((st) => {
           watched.push(st);
+          // (the media layer starts what was allowed: src/media/local.ts; here, the device names appear)
           st.onchange = () => {
-            if (alive && st.state === 'granted') void startMedia().then(refresh);
+            if (alive && st.state === 'granted') setTimeout(refresh, 800);
           };
         })
         .catch(() => {});
@@ -457,15 +457,6 @@ export function Lobby() {
             {fresh ? t('Enter the room') : t('Join the lesson')} <ArrowRight />
           </button>
 
-          <div class="hint">
-            <Headphones />
-            <span>
-              {t(
-                'Headphones give the purest sound, wired if you can (Bluetooth adds delay). On speakers, the echo is cancelled.',
-              )}
-            </span>
-          </div>
-
           {joinOther.value ? (
             <div class="field">
               <span class="label">{t('Room code')}</span>
@@ -524,8 +515,6 @@ export function Lobby() {
  */
 function ListeningQuestion() {
   const value = session.listening.value;
-  const label = session.media.outputLabel.value;
-  const known = !!label && !!settings.value.outputs[label];
   return (
     <div class="listen-q" data-testid="listen-q">
       <span>{t('Wearing headphones?')}</span>
@@ -538,12 +527,11 @@ function ListeningQuestion() {
           { value: 'speakers', label: t('No, speakers') },
         ]}
       />
-      <SoundCheckButton />
+      <SoundCheckButton compact />
       <small>
         {value === 'headphones'
-          ? t('Studio sound: nothing processed, the lowest delay.')
-          : t('The others’ sound is taken out of your microphone, so they never hear themselves.')}{' '}
-        {!known && t('Guessed: browsers do not say. Answer once, it is remembered for this output.')}
+          ? t('Studio sound: nothing processed, the lowest delay. Wired is best: Bluetooth adds some.')
+          : t('The others’ sound is taken out of your microphone, so they never hear themselves.')}
       </small>
     </div>
   );

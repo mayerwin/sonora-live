@@ -12,6 +12,9 @@ import { t } from '../app/i18n.ts';
 
 const video = session.video;
 
+/** the field to share a link is out (from the Track panel's YouTube button) */
+export const ytFormOpen = signal(false);
+
 /** hidden here by hand (until another video is shared) */
 export const videoHidden = signal(false);
 export const videoShown = computed(() => !!video.shared.value?.id && !videoHidden.value);
@@ -70,7 +73,7 @@ export function VideoControls() {
   const [link, setLink] = useState('');
   const [bad, setBad] = useState(false);
   if (!s?.id) {
-    if (!can) return null;
+    if (!can || !ytFormOpen.value) return null;
     return (
       <form
         class="yt-add"
@@ -79,6 +82,7 @@ export function VideoControls() {
           if (video.open(link)) {
             setLink('');
             videoHidden.value = false;
+            ytFormOpen.value = false;
           } else setBad(true);
         }}
       >
@@ -94,6 +98,10 @@ export function VideoControls() {
             setBad(false);
           }}
           aria-invalid={bad}
+          ref={(el) => {
+            if (el && !link) setTimeout(() => el.focus(), 0);
+          }}
+          onKeyDown={(e) => e.key === 'Escape' && (ytFormOpen.value = false)}
           data-testid="yt-link"
         />
         <button class="btn btn-sm btn-ghost" disabled={!youtubeId(link)} data-testid="yt-open">
@@ -148,9 +156,12 @@ export function VideoControls() {
       >
         <X size={16} />
       </button>
-      <small class="yt-note">
-        {t('Headphones are best: a browser cannot take YouTube’s sound out of the microphone.')}
-      </small>
+      {/* on speakers only: the microphone hears the video and cannot take it out */}
+      {session.listening.value === 'speakers' && (
+        <small class="yt-note">
+          {t('Headphones are best: a browser cannot take YouTube’s sound out of the microphone.')}
+        </small>
+      )}
     </div>
   );
 }

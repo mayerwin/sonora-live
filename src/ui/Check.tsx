@@ -16,7 +16,8 @@ type Phase =
   | { k: 'unheard' }
   | { k: 'failed' };
 
-export function SoundCheckButton() {
+/** `compact` (the lobby): the button alone until there is a result; what it does is in its tooltip. */
+export function SoundCheckButton({ compact = false }: { compact?: boolean } = {}) {
   const [phase, setPhase] = useState<Phase>({ k: 'idle' });
   const run = async (mode: 'detect' | 'headphones') => {
     setPhase({ k: 'running', mode });
@@ -31,18 +32,22 @@ export function SoundCheckButton() {
   };
   const busy = phase.k === 'running';
   return (
-    <div class="check" data-testid="sound-check">
+    <div class="sound-check" data-testid="sound-check">
       <button
         type="button"
         class="btn btn-sm"
         disabled={busy}
         onClick={() => void run('detect')}
         data-testid="check-run"
+        title={t(
+          'Two short sweeps from your speakers: if your microphone hears them, you are on speakers. Takes 2 seconds.',
+        )}
       >
         <AudioWaveform /> {busy && phase.mode === 'detect' ? t('Listening…') : t('Sound check')}
       </button>
       <p class="check-say" aria-live="polite">
         {phase.k === 'idle' &&
+          !compact &&
           t(
             'Two short sweeps from your speakers: if your microphone hears them, you are on speakers. Takes 2 seconds.',
           )}

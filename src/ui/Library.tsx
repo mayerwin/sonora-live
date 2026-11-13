@@ -1,7 +1,7 @@
 // The library, where it is useful: the recent tracks under an empty track player, the recent scores in the score
 // picker, everything (with its size) in Settings. One tap opens a file for everyone again.
 
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { FileMusic, FileText, Trash2 } from 'lucide-preact';
 import { t } from '../app/i18n.ts';
 import {
@@ -59,6 +59,8 @@ export function Recent({ kind, onOpen, max = 6 }: { kind: LibKind; onOpen: (f: F
 /** Settings: what the library holds, and a way to empty it. */
 export function LibrarySection() {
   const items = useLibrary();
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, 5);
   return (
     <div class="section">
       <h3>{t('Library on this device')}</h3>
@@ -76,7 +78,7 @@ export function LibrarySection() {
       {items.length > 0 && (
         <>
           <ul class="rec-list" data-testid="library-list">
-            {items.slice(0, 30).map((it) => (
+            {shown.map((it) => (
               <li key={it.id}>
                 {it.kind === 'track' ? <FileMusic size={16} /> : <FileText size={16} />}
                 <span class="grow">
@@ -94,9 +96,16 @@ export function LibrarySection() {
               </li>
             ))}
           </ul>
-          <button class="btn btn-sm btn-ghost" style="justify-self:start" onClick={() => void forgetAll()}>
-            <Trash2 /> {t('Empty the library')}
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            {items.length > 5 && (
+              <button class="btn btn-sm btn-ghost" onClick={() => setAll(!all)}>
+                {all ? t('Show fewer') : t('Show all {n}', { n: items.length })}
+              </button>
+            )}
+            <button class="btn btn-sm btn-ghost" onClick={() => void forgetAll()}>
+              <Trash2 /> {t('Empty the library')}
+            </button>
+          </div>
         </>
       )}
     </div>

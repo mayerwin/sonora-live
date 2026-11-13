@@ -4,6 +4,7 @@
 
 import { useRef } from 'preact/hooks';
 import {
+  TvMinimalPlay,
   ChevronDown,
   FileMusic,
   Headphones,
@@ -24,7 +25,7 @@ import { clockOf, MIN_LOOP_S, stepRate } from '../media/backing-core.ts';
 import { trackOpen } from './state.ts';
 import { HeldNote } from './Host.tsx';
 import { Recent } from './Library.tsx';
-import { VideoControls } from './Video.tsx';
+import { VideoControls, ytFormOpen } from './Video.tsx';
 
 const ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac,.aif,.aiff';
 
@@ -39,6 +40,7 @@ export function BackingPlayer() {
   const vol = settings.value.backingVolume;
   // (read here so the panel follows the host taking or giving back the controls)
   const held = session.controlsHeld.value;
+  const videoOn = !!session.video.shared.value?.id;
   const can = b.canControl && !held;
   const self = session.selfId;
   const file = useRef<HTMLInputElement>(null);
@@ -70,7 +72,8 @@ export function BackingPlayer() {
         }}
       />
       <HeldNote />
-      <VideoControls />
+      {/* a shared video's controls first; the field to share one opens under its button */}
+      {videoOn && <VideoControls />}
       {can && !tr && !incoming && !s?.id && <Recent kind="track" onOpen={(f) => b.load(f)} />}
       <div class="track-row">
         <FileMusic class="track-ico" />
@@ -81,6 +84,8 @@ export function BackingPlayer() {
             t('Receiving {file} · {pct}%', { file: incoming.name, pct: Math.round(incoming.progress * 100) })
           ) : s?.id ? (
             t('Waiting for the track…')
+          ) : videoOn ? (
+            ''
           ) : (
             <span class="muted">{t('No backing track. Load an audio file: it plays for everyone, in time.')}</span>
           )}
@@ -88,6 +93,17 @@ export function BackingPlayer() {
         {can && (
           <button class="btn btn-sm btn-ghost" onClick={pick} data-testid="track-load">
             <Upload /> {tr ? t('Change') : t('Load a track')}
+          </button>
+        )}
+        {can && !tr && !s?.id && !videoOn && (
+          <button
+            class={`btn btn-sm btn-ghost ${ytFormOpen.value ? 'on' : ''}`}
+            onClick={() => (ytFormOpen.value = !ytFormOpen.value)}
+            aria-expanded={ytFormOpen.value}
+            title={t('A YouTube video, watched together in time')}
+            data-testid="yt-toggle"
+          >
+            <TvMinimalPlay /> YouTube
           </button>
         )}
         {can && tr && (
@@ -109,6 +125,7 @@ export function BackingPlayer() {
           <ChevronDown size={16} />
         </button>
       </div>
+      {!videoOn && <VideoControls />}
 
       {active && (
         <>

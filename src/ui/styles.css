@@ -959,7 +959,7 @@ a:hover {
   font-size: 14px;
 }
 
-.check {
+.sound-check {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -2843,8 +2843,24 @@ emoji-picker {
 }
 
 .tool-vol {
-  flex: 1;
-  min-width: 140px;
+  flex: 0 1 190px;
+  min-width: 120px;
+}
+
+/* the metronome: its two groups side by side while there is room (one line on a computer), wrapping on a phone */
+.tool.metro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+}
+
+.tool.metro > .held-note {
+  flex-basis: 100%;
+}
+
+.tool.metro > .tool-opts {
+  flex: 1 1 480px;
 }
 
 .bpm {
@@ -3359,10 +3375,29 @@ emoji-picker {
   color: var(--text-2);
 }
 
+.score-color-wrap {
+  position: relative;
+}
+
+.score-color-wrap > .icon-btn .swatch {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 .score-colors {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
   display: flex;
-  gap: 4px;
-  padding: 0 6px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
 }
 
 .swatch {
@@ -3461,7 +3496,8 @@ emoji-picker {
 @media (max-width: 640px) {
   .stage.with-score {
     grid-template-columns: 1fr;
-    grid-template-rows: 84px minmax(0, 1fr);
+    /* the cameras in a row above (none: no row), the score or video below */
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 8px;
   }
 
@@ -3480,22 +3516,46 @@ emoji-picker {
     aspect-ratio: auto;
   }
 
-  .stage.with-score .score {
+  .stage.with-score > .stage-main,
+  .stage.with-score > .yt {
     grid-row: 2;
+  }
+
+  .stage.with-score .score {
     padding: 6px;
+  }
+
+  /* the score's tools in one row that scrolls sideways, not three */
+  .score-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+  }
+
+  .score-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .score-group {
+    flex: none;
+  }
+
+  /* the palette hangs from the score panel (the row of tools scrolls, and would clip it) */
+  .score {
+    position: relative;
+  }
+
+  .score-color-wrap {
+    position: static;
+  }
+
+  .score-colors {
+    top: 52px;
   }
 
   .score-bar .hide-xs {
     display: none;
-  }
-
-  .score-colors {
-    padding: 0 3px;
-  }
-
-  .swatch {
-    width: 16px;
-    height: 16px;
   }
 }
 
@@ -4660,4 +4720,14 @@ button.chip-btn:hover {
     min-width: 42px;
     padding: 0 2px;
   }
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.score-group[hidden] {
+  display: none;
 }

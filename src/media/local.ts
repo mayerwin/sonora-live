@@ -70,6 +70,7 @@ export class LocalMedia {
   /** whether the camera shows a picture (black behind a shutter, none when switched off by a key) */
   readonly picture = new PictureWatch();
   constructor() {
+    this.watchPermissions();
     // the engine's audio context started (a tap): process what is sent, if anything should be
     effect(() => {
       // and when it stops (interrupted): back to the microphone itself rather than silence from a stopped
@@ -108,6 +109,9 @@ export class LocalMedia {
   }
 
   /** Ask for camera and microphone together (one permission prompt). */
+  /** start() was called: the person wants their microphone (and camera) */
+  private started = false;
+
   start(opts: {
     mode: SoundMode;
     micId: string;
@@ -115,6 +119,7 @@ export class LocalMedia {
     quality: VideoQuality;
     wantVideo: boolean;
   }): Promise<void> {
+    this.started = true;
     return this.run(async () => {
       if (!this.supported) {
         const secure = window.isSecureContext;
@@ -201,6 +206,31 @@ export class LocalMedia {
     this.picture.watch(t);
     void this.emitVideo(t);
     if (old && old !== t) old.stop();
+  }
+
+  /**
+   * Allowed afterwards (from the address bar, after a refusal): the microphone and camera start at once, in the
+   * lobby or in the lesson, without reloading. The camera only if it is wanted (not turned off by hand).
+   */
+  private watchPermissions(): void {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return;
+    for (const name of ['microphone', 'camera'] as PermissionName[]) {
+      void navigator.permissions
+        .query({ name })
+        .then((st) => {
+          st.addEventListener('change', () => {
+            if (st.state !== 'granted' || !this.started) return;
+            if (name === 'microphone' && !this.audio.peek()) void this.restartAudio(this.mode.peek());
+            if (name === 'camera' && !this.video.peek() && this.videoProblem.peek()) {
+              this.camOn.value = true;
+              void this.restartVideo();
+            }
+          });
+        })
+        .catch(() => {
+          // a browser that cannot tell (Firefox for the camera): a Retry button stays in the lobby
+        });
+    }
   }
 
   /** New microphone track (another mode or device). */

@@ -1,7 +1,6 @@
 // The 88 keys: what everyone plays lights up in their role colour (and the sustain pedals). The keys can be
 // played with the mouse, touch, or the computer keyboard; they sound on the built-in piano and reach the others.
 
-import { SOUNDS, type InstrumentSound } from '../midi/synth.ts';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Keyboard as KeyboardIcon, X } from 'lucide-preact';
 import { session } from '../app/session.ts';
@@ -13,9 +12,6 @@ const LOW = 21;
 const HIGH = 108;
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-const soundName = (x: InstrumentSound) =>
-  ({ grand: t('Grand piano'), epiano: t('Electric piano'), organ: t('Organ'), strings: t('Strings') })[x];
-
 /** the names musicians use in each language: solfège in the Romance languages, H for B in German */
 const NAMES_BY: Partial<Record<Lang, string[]>> = {
   fr: ['do', 'do♯', 'ré', 'ré♯', 'mi', 'fa', 'fa♯', 'sol', 'sol♯', 'la', 'la♯', 'si'],
@@ -205,18 +201,6 @@ export function PianoKeys({ onClose }: { onClose: () => void }) {
           </span>
         )}
         <span style="flex:1" />
-        <select
-          class="select sm"
-          value={s.midi.sound}
-          onChange={(e) => updateMidi({ sound: (e.currentTarget as HTMLSelectElement).value as InstrumentSound })}
-          aria-label={t('Sound of what you play')}
-          title={t('How your playing sounds, here and for the others')}
-          data-testid="instrument-sound"
-        >
-          {SOUNDS.map((x) => (
-            <option value={x}>{soundName(x)}</option>
-          ))}
-        </select>
         {loading && (
           <span class="keys-loading" role="status">
             {t('Loading the grand piano · {pct}%', { pct: Math.round((loaded / total) * 100) })}

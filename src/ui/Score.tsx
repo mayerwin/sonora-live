@@ -149,6 +149,7 @@ export function ScoreView() {
   const inkCanvas = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [typing, setTyping] = useState<{ x: number; y: number } | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const drawing = useRef<Stroke | null>(null);
   const erased = useRef<Set<string>>(new Set());
   const typingDone = useRef<{ x: number; y: number } | null>(null);
@@ -313,7 +314,8 @@ export function ScoreView() {
   return (
     <section class="score" data-testid="score" aria-label={t('Score: {name}', { name: s.name })}>
       <div class="score-bar" role="toolbar" aria-label={t('Score tools')}>
-        <div class="score-group">
+        {/* a single page (a photo): no pages to turn */}
+        <div class="score-group" hidden={pages === 1}>
           <button
             class="icon-btn sm"
             onClick={() => go(-1)}
@@ -357,20 +359,36 @@ export function ScoreView() {
               <Icon size={17} />
             </button>
           ))}
-          <span class="score-colors" role="radiogroup" aria-label={t('Ink colour')}>
-            {INK_COLORS.map((c) => (
-              <button
-                role="radio"
-                aria-checked={myColor() === c}
-                aria-label={c}
-                class="swatch"
-                style={`--c:${c}`}
-                onClick={() => {
-                  color.value = c;
-                  if (tool.value === 'view' || tool.value === 'eraser') tool.value = 'pen';
-                }}
-              />
-            ))}
+          {/* one swatch, the palette under it */}
+          <span class="score-color-wrap">
+            <button
+              class="icon-btn sm"
+              aria-label={t('Ink colour')}
+              title={t('Ink colour')}
+              aria-expanded={paletteOpen}
+              onClick={() => setPaletteOpen(!paletteOpen)}
+              data-testid="ink-color"
+            >
+              <i class="swatch" style={`--c:${myColor()}`} />
+            </button>
+            {paletteOpen && (
+              <span class="score-colors" role="radiogroup" aria-label={t('Ink colour')}>
+                {INK_COLORS.map((c) => (
+                  <button
+                    role="radio"
+                    aria-checked={myColor() === c}
+                    aria-label={c}
+                    class="swatch"
+                    style={`--c:${c}`}
+                    onClick={() => {
+                      color.value = c;
+                      if (tool.value === 'view' || tool.value === 'eraser') tool.value = 'pen';
+                      setPaletteOpen(false);
+                    }}
+                  />
+                ))}
+              </span>
+            )}
           </span>
         </div>
         <div class="score-group">

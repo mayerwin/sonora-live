@@ -132,7 +132,7 @@ export function MusicStrip() {
       busy: false,
       toggle: () => (tunerOpen.value = !s.tuner),
     },
-    { id: 'keys', label: t('Keys'), icon: KeyboardMusic, on: s.keys, busy: false, toggle: () => setKeys(!s.keys) },
+    { id: 'keys', label: t('Piano'), icon: KeyboardMusic, on: s.keys, busy: false, toggle: () => setKeys(!s.keys) },
     {
       id: 'score',
       label: t('Score'),
@@ -380,46 +380,82 @@ function TunerPanel() {
   const a4 = settings.value.tunerA4;
   const mic = session.media.audio.value;
   const [reading, setReading] = useState<{ midi: number; cents: number; hz: number } | null>(null);
+  /** the microphone could not be opened for the tuner (blocked, or none) */
+  const [noMic, setNoMic] = useState(false);
   useEffect(() => {
-    if (!mic || mic.readyState !== 'live') return;
-    const ctx = engine.ensure();
-    if (!ctx) return;
-    // a copy that keeps running even while muted (the tuner listens; nothing is sent)
-    const copy = mic.clone();
-    copy.enabled = true;
-    const src = ctx.createMediaStreamSource(new MediaStream([copy]));
-    const an = ctx.createAnalyser();
-    an.fftSize = 4096;
-    src.connect(an);
-    const buf = new Float32Array(an.fftSize);
-    const recent: number[] = [];
-    let frame = 0;
-    let quiet = 0;
-    const loop = () => {
-      frame = requestAnimationFrame(loop);
-      an.getFloatTimeDomainData(buf);
-      const p = detectPitch(buf, ctx.sampleRate, 40, 2100);
-      if (!p || p.clarity < 0.8) {
-        // a short gap keeps the last note; a longer one clears it
-        if (++quiet > 20) {
-          recent.length = 0;
-          setReading(null);
-        }
+    let alive = true;
+    let stop = () => {};
+    const listen = (track: MediaStreamTrack, own: boolean) => {
+      const ctx = engine.ensure();
+      if (!ctx || !alive) {
+        if (own) track.stop();
         return;
       }
-      quiet = 0;
-      recent.push(p.hz);
-      if (recent.length > 5) recent.shift();
-      const sorted = [...recent].sort((x, y) => x - y);
-      const hz = sorted[sorted.length >> 1];
-      const n = nearestNote(hz, settings.peek().tunerA4);
-      setReading({ ...n, hz });
+      const src = ctx.createMediaStreamSource(new MediaStream([track]));
+      const an = ctx.createAnalyser();
+      an.fftSize = 4096;
+      src.connect(an);
+      const buf = new Float32Array(an.fftSize);
+      const recent: number[] = [];
+      let frame = 0;
+      let quiet = 0;
+      const loop = () => {
+        frame = requestAnimationFrame(loop);
+        an.getFloatTimeDomainData(buf);
+        const p = detectPitch(buf, ctx.sampleRate, 40, 2100);
+        if (!p || p.clarity < 0.8) {
+          // a short gap keeps the last note; a longer one clears it
+          if (++quiet > 20) {
+            recent.length = 0;
+            setReading(null);
+          }
+          return;
+        }
+        quiet = 0;
+        recent.push(p.hz);
+        if (recent.length > 5) recent.shift();
+        const sorted = [...recent].sort((x, y) => x - y);
+        const hz = sorted[sorted.length >> 1];
+        const n = nearestNote(hz, settings.peek().tunerA4);
+        setReading({ ...n, hz });
+      };
+      loop();
+      stop = () => {
+        cancelAnimationFrame(frame);
+        src.disconnect();
+        track.stop();
+      };
     };
-    loop();
+    if (mic && mic.readyState === 'live') {
+      // a copy of the lesson's microphone that keeps running even while muted (the tuner listens; nothing is sent)
+      const copy = mic.clone();
+      copy.enabled = true;
+      setNoMic(false);
+      listen(copy, true);
+    } else {
+      // no microphone in the lesson (none chosen, or it stopped): the tuner opens it for itself, unprocessed
+      navigator.mediaDevices
+        ?.getUserMedia({
+          audio: {
+            deviceId: settings.peek().micId ? { ideal: settings.peek().micId } : undefined,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        })
+        .then(
+          (st) => {
+            setNoMic(false);
+            const tr = st.getAudioTracks()[0];
+            if (alive && tr) listen(tr, true);
+            else st.getTracks().forEach((x) => x.stop());
+          },
+          () => alive && setNoMic(true),
+        );
+    }
     return () => {
-      cancelAnimationFrame(frame);
-      src.disconnect();
-      copy.stop();
+      alive = false;
+      stop();
     };
   }, [mic]);
   const cents = reading?.cents ?? 0;
@@ -463,7 +499,9 @@ function TunerPanel() {
               <small>{reading.hz.toFixed(1)} Hz</small>
             </>
           ) : (
-            <small class="muted">{mic ? t('Play or sing a note') : t('Turn on your microphone to tune')}</small>
+            <small class="muted">
+              {noMic ? t('The microphone could not be opened for the tuner.') : t('Play or sing a note')}
+            </small>
           )}
         </div>
         <label class="tool-ctl" title={t('The pitch of A4 your ensemble tunes to')}>

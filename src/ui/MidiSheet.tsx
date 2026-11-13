@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks';
+import { SOUNDS, type InstrumentSound } from '../midi/synth.ts';
 import {
   Bluetooth,
   Cable,
@@ -18,6 +19,9 @@ import { BLUEFY_IOS, browser, browserName, os, PERFECT_BT_MIDI, WEB_MIDI_BROWSER
 import type { PlayOn } from '../midi/hub.ts';
 import { Rich, Seg, Sheet, ToggleRow } from './common.tsx';
 import { sheet } from './state.ts';
+
+const soundName = (x: InstrumentSound) =>
+  ({ grand: t('Grand piano'), epiano: t('Electric piano'), organ: t('Organ'), strings: t('Strings') })[x];
 
 function PlatformHelp() {
   const d = session.midi.devices;
@@ -354,6 +358,18 @@ export function MidiSheet() {
 
       <div class="section">
         <h3>{t('Options')}</h3>
+        <div class="field">
+          <label>{t('Your playing sounds as')}</label>
+          <Seg<InstrumentSound>
+            label={t('Your playing sounds as')}
+            value={s.sound}
+            onChange={(v) => updateMidi({ sound: v })}
+            options={SOUNDS.map((x) => ({ value: x, label: soundName(x) }))}
+          />
+          <small class="field-hint">
+            {t('On the built-in instrument, here and for the others. Your own instrument keeps its sound.')}
+          </small>
+        </div>
         <div>
           <ToggleRow
             title={t('Send my playing to the others')}

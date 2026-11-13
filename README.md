@@ -151,9 +151,10 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
   Undo, an eraser, your own zoom, and a PDF saved with everyone's annotations (pdf.js and pdf-lib, loaded only then).
 - **Record the lesson** on your own device: everyone's picture laid out as on screen (a shared screen or the score
   large) with everyone's sound, written a second at a time into the browser's storage, so a closed tab or a crash
-  loses at most a second and the next visit offers the recording back. MP4 where the browser records H.264, WebM
-  otherwise; optionally each person's sound in a file of its own, for editing. Everyone sees a red chip while anyone
-  records.
+  loses at most a second and the next visit offers the recording back. MP4 (H.264 and Opus) where the browser offers
+  it, WebM otherwise; optionally each person's sound in a file of its own, for editing. Everyone sees a red chip while
+  anyone records. No length limit of its own: about 1.2 GB an hour at 720p (2.3 GB at 1080p), as much as the browser
+  lets a site store (Chrome and Edge: up to about 60 % of the free disk), with a warning before it runs short.
 - **A phone as a camera**: scan a QR code and the phone becomes your camera on the hands, the bow or the pedals: no
   sound, nothing to set up, shown next to you, up to four. It joins a full room without taking a place.
 - **Share your screen with its sound** (a video, a recording, a score editor): the sound goes out in stereo on a
@@ -172,14 +173,21 @@ sounds on the teacher's piano, and what the teacher plays sounds on the student'
 - **Always the latest version**, with no refresh to force: a new release loads by itself in the lobby, and never
   interrupts a lesson (it waits until you are back in the lobby).
 
+<p align="center">
+  <img src="docs/screenshots/score.webp" alt="A shared score: the teacher's slur and a note, the student's highlight, the metronome at 72 and the keys below, while the lesson is recorded" width="100%">
+</p>
+
 <table>
   <tr>
-    <td width="66%"><img src="docs/screenshots/lobby.webp" alt="The lobby: camera preview, room code and name"></td>
-    <td><img src="docs/screenshots/mobile.webp" alt="The student's view on a phone"></td>
+    <td width="66%"><img src="docs/screenshots/lobby.webp" alt="The lobby: camera preview, Wearing headphones? with the sound check, room code and name"></td>
+    <td><img src="docs/screenshots/mobile.webp" alt="The student's view on a phone, with the keys"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/midi.webp" alt="Picking a MIDI instrument"></td>
-    <td><img src="docs/screenshots/settings.webp" alt="Sound settings: Auto, Pure, Voice and quality"></td>
+    <td><img src="docs/screenshots/phonecam.webp" alt="A phone as a camera: the QR code to scan"></td>
+    <td><img src="docs/screenshots/midi.webp" alt="Picking a MIDI instrument, and how your playing sounds"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/settings.webp" alt="Sound settings: the microphone, headphones or speakers, the sound check"></td>
   </tr>
 </table>
 

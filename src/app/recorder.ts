@@ -6,7 +6,7 @@
 // Nothing is uploaded: the file is saved on this device when the recording stops.
 
 import { batch, effect, signal } from '@preact/signals';
-import fixWebmDuration from 'fix-webm-duration';
+import { withDuration } from '../media/webm-duration.ts';
 import { Compositor, type CompSource } from '../media/compositor.ts';
 import {
   assemble,
@@ -54,18 +54,23 @@ const SLICE_MS = 1000;
 const LOW_SPACE = 400 * 1024 * 1024;
 const SAVED_DAYS = 14;
 
-/** The best format this browser records in: MP4 (H.264/AAC) plays everywhere, WebM where it is not offered. */
+/**
+ * The best format this browser records in. MP4 with H.264 and Opus first (H.264 plays everywhere; Opus is the
+ * sound encoder every browser has, the same as in WebM); WebM next; MP4 with AAC last (Safari's only one: the AAC
+ * path of other browsers once wrote files without their sound).
+ */
 export function pickMime(audioOnly = false): string {
   const can = (m: string) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m);
   const list = audioOnly
     ? ['audio/webm;codecs=opus', 'audio/mp4;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm']
     : [
-        'video/mp4;codecs=avc1.640028,mp4a.40.2',
-        'video/mp4;codecs=avc1.42E01F,mp4a.40.2',
-        'video/mp4;codecs=avc1,mp4a',
+        'video/mp4;codecs=avc1.640028,opus',
+        'video/mp4;codecs=avc1,opus',
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
         'video/webm',
+        'video/mp4;codecs=avc1.640028,mp4a.40.2',
+        'video/mp4;codecs=avc1,mp4a.40.2',
         'video/mp4',
       ];
   return list.find(can) ?? '';
@@ -195,7 +200,12 @@ export class Recorder {
       this.main = await this.begin(
         stream,
         { id: this.group, started: this.startedAt, mime, kind: 'lesson', done: false },
-        { videoBitsPerSecond: q.video, audioBitsPerSecond: AUDIO_BPS },
+        {
+          videoBitsPerSecond: q.video,
+          audioBitsPerSecond: AUDIO_BPS,
+          // a keyframe every second: an MP4 is written a keyframe at a time, and an interruption loses at most that
+          videoKeyFrameIntervalDuration: 1000,
+        } as MediaRecorderOptions,
       );
       if (settings.peek().record.voices) this.syncVoices();
       // the others come and go, the microphone and camera change: the mix and the voices follow
@@ -241,6 +251,9 @@ export class Recorder {
     this.host.send({ t: 'rec', on: false });
     if (failed) this.error.value = t('Storage ran out: the recording was kept up to that point.');
     for (const m of metas) await this.save(m);
+    // said in the chat too, as the start was (the others get "{name} stopped recording")
+    const lesson = metas.find((m) => m.kind === 'lesson');
+    if (lesson) this.host.note(t('You stopped recording: {file} is saved on this device.', { file: fileName(lesson) }));
     await this.refresh();
     batch(() => {
       this.state.value = 'idle';
@@ -260,7 +273,15 @@ export class Recorder {
       : Math.max(meta.durationMs ?? 0, got.pieces * SLICE_MS - SLICE_MS / 2);
     if (meta.mime.includes('webm') && duration > 0) {
       // MediaRecorder writes WebM without its length: players would show no duration and could not seek
-      blob = await fixWebmDuration(blob, duration, { logger: false });
+      // (only the header is rewritten: a file of any size)
+      blob = await withDuration(blob, duration);
+    }
+    // a file without its sound is a broken recording: said at once, not discovered later
+    if (meta.kind === 'lesson' && !(await hasSound(blob, meta.mime))) {
+      this.error.value = t(
+        'This recording was saved without its sound. Try again; if it happens again, try another browser.',
+      );
+      log('recording without sound', meta.mime);
     }
     download(blob, fileName(meta));
     // recovered: complete now, as far as it goes
@@ -546,4 +567,14 @@ function download(blob: Blob, name: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** The file has a sound track (looked for in its header: an MP4's sound handler, a WebM's audio codec). */
+export async function hasSound(blob: Blob, mime: string): Promise<boolean> {
+  try {
+    const head = new TextDecoder('latin1').decode(await blob.slice(0, 256 * 1024).arrayBuffer());
+    return mime.includes('webm') ? /A_OPUS|A_VORBIS|A_AAC/.test(head) : head.includes('soun');
+  } catch {
+    return true;
+  }
 }

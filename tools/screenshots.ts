@@ -17,7 +17,20 @@ const DOCS = resolve('docs/screenshots');
 /** README pictures: captured as PNG, published as WebP (a tenth of the size) */
 const doc = (name: string) => `${TMP}/${name}.png`;
 const toWebp = (name: string) =>
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', doc(name), '-c:v', 'libwebp', '-quality', '88', '-compression_level', '6', `${DOCS}/${name}.webp`]);
+  execFileSync('ffmpeg', [
+    '-y',
+    '-loglevel',
+    'error',
+    '-i',
+    doc(name),
+    '-c:v',
+    'libwebp',
+    '-quality',
+    '88',
+    '-compression_level',
+    '6',
+    `${DOCS}/${name}.webp`,
+  ]);
 mkdirSync(TMP, { recursive: true });
 mkdirSync(DOCS, { recursive: true });
 mkdirSync('public/social', { recursive: true });
@@ -31,18 +44,50 @@ const exe = process.env.PW_CHROMIUM || undefined;
     await p.goto(`file://${resolve('tools/brand/scenes.html')}?scene=${s}`);
     await p.waitForTimeout(150);
     await p.screenshot({ path: `${TMP}/${s}.png` });
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-loop', '1', '-i', `${TMP}/${s}.png`, '-t', '1', '-r', '10', '-pix_fmt', 'yuv420p', `${TMP}/${s}.y4m`]);
+    execFileSync('ffmpeg', [
+      '-y',
+      '-loglevel',
+      'error',
+      '-loop',
+      '1',
+      '-i',
+      `${TMP}/${s}.png`,
+      '-t',
+      '1',
+      '-r',
+      '10',
+      '-pix_fmt',
+      'yuv420p',
+      `${TMP}/${s}.y4m`,
+    ]);
   }
+  // the same page, flat and clean: shared as a score in the lesson
+  await p.setViewportSize({ width: 800, height: 760 });
+  await p.goto(`file://${resolve('tools/brand/scenes.html')}?scene=page`);
+  await p.waitForTimeout(150);
+  await p.screenshot({ path: `${TMP}/prelude.png`, clip: { x: 0, y: 0, width: 800, height: 760 } });
   await b.close();
 }
 // 2. a soft C major chord as the microphone (so the level meters move without clipping)
 if (!existsSync(`${TMP}/piano.wav`)) {
   const f = (n: string) => ['-i', `public/piano/ogg/${n}.ogg`];
   execFileSync('ffmpeg', [
-    '-y', '-loglevel', 'error',
-    ...f('mf-c2'), ...f('mf-c3'), ...f('mf-e3'), ...f('mf-g3'),
-    '-filter_complex', '[1]adelay=250|250[b];[2]adelay=500|500[c];[3]adelay=750|750[d];[0][b][c][d]amix=inputs=4:normalize=0,volume=0.35,aloop=loop=-1:size=2e6',
-    '-t', '20', '-ar', '48000', '-ac', '2', `${TMP}/piano.wav`,
+    '-y',
+    '-loglevel',
+    'error',
+    ...f('mf-c2'),
+    ...f('mf-c3'),
+    ...f('mf-e3'),
+    ...f('mf-g3'),
+    '-filter_complex',
+    '[1]adelay=250|250[b];[2]adelay=500|500[c];[3]adelay=750|750[d];[0][b][c][d]amix=inputs=4:normalize=0,volume=0.35,aloop=loop=-1:size=2e6',
+    '-t',
+    '20',
+    '-ar',
+    '48000',
+    '-ac',
+    '2',
+    `${TMP}/piano.wav`,
   ]);
 }
 
@@ -61,7 +106,17 @@ async function launch(scene: string): Promise<Browser> {
 
 async function person(
   b: Browser,
-  opts: { name: string; role: string; piano: string; hash?: string; w: number; h: number; dpr?: number; mobile?: boolean; prefs?: object },
+  opts: {
+    name: string;
+    role: string;
+    piano: string;
+    hash?: string;
+    w: number;
+    h: number;
+    dpr?: number;
+    mobile?: boolean;
+    prefs?: object;
+  },
 ): Promise<Page> {
   const ctx = await b.newContext({
     viewport: { width: opts.w, height: opts.h },
@@ -72,11 +127,13 @@ async function person(
   });
   await ctx.addInitScript(fakeMidiScript(opts.piano));
   // the teacher's camera shows a score (not mirrored), at a lighter resolution to keep this machine's CPU free
-  if (opts.prefs) await ctx.addInitScript(`localStorage.setItem('sonora.settings.v1', ${JSON.stringify(JSON.stringify(opts.prefs))})`);
+  if (opts.prefs)
+    await ctx.addInitScript(
+      `localStorage.setItem('sonora.settings.v1', ${JSON.stringify(JSON.stringify(opts.prefs))})`,
+    );
   const p = await ctx.newPage();
   await p.goto(`${URL}${opts.hash ? `#${opts.hash}` : ''}`);
   await p.getByPlaceholder('e.g. Clara').fill(opts.name);
-  await p.locator(`button.role[data-role=${opts.role}]`).click();
   await p.waitForTimeout(700);
   return p;
 }
@@ -84,8 +141,7 @@ async function person(
 const settle = (p: Page, ms = 900) => p.waitForTimeout(ms);
 // toasts are transient; the delay badges measure this machine's fake camera and microphone (CPU-bound, bursty),
 // not a real connection, so they are left out of the pictures
-const hideToasts = (p: Page) =>
-  p.addStyleTag({ content: '.toasts,[data-latency],.net-chip{display:none!important}' });
+const hideToasts = (p: Page) => p.addStyleTag({ content: '.toasts,[data-latency],.net-chip{display:none!important}' });
 
 const teacherB = await launch('score');
 const studentB = await launch('keys');
@@ -109,13 +165,27 @@ await settle(teacher, 1200);
 const code = await teacher.evaluate(() => location.hash.slice(1));
 
 // the student joins from a phone
-const student = await person(studentB, { name: 'Leo', role: 'student', piano: 'Yamaha P-125', hash: code, w: 390, h: 844, dpr: 2, mobile: true });
+const student = await person(studentB, {
+  name: 'Leo',
+  role: 'student',
+  piano: 'Yamaha P-125',
+  hash: code,
+  w: 390,
+  h: 844,
+  dpr: 2,
+  mobile: true,
+});
 await student.locator('.join-card .btn-primary').click();
-await teacher.waitForFunction(() => (window as any).sonora.peers.value.some((p: any) => p.link === 'connected' && p.remote));
+await teacher.waitForFunction(() =>
+  (window as any).sonora.peers.value.some((p: any) => p.link === 'connected' && p.remote),
+);
 await settle(teacher, 2500);
 
 // both connect their digital piano: tap MIDI, pick it
-for (const [p, name] of [[teacher, 'Roland FP-30X'], [student, 'Yamaha P-125']] as const) {
+for (const [p, name] of [
+  [teacher, 'Roland FP-30X'],
+  [student, 'Yamaha P-125'],
+] as const) {
   await p.getByTestId('btn-midi').click();
   await p.getByTestId('midi-instrument').filter({ hasText: name }).click();
   await settle(p, 300);
@@ -134,7 +204,7 @@ await say(teacher, 'Lovely tone in the opening! Can you play bars 5–8 again, a
 await say(student, 'Sure! The left hand jump is still tricky 😅');
 await say(teacher, 'Keep the wrist loose and look one beat ahead. Watch my hands 🎹');
 await say(student, '👍👍');
-await student.getByRole('button', { name: 'Close chat' }).click();
+await student.locator('.side-head, header').getByRole('button', { name: 'Close', exact: true }).first().click();
 
 // the student plays a chord with the pedal down on their piano (it lights up, and sounds, at the teacher's)
 await student.evaluate(() => {
@@ -163,18 +233,84 @@ await teacher.keyboard.press('Escape');
 await teacher.getByTestId('btn-settings').click();
 await settle(teacher, 600);
 await teacher.screenshot({ path: doc('settings') });
+
+// a phone as a camera: the QR code (Settings, Video)
+await teacher.getByRole('tab', { name: 'Video' }).click();
+await teacher.getByTestId('settings-phonecam').click();
+await settle(teacher, 700);
+await teacher.screenshot({ path: doc('phonecam') });
 await teacher.keyboard.press('Escape');
+
+// the shared score: she opens the prélude, both write on it, the metronome runs, and she records the lesson
+if (!(await teacher.getByTestId('music').isVisible())) await teacher.getByTestId('btn-music').click();
+await teacher.getByTestId('chip-score').click();
+const chooser = teacher.waitForEvent('filechooser');
+await teacher.getByTestId('score-open').click();
+await (await chooser).setFiles(`${TMP}/prelude.png`);
+await student.getByTestId('score').waitFor({ timeout: 20_000 });
+await settle(teacher, 1500);
+const ink = async (p: Page, tool: string, color: number | null, path: [number, number][]) => {
+  await p.getByTestId(`ink-${tool}`).click();
+  if (color !== null) {
+    await p.getByTestId('ink-color').click();
+    await p.locator('.score-colors .swatch').nth(color).click();
+    await p.getByTestId(`ink-${tool}`).click();
+  }
+  const box = (await p.getByTestId('score-ink').boundingBox())!;
+  const at = ([x, y]: [number, number]) => [box.x + box.width * x, box.y + box.height * y] as const;
+  await p.mouse.move(...at(path[0]));
+  await p.mouse.down();
+  for (const pt of path.slice(1)) await p.mouse.move(...at(pt), { steps: 6 });
+  await p.mouse.up();
+  await settle(p, 300);
+};
+// her slur over bars 5–8 (red), his highlight on the left hand's jump (gold)
+const slur: [number, number][] = [];
+for (let i = 0; i <= 16; i++) {
+  const t = i / 16;
+  slur.push([0.19 + 0.5 * t, 0.395 - 0.07 * Math.sin(Math.PI * t)]);
+}
+await ink(teacher, 'pen', 0, slur);
+await ink(student, 'marker', 3, [
+  [0.55, 0.56],
+  [0.93, 0.545],
+]);
+await teacher.getByTestId('ink-text').click();
+{
+  const box = (await teacher.getByTestId('score-ink').boundingBox())!;
+  await teacher.mouse.click(box.x + box.width * 0.72, box.y + box.height * 0.31);
+  await teacher.getByTestId('score-text').fill('legato!');
+  await teacher.getByTestId('score-text').press('Enter');
+}
+await teacher.getByTestId('ink-view').click();
+await teacher.getByTestId('chip-metronome').click();
+await teacher.getByRole('spinbutton', { name: 'Tempo, beats per minute' }).fill('72');
+await teacher.getByRole('spinbutton', { name: 'Tempo, beats per minute' }).press('Enter');
+await teacher.getByTestId('metro-play').click();
+await teacher.getByTestId('btn-rec').click();
+await teacher.getByTestId('rec-start').click();
+await settle(teacher, 3500);
+await hideToasts(teacher);
+await teacher.screenshot({ path: doc('score') });
+await hideToasts(student);
+await student.screenshot({ path: `${TMP}/score-phone.png` });
+await teacher.getByTestId('rec-chip').click();
+await settle(teacher, 1500);
 
 // social preview (1200 x 630): the brand next to the lesson
 {
-  const p = await (await teacherB.newContext({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 })).newPage();
+  const p = await (
+    await teacherB.newContext({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 })
+  ).newPage();
   await p.goto(`${URL}`);
   await p.waitForTimeout(800);
   const shot = `data:image/png;base64,${(await teacher.screenshot({ type: 'png' })).toString('base64')}`;
   // keep the app's stylesheet (its fonts), replace the page
-  await p.evaluate((html) => {
-    document.body.innerHTML = html;
-  }, `<style>
+  await p.evaluate(
+    (html) => {
+      document.body.innerHTML = html;
+    },
+    `<style>
     body{margin:0;width:1200px;height:630px;overflow:hidden;background:#0f0e13;color:#f4efe7;font-family:'Instrument Sans Variable',system-ui,sans-serif}
     .glow{position:absolute;inset:0;background:radial-gradient(800px 500px at 0% 0%,rgba(245,181,68,.18),transparent 60%),radial-gradient(700px 500px at 100% 100%,rgba(82,214,180,.12),transparent 60%)}
     .copy{position:absolute;left:64px;top:70px;width:470px}
@@ -191,7 +327,8 @@ await teacher.keyboard.press('Escape');
   <h1>Music lessons, <em>face to face</em>, from anywhere.</h1>
   <p>Pure instrument sound and two-way MIDI between pianos. Peer to peer, in the browser.</p>
   <div class="tags"><span>Pure sound</span><span>Piano ↔ piano MIDI</span><span>Low latency</span><span>No account</span></div></div>
-  <img class="shot" src="${shot}">`);
+  <img class="shot" src="${shot}">`,
+  );
   await p.evaluate(() => document.fonts.ready);
   await p.waitForTimeout(500);
   await p.screenshot({ path: 'public/social/og-image.png' });
@@ -199,9 +336,20 @@ await teacher.keyboard.press('Escape');
 
 await teacherB.close();
 await studentB.close();
-for (const n of ['lobby', 'lesson', 'mobile', 'midi', 'settings']) toWebp(n);
+for (const n of ['lobby', 'lesson', 'mobile', 'midi', 'settings', 'phonecam', 'score']) toWebp(n);
 // the install dialog's pictures (web app manifest)
 for (const n of ['screenshot-wide', 'screenshot-narrow']) {
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', `${TMP}/${n}.png`, '-c:v', 'libwebp', '-quality', '86', `public/social/${n}.webp`]);
+  execFileSync('ffmpeg', [
+    '-y',
+    '-loglevel',
+    'error',
+    '-i',
+    `${TMP}/${n}.png`,
+    '-c:v',
+    'libwebp',
+    '-quality',
+    '86',
+    `public/social/${n}.webp`,
+  ]);
 }
 console.log('screenshots written to docs/screenshots and public/social');

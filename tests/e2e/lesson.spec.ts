@@ -1049,10 +1049,10 @@ test('headphones or speakers: asked in the lobby, one tap in the bar, remembered
   // the lobby asks (the fake output's name says nothing: speakers is the guess)
   const q = a.getByTestId('listen-q');
   await expect(q).toContainText('Wearing headphones?');
-  await expect(q).toContainText('Guessed');
+  await expect(q).toContainText('taken out of your microphone');
   await q.getByRole('button', { name: 'Yes' }).click();
   await expect.poll(async () => (await now()).listening).toBe('headphones');
-  await expect(q).not.toContainText('Guessed');
+  await expect(q).toContainText('Studio sound');
   // remembered for this output, by its name
   const saved = await a.evaluate(() => {
     const s = JSON.parse(localStorage.getItem('sonora.settings.v1')!);
@@ -1145,7 +1145,10 @@ async function probe(page: Page, file: string, mime: string) {
       let rms = -1;
       try {
         const ctx = new OfflineAudioContext(1, 48000, 48000);
-        const buf = await ctx.decodeAudioData(bytes.buffer.slice(0));
+        const buf = await Promise.race([
+          ctx.decodeAudioData(bytes.buffer.slice(0)),
+          new Promise<never>((_, j) => setTimeout(() => j(new Error('decode timeout')), 5000)),
+        ]);
         const d = buf.getChannelData(0);
         let s = 0;
         for (let i = 0; i < d.length; i++) s += d[i] * d[i];
@@ -1155,9 +1158,9 @@ async function probe(page: Page, file: string, mime: string) {
       }
       // a frame from the middle, to look at (test-results/recording-frame.jpg)
       let frame = '';
-      if (el.videoWidth) {
+      if (el.videoWidth && Number.isFinite(el.duration)) {
         el.currentTime = Math.min(2, el.duration / 2);
-        await new Promise((r) => (el.onseeked = r));
+        await Promise.race([new Promise((r) => (el.onseeked = r)), new Promise((r) => setTimeout(r, 3000))]);
         const c = document.createElement('canvas');
         c.width = el.videoWidth;
         c.height = el.videoHeight;
@@ -1202,6 +1205,19 @@ test('recording the lesson: everyone is told, the video and each voice are saved
   await teacher.getByTestId('rec-chip').click();
   await expect.poll(() => downloads.filter((d) => d.path).length, { timeout: 20_000 }).toBe(3);
   await expect(student.getByTestId('rec-chip')).toHaveCount(0);
+  // both are told in the chat that it stopped
+  const said = (p: Page) =>
+    p.evaluate(() =>
+      (
+        window as unknown as { sonora: { chat: { messages: { value: { kind: string; text?: string }[] } } } }
+      ).sonora.chat.messages.value
+        .filter((m) => m.kind === 'system')
+        .map((m) => m.text ?? ''),
+    );
+  await expect
+    .poll(async () => (await said(teacher)).some((x) => x.startsWith('You stopped recording: Lesson')))
+    .toBe(true);
+  await expect.poll(async () => (await said(student)).includes('Clara stopped recording.')).toBe(true);
 
   const lesson = downloads.find((d) => !d.name.includes(' - '))!;
   expect(lesson.name).toMatch(/^Lesson \d{4}-\d\d-\d\d \d\d\.\d\d\.(mp4|webm)$/);
@@ -1239,7 +1255,7 @@ test('recording the lesson: everyone is told, the video and each voice are saved
   await student.getByTestId('btn-rec').click();
   await student.getByTestId('rec-start').click();
   await expect(teacher.getByTestId('rec-chip')).toContainText('Leo is recording');
-  await student.waitForTimeout(3500);
+  await student.waitForTimeout(5000);
   await student.reload();
   await expect(student.getByTestId('rec-recover')).toBeVisible({ timeout: 20_000 });
   const saved = student.waitForEvent('download');
@@ -1572,8 +1588,10 @@ test('comforts: the library reopens last week’s track in one tap, the keys can
   await b.keyboard.press('Escape');
 
   // her keys as an organ: what she plays sounds as an organ on his side too
-  await openTool(a, 'keys');
-  await a.getByTestId('instrument-sound').selectOption('organ');
+  // (in the MIDI sheet, with the built-in instrument's other options)
+  await a.getByTestId('btn-midi').click();
+  await a.getByRole('group', { name: 'Your playing sounds as' }).getByRole('button', { name: 'Organ' }).click();
+  await a.keyboard.press('Escape');
   const claraId = await a.evaluate(() => (window as unknown as S).sonora.selfId);
   await expect
     .poll(() => b.evaluate((id) => (window as unknown as S).sonora.midi.piano.soundOf(id), claraId))
@@ -1652,6 +1670,7 @@ test('YouTube together: shared by one, playing in time on both sides', async ({ 
   await connected(a, 1);
   await connected(b, 1);
   await openTool(a, 'track');
+  await a.getByTestId('yt-toggle').click();
   await a.getByTestId('yt-link').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10');
   await a.getByTestId('yt-open').click();
   await expect(b.getByTestId('youtube')).toBeVisible({ timeout: 15_000 });
@@ -1734,4 +1753,46 @@ test('background blur: the picture sent is the blurred one, and it still reaches
       }),
     )
     .toBe(true);
+});
+
+test('the microphone and camera allowed after a refusal start at once, in the lesson, without reloading', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  // the browser refuses (the person said no, or it was blocked) until the test allows it, as from the address bar
+  await ctx.addInitScript(() => {
+    type W = { __allow: () => void };
+    let allowed = false;
+    const statuses: (EventTarget & { state: string })[] = [];
+    const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = (c) =>
+      allowed ? real(c) : Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+    (navigator.permissions as { query: (d: { name: string }) => Promise<unknown> }).query = async () => {
+      const st = Object.assign(new EventTarget(), { state: allowed ? 'granted' : 'denied', onchange: null });
+      statuses.push(st);
+      return st;
+    };
+    (window as unknown as W).__allow = () => {
+      allowed = true;
+      for (const st of statuses) {
+        st.state = 'granted';
+        st.dispatchEvent(new Event('change'));
+      }
+    };
+  });
+  const a = await ctx.newPage();
+  await a.goto(urlFor('teacher'));
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await enter(a);
+  type M = {
+    sonora: { media: { audio: { value: MediaStreamTrack | null }; video: { value: MediaStreamTrack | null } } };
+  };
+  const has = () =>
+    a.evaluate(() => {
+      const m = (window as unknown as M).sonora.media;
+      return { mic: !!m.audio.value, cam: !!m.video.value };
+    });
+  expect(await has()).toEqual({ mic: false, cam: false });
+  await a.evaluate(() => (window as unknown as { __allow: () => void }).__allow());
+  await expect.poll(has, { timeout: 10_000 }).toEqual({ mic: true, cam: true });
 });

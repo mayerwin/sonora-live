@@ -513,7 +513,7 @@ function ControlBar() {
           class={`ctl ${music ? 'active' : ''}`}
           onClick={toggleMusic}
           aria-pressed={music}
-          title={t('Keys, backing track, metronome and tuner')}
+          title={t('Piano, track, score, metronome and tuner')}
           data-testid="btn-music"
         >
           <AudioLines />
@@ -617,7 +617,7 @@ function ControlBar() {
                 <AudioLines />
                 <span>
                   <b>{music ? t('Hide the music tools') : t('Music tools')}</b>
-                  <small>{t('Keys, backing track, metronome and tuner')}</small>
+                  <small>{t('Piano, track, score, metronome and tuner')}</small>
                 </span>
               </button>
               {canRecord && (
