@@ -148,19 +148,33 @@ test('in a lesson on speakers: the browser’s echo cancelling by default, the m
         routed: !!el && el.muted,
       };
     });
-  // by default: the browser's echo cancelling in the capture, the automatic level on what is sent
+  // by default: the browser's echo cancelling in the capture, the automatic level on what is sent. A microphone
+  // that cannot cancel echo (Firefox's fake one, some real ones): the music-safe canceller instead, never none
+  const canCancel = await a.evaluate(
+    () =>
+      (
+        (window as unknown as S).sonora.media.audio.value.getCapabilities?.().echoCancellation as unknown as
+          | boolean[]
+          | undefined
+      )?.includes?.(true) ?? true,
+  );
   await expect
     .poll(state, { timeout: 15_000 })
-    .toEqual({ captureEcho: true, processed: true, cancelling: false, echo: true, routed: false });
+    .toEqual(
+      canCancel
+        ? { captureEcho: true, processed: true, cancelling: false, echo: true, routed: false }
+        : { captureEcho: false, processed: true, cancelling: true, echo: true, routed: true },
+    );
   await expect
     .poll(() => a.evaluate(() => (window as unknown as S).sonora.engine.levelDb.value !== null), { timeout: 5000 })
     .toBe(true);
   // the level runs on the microphone's own frames (Chromium): no audio context in the way, no added delay
-  expect(
-    await a.evaluate(
-      () => (window as unknown as { sonora: { engine: { path: { value: string } } } }).sonora.engine.path.value,
-    ),
-  ).toBe('frames');
+  if (canCancel && test.info().project.name !== 'firefox')
+    expect(
+      await a.evaluate(
+        () => (window as unknown as { sonora: { engine: { path: { value: string } } } }).sonora.engine.path.value,
+      ),
+    ).toBe('frames');
   await expect
     .poll(() => b.evaluate(() => (window as unknown as S).sonora.peers.value[0]?.stats?.audioInKbps ?? 0), {
       timeout: 15_000,

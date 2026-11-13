@@ -280,11 +280,13 @@ export class LocalMedia {
     );
   }
 
-  /** The engine's music-safe echo cancelling on what is sent (pure mode: the capture is untouched). */
+  /**
+   * The engine's music-safe echo cancelling on what is sent (pure mode: the capture is untouched): when chosen, and
+   * also when the browser's was asked for and not given (a microphone or a platform that cannot: its capabilities
+   * say echoCancellation [false]). On speakers, never no echo cancelling at all.
+   */
   private engineEcho(): boolean {
-    return (
-      this.mode.peek() === 'pure' && this.wantEcho && this.musicEcho && !this.trackEcho && !engine.aecUnavailable.peek()
-    );
+    return this.mode.peek() === 'pure' && this.wantEcho && !this.trackEcho && !engine.aecUnavailable.peek();
   }
 
   /** Which echo canceller in pure mode: the music-safe one (true) or the browser's. */
