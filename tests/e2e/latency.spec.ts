@@ -2,9 +2,12 @@
 // relay that delays each one's packets), so sound, video, MIDI and the data channels all take the delay, as
 // between two cities. Up to 200 ms each way (400 ms round trip), a little jitter.
 
+import { closeAll } from './media.ts';
 import { expect, test } from '@playwright/test';
 import { startNetsim, type Netsim } from '../../server/netsim.ts';
 import { burstsWav, codeOf, lagBetween, linked, openTool, simPerson, stats } from './sim.ts';
+
+test.afterEach(closeAll);
 
 let sim: Netsim;
 test.beforeAll(async () => {

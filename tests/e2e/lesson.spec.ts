@@ -2,8 +2,10 @@
 // development server (the public MQTT brokers are replaced by server/relay.ts), with fake camera and microphone.
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { media } from './media.ts';
+import { media, closeAll } from './media.ts';
 import { openTool } from './sim.ts';
+
+test.afterEach(closeAll);
 
 /** who someone is in a test: musicians all join alike; an observer comes with the observer's link */
 type Role = 'student' | 'teacher' | 'observer';

@@ -2,9 +2,12 @@
 // links. What is measured is what a person hears or plays: note timing on the other side, notes lost or held,
 // the other side's sound coming back as echo, and the delay the app shows against the real one.
 
+import { closeAll } from './media.ts';
 import { expect, test, type Page } from '@playwright/test';
 import { startNetsim, usernameOf, type LinkProfile, type Netsim } from '../../server/netsim.ts';
 import { codeOf, lagBetween, linked, simPerson } from './sim.ts';
+
+test.afterEach(closeAll);
 
 let sim: Netsim;
 test.beforeAll(async () => {

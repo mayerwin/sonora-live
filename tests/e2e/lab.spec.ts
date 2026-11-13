@@ -2,7 +2,9 @@
 // beep, so the numbers mean nothing; what is checked is that every stage runs and the report is complete).
 
 import { expect, test } from '@playwright/test';
-import { media } from './media.ts';
+import { media, closeAll } from './media.ts';
+
+test.afterEach(closeAll);
 
 test('the sound lab measures each processing in its own pass and reports', async ({ browser }) => {
   test.setTimeout(180_000);

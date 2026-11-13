@@ -4,7 +4,9 @@
 // sound plays through it, and still reaches the other side.
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { media } from './media.ts';
+import { media, closeAll } from './media.ts';
+
+test.afterEach(closeAll);
 
 const Q = '?relay=local&debug';
 
