@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useComputed, type ReadonlySignal } from '@preact/signals';
-import { useEffect, useMemo, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import {
   CircleAlert,
   Info,
@@ -54,7 +54,8 @@ export function Sheet(props: {
   // the latest onClose, without reinstalling the listener at every render (callers pass a new arrow each time)
   const close = useRef(props.onClose);
   close.current = props.onClose;
-  useEffect(() => {
+  // as soon as it is on screen (an effect waits for the next frame: an Escape pressed at once was missed)
+  useLayoutEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close.current();
     };

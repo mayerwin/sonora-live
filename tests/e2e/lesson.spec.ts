@@ -1264,9 +1264,12 @@ test('the host (who opened the room) can hold the shared controls; a reload keep
   await b.getByTestId('lock-chip').click();
   await expect(b.getByTestId('host-section')).toContainText('Clara opened this room');
   await b.keyboard.press('Escape');
+  await expect(b.locator('.scrim')).toHaveCount(0);
   await a.getByTestId('lock-chip').click();
-  await a.getByTestId('host-section').locator('.row-toggle').click();
+  await a.getByTestId('host-section').getByRole('switch').click();
+  await expect(a.getByTestId('host-section').getByRole('switch')).toBeChecked();
   await a.keyboard.press('Escape');
+  await expect(a.locator('.scrim')).toHaveCount(0);
   await expect(b.locator('.toast.info')).toContainText('Clara holds the shared controls');
 
   // he cannot start the metronome, record or change her sound; she can
@@ -1287,8 +1290,9 @@ test('the host (who opened the room) can hold the shared controls; a reload keep
   await connected(a, 1);
   await expect(b.getByTestId('metro-play')).toBeDisabled();
   await a.getByTestId('lock-chip').click();
-  await expect(a.getByTestId('host-section').locator('input[type=checkbox], [role=switch]').first()).toBeChecked();
+  await expect(a.getByTestId('host-section').getByRole('switch')).toBeChecked();
   await a.keyboard.press('Escape');
+  await expect(a.locator('.scrim')).toHaveCount(0);
 
   // she leaves: released, he can use everything
   await a.getByTestId('btn-leave').click();
