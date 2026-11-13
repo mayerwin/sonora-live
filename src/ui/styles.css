@@ -945,6 +945,28 @@ a:hover {
   font-size: 14px;
 }
 
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+}
+
+.check-say {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.check-say svg {
+  vertical-align: -3px;
+  color: var(--gold);
+}
+
 .listen-q small {
   flex-basis: 100%;
   color: var(--muted);

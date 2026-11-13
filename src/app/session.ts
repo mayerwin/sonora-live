@@ -27,6 +27,7 @@ import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { BackingTrack, MAX_TRACK_BYTES, type BackingHost, type TrackMeta } from './backing.ts';
 import { Metronome } from './metronome.ts';
+import { runSoundCheck, type CheckResult } from '../media/soundcheck.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -851,6 +852,7 @@ export class Session {
       echo: m.echo.peek(),
       headphones: m.headphones.peek(),
       sendMs: this.sendMs(),
+      hearExtra: this.hearExtra(),
       musicEcho: settings.peek().musicEcho,
       autoLevel: settings.peek().autoLevel,
       midiPlayOn: settings.peek().midi.playOn,
@@ -904,6 +906,8 @@ export class Session {
         void settings.value.autoLevel;
         void settings.value.midi;
         void engine.path.value;
+        void settings.value.calibration;
+        void this.media.outputLabel.value;
         void this.midi.devices.connected.value;
         void this.midi.devices.currentName.value;
         void this.midi.sending.value;
@@ -1233,6 +1237,40 @@ export class Session {
     if (Object.keys(patch).length) update(patch);
     if (Object.keys(midi).length) updateMidi(midi);
     toast({ kind: 'info', title: said.join(' · '), body: t('You can change it back in the Sound tab.') });
+  }
+
+  /** The sound check's key for this output and microphone. */
+  private deviceKey(): string {
+    return `${this.media.outputLabel.peek()}|${this.media.audio.peek()?.label ?? ''}`;
+  }
+
+  /** How much later than the browser says this side hears and captures (ms), as the sound check measured. */
+  private hearExtra(): number {
+    return settings.peek().calibration[this.deviceKey()] ?? 0;
+  }
+
+  /**
+   * The sound check: sweeps from the speakers, heard or not by the microphone. `detect`: heard means speakers,
+   * not heard headphones (remembered for this output, as if answered). `headphones`: headphones held against the
+   * microphone, to measure their delay (Bluetooth). When heard, the delay beyond what the browser reports is
+   * remembered for this output and microphone, and told to the others: what they play in time with this side
+   * waits for it.
+   */
+  async soundCheck(mode: 'detect' | 'headphones'): Promise<CheckResult & { extraMs: number | null }> {
+    const ctx = engine.ensure();
+    if (!ctx || !engine.out) throw new Error('no audio');
+    const micId = this.media.audio.peek()?.getSettings().deviceId || settings.peek().micId || undefined;
+    const r = await runSoundCheck(ctx, engine.out, micId);
+    let extraMs: number | null = null;
+    if (r.heard && r.roundTripMs !== null) {
+      const st = (this.media.audio.peek()?.getSettings() ?? {}) as MediaTrackSettings & { latency?: number };
+      const said = engine.outputLatencyMs + (st.latency ?? 0.01) * 1000;
+      extraMs = Math.max(0, Math.round(r.roundTripMs - said));
+      update({ calibration: { ...settings.peek().calibration, [this.deviceKey()]: extraMs } });
+    }
+    if (mode === 'detect') this.setListening(r.heard ? 'speakers' : 'headphones');
+    else if (r.heard) this.setListening('headphones');
+    return { ...r, extraMs };
   }
 
   /** Tell everyone who this browser is connected to. */

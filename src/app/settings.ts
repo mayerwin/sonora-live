@@ -23,6 +23,8 @@ export interface Settings {
   autoLevel: boolean;
   /** the metronome this device starts with (tempo, bar, subdivision, accent) and its own volume */
   metronome: { bpm: number; beats: number; sub: 1 | 2 | 3 | 4; accent: boolean; volume: number; countIn: boolean };
+  /** the sound check's measurements: the delay beyond what the browser reports (ms), per output and microphone */
+  calibration: Record<string, number>;
   /** the tuner's reference pitch for A4 (Hz) */
   tunerA4: number;
   /** what each sound output is, as the person said (by its name): browsers do not tell headphones from speakers */
@@ -75,6 +77,7 @@ export const DEFAULTS: Settings = {
   autoLevel: true,
   outputs: {},
   tunerA4: 440,
+  calibration: {},
   metronome: { bpm: 100, beats: 4, sub: 1, accent: true, volume: 0.7, countIn: false },
   midiSync: true,
   audioQuality: 'high',

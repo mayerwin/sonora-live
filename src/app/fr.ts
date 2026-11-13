@@ -740,4 +740,22 @@ export const FR: Record<string, string> = spaced({
   'Reference pitch of A4': 'Hauteur de référence du la',
   'Keys, backing track, metronome and tuner': 'Clavier, piste d’accompagnement, métronome et accordeur',
   Music: 'Musique',
+  'Listening…': 'Écoute…',
+  'Two short sweeps from your speakers: if your microphone hears them, you are on speakers. Takes 2 seconds.':
+    'Deux balayages courts dans vos haut-parleurs : si votre micro les entend, vous êtes sur haut-parleurs. Cela prend 2 secondes.',
+  'Playing two short sweeps…': 'Deux balayages courts…',
+  'Speakers: your microphone hears them, so their sound is taken out of it.':
+    'Haut-parleurs : votre micro les entend, leur son en est donc retiré.',
+  'Round trip {ms} ms.': 'Aller-retour {ms} ms.',
+  'Headphones: nothing reaches your microphone, so nothing is processed.':
+    'Casque : rien n’atteint votre micro, donc rien n’est traité.',
+  'Bluetooth headphones can add a fifth of a second: to measure theirs, hold one earcup against your microphone and press Measure.':
+    'Un casque Bluetooth peut ajouter un cinquième de seconde : pour mesurer le vôtre, tenez un écouteur contre votre micro et appuyez sur Mesurer.',
+  Measure: 'Mesurer',
+  'Headphones: {ms} ms more than the browser says. What the others play in time with you now waits for it.':
+    'Casque : {ms} ms de plus que ce qu’indique le navigateur. Ce que les autres jouent en rythme avec vous en tient compte désormais.',
+  'Headphones: no more delay than the browser says.': 'Casque : pas plus de délai que ce qu’indique le navigateur.',
+  'Still nothing: hold the earcup closer to the microphone, turn the volume up, and try again.':
+    'Toujours rien : rapprochez l’écouteur du micro, montez le volume et réessayez.',
+  'The microphone could not be opened for the check.': 'Le micro n’a pas pu être ouvert pour le test.',
 });

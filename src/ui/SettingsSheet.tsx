@@ -25,6 +25,7 @@ import { canPickSpeaker, listDevices, type DeviceLists } from '../media/local.ts
 import { hasBuiltInTurn } from '../net/ice.ts';
 import { LevelBars, Rich, Seg, Sheet, ToggleRow } from './common.tsx';
 import { SoundCheck } from './SoundCheck.tsx';
+import { SoundCheckButton } from './Check.tsx';
 import { midiSyncTip } from './SoundPanel.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
@@ -207,6 +208,7 @@ function AudioTab({ devices }: { devices: DeviceLists }) {
               'Nothing is taken out of your microphone: only with headphones, or the others hear themselves and it can howl.',
             )}
         </p>
+        <SoundCheckButton />
         {session.pureEcho.value && mode === 'pure' && (
           <>
             <h4 class="sub-h">{t('Echo cancelling on speakers')}</h4>

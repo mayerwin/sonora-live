@@ -27,6 +27,7 @@ import type { Picture } from '../media/picture.ts';
 import { listDevices, type DeviceLists, type MediaProblem } from '../media/local.ts';
 import { normalizeRoomCode, prettyCode } from '../net/code.ts';
 import { LevelBars, Qr, Seg, VideoView } from './common.tsx';
+import { SoundCheckButton } from './Check.tsx';
 import { GitHubIcon, initials, Logo, RoleIcon, Wordmark } from './icons.tsx';
 import { installable, promptInstall } from '../app/pwa.ts';
 import { canShare, copyLink, roomLink, shareLink } from './share.ts';
@@ -527,6 +528,7 @@ function ListeningQuestion() {
           { value: 'speakers', label: t('No, speakers') },
         ]}
       />
+      <SoundCheckButton />
       <small>
         {value === 'headphones'
           ? t('Studio sound: nothing processed, the lowest delay.')

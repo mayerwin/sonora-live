@@ -429,3 +429,62 @@ test('the sound never drops out while the built-in piano loads (entering a lesso
   await a.context().close();
   await b.context().close();
 });
+
+test('the sound check tells speakers from headphones, and measures Bluetooth headphones for the others', async () => {
+  const a = await simPerson(browser!, 'Clara', { turn: sim.url, settings: { echo: 'auto' } });
+  const b = await simPerson(browser!, 'Leo', { turn: sim.url, settings: { echo: 'off' }, hash: await codeOf(a) });
+  await linked(a, 1);
+  await linked(b, 1);
+  type L = { sonora: { listening: { value: string } } };
+  const listening = () => a.evaluate(() => (window as unknown as L).sonora.listening.value);
+  /** What her speakers or headphones play reaches her microphone `ms` later (null: nothing does). */
+  const path = (ms: number | null) =>
+    a.evaluate((ms) => {
+      const w = window as unknown as W & { __path?: GainNode };
+      w.__path?.disconnect();
+      w.__path = undefined;
+      if (ms === null) return;
+      const ctx = w.sonora.engine.ctx;
+      const d = ctx.createDelay(1);
+      d.delayTime.value = ms / 1000;
+      const g = ctx.createGain();
+      g.gain.value = 0.3;
+      w.sonora.engine.out.connect(d).connect(g).connect(w.__sim.mic);
+      w.__path = g;
+    }, ms);
+  await a.getByTestId('btn-settings').click();
+  const check = a.getByTestId('sound-check');
+  // headphones: nothing she plays reaches her microphone
+  await check.getByTestId('check-run').click();
+  await expect(check).toContainText('Headphones: nothing reaches your microphone', { timeout: 10_000 });
+  expect(await listening()).toBe('headphones');
+  // Bluetooth headphones, one earcup held against the microphone: 200 ms late
+  await path(200);
+  await check.getByTestId('check-measure').click();
+  await expect(check).toContainText(/Headphones: \d+ ms more than the browser says/, { timeout: 10_000 });
+  const extra = Number(/(\d+) ms more/.exec((await check.textContent()) ?? '')?.[1]);
+  console.log(`headphones measured: ${extra} ms more than the browser says (200 ms simulated)`);
+  expect(extra).toBeGreaterThan(150);
+  expect(await listening()).toBe('headphones');
+  // he learns it: what he plays in time with her waits for it
+  await expect
+    .poll(() =>
+      b.evaluate(
+        () =>
+          (window as unknown as { sonora: { peers: { value: { remote: { hearExtra?: number } | null }[] } } }).sonora
+            .peers.value[0].remote?.hearExtra ?? 0,
+      ),
+    )
+    .toBeGreaterThan(150);
+  // speakers: the room brings them back 40 ms later
+  await path(40);
+  await check.getByTestId('check-run').click();
+  await expect(check).toContainText('Speakers: your microphone hears them', { timeout: 10_000 });
+  expect(await listening()).toBe('speakers');
+  const rt = Number(/Round trip (\d+) ms/.exec((await check.textContent()) ?? '')?.[1]);
+  console.log(`sound check: round trip ${rt} ms (40 ms of room)`);
+  expect(rt).toBeGreaterThanOrEqual(40);
+  expect(rt).toBeLessThan(140);
+  await a.context().close();
+  await b.context().close();
+});

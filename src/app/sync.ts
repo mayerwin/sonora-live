@@ -19,5 +19,8 @@ export function soundDelayFrom(peers: PeerView[], selfId: string, ref: string): 
   if (ref === selfId) return 0;
   const p = peers.find((x) => x.id === ref && x.link === 'connected');
   if (!p?.stats || p.stats.rtt === null) return 0;
-  return (p.remote?.sendMs ?? 20) + p.stats.rtt / 2 + p.stats.bufferMs + engine.outputLatencyMs;
+  // their own measured extra (Bluetooth headphones): they hear the track and play along that much later
+  return (
+    (p.remote?.sendMs ?? 20) + (p.remote?.hearExtra ?? 0) + p.stats.rtt / 2 + p.stats.bufferMs + engine.outputLatencyMs
+  );
 }

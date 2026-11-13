@@ -52,6 +52,9 @@ export interface RemoteState {
   headphones?: boolean;
   /** how long their microphone's sound takes before it leaves (capture, processing, one audio frame), ms */
   sendMs?: number;
+  /** how much later than the browser says this side hears its own speakers and captures its microphone (ms),
+   * measured by the sound check (Bluetooth headphones: often 150 ms or more) */
+  hearExtra?: number;
   /** more of their settings, which the others can see and change */
   musicEcho?: boolean;
   autoLevel?: boolean;
