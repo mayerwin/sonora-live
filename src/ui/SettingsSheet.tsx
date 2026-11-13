@@ -446,9 +446,11 @@ function VideoTab({ devices }: { devices: DeviceLists }) {
         <ToggleRow
           title={t('Blur my background')}
           sub={
-            session.media.blurFailed.value
-              ? t('Not possible in this browser: try an up-to-date Chrome, Edge or Firefox.')
-              : t('Done on this device; the first time takes a few seconds to load. It uses some battery.')
+            session.media.blurTooSlow.value
+              ? t('Turned off: this device could not keep up, and the lesson comes first.')
+              : session.media.blurFailed.value
+                ? t('Not possible in this browser: try an up-to-date Chrome, Edge or Firefox.')
+                : t('Done on this device; the first time takes a few seconds to load. It uses some battery.')
           }
           checked={s.blur}
           onChange={(v) => update({ blur: v })}

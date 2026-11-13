@@ -932,4 +932,6 @@ export const FR: Record<string, string> = spaced({
   'Show all {n}': 'Afficher les {n}',
   'Studio sound: nothing processed, the lowest delay. Wired is best: Bluetooth adds some.':
     'Son studio : rien n’est traité, le délai le plus court. Filaire de préférence : le Bluetooth en ajoute.',
+  'Turned off: this device could not keep up, and the lesson comes first.':
+    'Désactivé : cet appareil ne suivait pas, et le cours passe avant.',
 });

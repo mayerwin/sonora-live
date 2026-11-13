@@ -1227,6 +1227,12 @@ export class Session {
         this.media.setBlur(settings.value.blur && !this.camOf.peek());
       }),
     );
+    // turned off by itself (the device could not keep up): the setting says so too, and it is not tried again
+    this.disposers.push(
+      effect(() => {
+        if (this.media.blurTooSlow.value && settings.peek().blur) update({ blur: false });
+      }),
+    );
     // what the others play sounds as they chose it (a grand, an electric piano, an organ, strings)
     this.disposers.push(
       effect(() => {

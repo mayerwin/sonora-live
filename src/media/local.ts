@@ -28,6 +28,8 @@ export class LocalMedia {
   readonly blur = signal(false);
   /** the blur could not start here (an old browser, no WebAssembly SIMD, no memory) */
   readonly blurFailed = signal(false);
+  /** the blur was turned off: this device could not keep up with it */
+  readonly blurTooSlow = signal(false);
   /** the shared screen's sound (a tab or the whole system, where the browser offers it) */
   readonly screenAudio = signal<MediaStreamTrack | null>(null);
   readonly micOn = signal(true);
@@ -552,6 +554,12 @@ export class LocalMedia {
     try {
       const b = await Blurred.create(t);
       if (gen !== this.videoGen) return b.stop();
+      b.onTooSlow = () => {
+        if (this.blurred !== b) return;
+        this.blurTooSlow.value = true;
+        this.blur.value = false;
+        void this.emitVideo(this.video.peek());
+      };
       this.blurred = b;
       this.sentVideo.value = b.track;
       this.onTrack('video', b.track);
@@ -564,6 +572,8 @@ export class LocalMedia {
   }
 
   setBlur(on: boolean): void {
+    // asked again: another try (the machine may be less busy now)
+    if (on) this.blurTooSlow.value = false;
     if (on === this.blur.peek()) return;
     this.blur.value = on;
     void this.emitVideo(this.video.peek());

@@ -1603,6 +1603,7 @@ test('comforts: the library reopens last week’s track in one tap, the keys can
   await a.getByTestId('btn-settings').click();
   await a.getByRole('tab', { name: 'Room' }).click();
   await a.getByTestId('timer-on').check();
+  await expect(a.getByRole('button', { name: '45 min' })).toBeEnabled();
   await a.getByRole('button', { name: '45 min' }).click();
   await a.keyboard.press('Escape');
   await expect(a.getByTestId('lesson-timer')).toHaveText(/^4[45]:\d\d$/);
@@ -1720,31 +1721,44 @@ test('background blur: the picture sent is the blurred one, and it still reaches
         video: { value: MediaStreamTrack | null };
         sentVideo: { value: MediaStreamTrack | null };
         blurFailed: { value: boolean };
+        blurTooSlow: { value: boolean };
       };
     };
   };
+  const state = () =>
+    a.evaluate(() => {
+      const m = (window as unknown as M).sonora.media;
+      return {
+        failed: m.blurFailed.value,
+        slow: m.blurTooSlow.value,
+        processed: !!m.sentVideo.value && m.sentVideo.value !== m.video.value,
+      };
+    });
   // the segmentation loads (served with the app), then the sent picture is the processed one
-  await expect
-    .poll(
-      () =>
-        a.evaluate(() => {
-          const m = (window as unknown as M).sonora.media;
-          return { failed: m.blurFailed.value, processed: !!m.sentVideo.value && m.sentVideo.value !== m.video.value };
-        }),
-      { timeout: 40_000 },
-    )
-    .toEqual({ failed: false, processed: true });
-  // his side keeps receiving her picture, now the blurred one
-  await b.waitForTimeout(3000);
-
-  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
-  // off again: the camera itself
+  await expect.poll(state, { timeout: 40_000 }).toMatchObject({ failed: false, processed: true });
+  // a while blurring: on a machine too slow for it (a CI runner), it turns itself off rather than freeze the lesson
+  await a.waitForTimeout(8000);
+  const s = await state();
+  console.log('blur after 8 s', s);
+  expect(s.processed || s.slow).toBe(true);
+  // either way the page answers at once, and his side keeps receiving her picture
   const t0 = Date.now();
   await a.evaluate(() => 1);
-  console.log('a round trip to her page while blurring (ms)', Date.now() - t0);
-  await a.getByTestId('btn-settings').click();
-  await a.getByRole('tab', { name: 'Video' }).click();
-  await a.getByText('Blur my background').click();
+  const lag = Date.now() - t0;
+  console.log('a round trip to her page while blurring (ms)', lag);
+  expect(lag).toBeLessThan(2000);
+  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
+  // off again: the camera itself
+  if (s.processed) {
+    await a.getByTestId('btn-settings').click();
+    await a.getByRole('tab', { name: 'Video' }).click();
+    await a.getByText('Blur my background').click();
+  } else {
+    // turned off by itself: Settings says why
+    await a.getByTestId('btn-settings').click();
+    await a.getByRole('tab', { name: 'Video' }).click();
+    await expect(a.getByText('this device could not keep up')).toBeVisible();
+  }
   await expect
     .poll(() =>
       a.evaluate(() => {

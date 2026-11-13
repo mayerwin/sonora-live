@@ -919,4 +919,6 @@ export const IT: Record<string, string> = {
   'Show all {n}': 'Mostra tutti e {n}',
   'Studio sound: nothing processed, the lowest delay. Wired is best: Bluetooth adds some.':
     'Suono da studio: nessuna elaborazione, il ritardo minimo. Meglio con il cavo: il Bluetooth ne aggiunge un po’.',
+  'Turned off: this device could not keep up, and the lesson comes first.':
+    'Disattivato: questo dispositivo non stava al passo, e la lezione viene prima.',
 };

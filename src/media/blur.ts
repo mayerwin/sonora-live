@@ -29,7 +29,7 @@ const FILES: Record<string, string> = {
 interface Segmenter {
   setOptions(o: { modelSelection?: number; selfieMode?: boolean }): void;
   onResults(cb: (r: { image: CanvasImageSource; segmentationMask: CanvasImageSource }) => void): void;
-  send(i: { image: HTMLVideoElement }): Promise<void>;
+  send(i: { image: HTMLVideoElement | HTMLCanvasElement }): Promise<void>;
   initialize(): Promise<void>;
   close(): Promise<void>;
 }
@@ -86,6 +86,16 @@ export class Blurred {
   private small = document.createElement('canvas');
   private stopTicker: (() => void) | null = null;
   private stopped = false;
+  /** the frame the model sees: its own size (256×144), not the camera's (16 to 36 times fewer pixels to upload) */
+  private modelIn = document.createElement('canvas');
+  /** how long a mask takes here (ms, smoothed), and how many were made */
+  private segMs = 0;
+  private lastTick = 0;
+  private stalls: number[] = [];
+  private started = performance.now();
+  private segs = 0;
+  /** the device cannot keep up: blur gives up (the caller sends the camera as it is) */
+  onTooSlow: (() => void) | null = null;
 
   private constructor(private source: MediaStreamTrack) {
     const st = source.getSettings();
@@ -123,7 +133,16 @@ export class Blurred {
    * smooth and its page responsive, with a mask a little behind.
    */
   private tick(): void {
-    if (this.stopped || this.video.readyState < 2) return;
+    if (this.stopped) return;
+    // the page itself stalling (frames due every 33 ms arriving half a second late, again and again): whatever
+    // the cause, a blurred background is not worth a frozen lesson
+    const t = performance.now();
+    if (this.lastTick && t - this.lastTick > 400) {
+      this.stalls = [...this.stalls.filter((x) => t - x < 10_000), t];
+      if (this.stalls.length >= 3 && t - this.started > 4000) this.onTooSlow?.();
+    }
+    this.lastTick = t;
+    if (this.video.readyState < 2) return;
     const vw = this.video.videoWidth;
     const vh = this.video.videoHeight;
     if (vw && (vw !== this.canvas.width || vh !== this.canvas.height)) {
@@ -140,7 +159,14 @@ export class Blurred {
   private async segment(started: number): Promise<void> {
     this.busy = true;
     try {
-      await this.seg!.send({ image: this.video });
+      const iw = 256;
+      const ih = Math.round((iw * this.canvas.height) / this.canvas.width) || 144;
+      if (this.modelIn.width !== iw || this.modelIn.height !== ih) {
+        this.modelIn.width = iw;
+        this.modelIn.height = ih;
+      }
+      this.modelIn.getContext('2d')!.drawImage(this.video, 0, 0, iw, ih);
+      await this.seg!.send({ image: this.modelIn });
     } catch {
       // a frame lost: the next one comes
     } finally {
@@ -148,6 +174,12 @@ export class Blurred {
       const took = performance.now() - started;
       // a slow device: the mask renewed less often (its work never more than about a sixth of the time)
       this.nextSeg = started + Math.max(1000 / 15, took * 6);
+      // the first mask includes the model's warm-up; after it, a device that needs a quarter second or more per
+      // mask is too slow: the lesson must not suffer for a blurred background
+      if (this.segs++ > 0) {
+        this.segMs = this.segMs ? this.segMs * 0.7 + took * 0.3 : took;
+        if (this.segs > 6 && this.segMs > 250 && !this.stopped) this.onTooSlow?.();
+      }
     }
   }
 
