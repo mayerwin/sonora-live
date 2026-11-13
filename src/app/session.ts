@@ -25,7 +25,8 @@ import {
 } from '../net/room.ts';
 import { DEFAULT_TUNING } from '../net/sdp.ts';
 import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
-import { BackingTrack, MAX_TRACK_BYTES, type TrackMeta } from './backing.ts';
+import { BackingTrack, MAX_TRACK_BYTES, type BackingHost, type TrackMeta } from './backing.ts';
+import { Metronome } from './metronome.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
 import { settings, tabId, update, updateMidi, type EchoSetting, type SoundSetting } from './settings.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -88,8 +89,8 @@ export class Session {
   readonly meter = new Meter();
   readonly midi = new MidiHub();
   readonly chat = new Chat();
-  /** the backing track everyone plays in time (src/app/backing.ts) */
-  readonly backing = new BackingTrack({
+  /** what the shared music tools need of the lesson */
+  private readonly toolHost: BackingHost = {
     selfId: () => this.selfId,
     observer: () => watching(),
     peers: () => this.peers.peek(),
@@ -98,7 +99,11 @@ export class Session {
     },
     sendFile: (meta, blob, to) => this.sendTrackFile(meta, blob, to),
     note: (text) => this.chat.system(text),
-  });
+  };
+  /** the backing track everyone plays in time (src/app/backing.ts) */
+  readonly backing = new BackingTrack(this.toolHost);
+  /** the shared metronome (src/app/metronome.ts) */
+  readonly metronome = new Metronome(this.toolHost);
 
   /** lobby: choosing name and role; room: in the lesson; left: after leaving */
   readonly phase = signal<'lobby' | 'room' | 'left'>('lobby');
@@ -508,6 +513,7 @@ export class Session {
     this.meter.detach();
     this.chat.clear();
     this.backing.clear();
+    this.metronome.clear();
     this.knocks.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
     this.statsTimer = null;
@@ -646,6 +652,7 @@ export class Session {
     this.sendRoster();
     this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
     this.backing.onConnected(link.id);
+    this.metronome.onConnected(link.id);
   }
 
   /** The other side introduced itself for the first time: now we can say who joined. */
@@ -979,7 +986,9 @@ export class Session {
       effect(() => void this.media.setAutoLevel(settings.value.autoLevel && this.listening.value === 'speakers')),
     );
     // a backing track loaded here: on speakers, its echo is cancelled
-    this.disposers.push(effect(() => void this.media.setBacking(!!this.backing.track.value)));
+    this.disposers.push(
+      effect(() => void this.media.setBacking(!!this.backing.track.value || this.metronome.shared.value.running)),
+    );
     // echo cancelling in pure sound follows its setting and the output (headphones or not)
     this.disposers.push(effect(() => void this.media.setEcho(this.pureEcho.value)));
     // the chosen output for everything: the others' sound (its elements), and the engine (the built-in piano,
@@ -1140,6 +1149,9 @@ export class Session {
       case 'bt':
       case 'bt-at':
         this.backing.onControl(id, msg);
+        break;
+      case 'mt':
+        this.metronome.onControl(id, msg);
         break;
     }
   }

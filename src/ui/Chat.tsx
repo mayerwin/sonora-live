@@ -9,6 +9,9 @@ import frPicker from 'emoji-picker-element/i18n/fr';
 import versions from 'virtual:sonora-assets';
 import { clock, lang, t, tn } from '../app/i18n.ts';
 
+/** quick reactions: they float over the video for everyone */
+const REACTIONS = ['👏', '👍', '❤️', '🎵', '😂', '🔥', '🙌', '🤔'];
+
 function Linkified({ text }: { text: string }) {
   const links = findLinks(text, 'url');
   if (!links.length) return <>{text}</>;
@@ -273,6 +276,13 @@ export function ChatPanel() {
       </div>
       <div class="composer">
         {emoji && <EmojiPicker onPick={(e) => insert(e)} onClose={() => setEmoji(false)} />}
+        <div class="react-row" role="group" aria-label={t('React')}>
+          {REACTIONS.map((e) => (
+            <button type="button" aria-label={t('React {emoji}', { emoji: e })} onClick={() => session.react(e)}>
+              {e}
+            </button>
+          ))}
+        </div>
         <div class="composer-box">
           <button class="icon-btn" aria-label={t('Attach a file')} onClick={() => file.current?.click()}>
             <Paperclip />

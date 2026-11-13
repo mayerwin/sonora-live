@@ -4,7 +4,7 @@
 
 import { expect, test } from '@playwright/test';
 import { startNetsim, type Netsim } from '../../server/netsim.ts';
-import { burstsWav, codeOf, lagBetween, linked, simPerson, stats } from './sim.ts';
+import { burstsWav, codeOf, lagBetween, linked, openTool, simPerson, stats } from './sim.ts';
 
 let sim: Netsim;
 test.beforeAll(async () => {
@@ -73,7 +73,7 @@ test('backing track at 200 ms each way: the teacher hears the student sing in ti
   const b = await simPerson(browser, 'Leo', { turn: sim.url, net, settings, hash: await codeOf(a) });
   await linked(a, 1);
   await linked(b, 1);
-  await a.getByTestId('btn-track').click();
+  await openTool(a, 'track');
   await a
     .getByTestId('backing-track')
     .locator('input[type=file]')
@@ -169,7 +169,7 @@ for (const musicEcho of [false, true]) {
     await linked(b, 1);
     // the room: her speakers reach her microphone 20 ms later, at half the level
     await micHears(a, 'out', { ms: 20, gain: 0.5 });
-    await a.getByTestId('btn-track').click();
+    await openTool(a, 'track');
     await a
       .getByTestId('backing-track')
       .locator('input[type=file]')
@@ -193,3 +193,64 @@ for (const musicEcho of [false, true]) {
     await b.context().close();
   });
 }
+
+test('metronome at 200 ms each way: started by the student, the teacher hears him on her clicks', async ({
+  browser,
+}) => {
+  const net = { up: 100, down: 100, jitter: 5 };
+  const settings = { echo: 'off', metronome: { bpm: 40, beats: 4, sub: 1, accent: true, volume: 0.7, countIn: false } };
+  const a = await simPerson(browser, 'Clara', { turn: sim.url, net, settings });
+  const b = await simPerson(browser, 'Leo', { turn: sim.url, net, settings, hash: await codeOf(a) });
+  await linked(a, 1);
+  await linked(b, 1);
+  // he plays exactly on the clicks he hears
+  await micHears(b, 'trackBus');
+  await openTool(b, 'metronome');
+  await b.getByTestId('metro-play').click();
+  await expect
+    .poll(() =>
+      a.evaluate(
+        () =>
+          (window as unknown as { sonora: { metronome: { shared: { value: { running: boolean } } } } }).sonora.metronome
+            .shared.value.running,
+      ),
+    )
+    .toBe(true);
+  await a.waitForTimeout(5000);
+  const delay = await a.evaluate(
+    () => (window as unknown as { sonora: { metronome: { delay: { value: number } } } }).sonora.metronome.delay.value,
+  );
+  const r = await lagBetween(a, 9, 'sonora.engine.trackBus', theirSound);
+  console.log(
+    `teacher: clicks delayed ${delay} ms; his playing vs her clicks: ${r.lagMs} ms (match ${r.match.toFixed(2)})`,
+  );
+  expect(delay).toBeGreaterThan(200);
+  expect(r.match).toBeGreaterThan(0.5);
+  expect(Math.abs(r.lagMs)).toBeLessThanOrEqual(40);
+  await a.context().close();
+  await b.context().close();
+});
+
+test('the tuner names the note and how far off it is', async ({ browser }) => {
+  const a = await simPerson(browser, 'Clara', { turn: sim.url, settings: { echo: 'off' } });
+  // a G3 into her microphone
+  await a.evaluate(() => {
+    const w = window as unknown as W & { __osc: OscillatorNode };
+    const o = w.__sim.ctx.createOscillator();
+    o.frequency.value = 196;
+    const g = w.__sim.ctx.createGain();
+    g.gain.value = 0.3;
+    o.connect(g).connect(w.__sim.mic);
+    o.start();
+    w.__osc = o;
+  });
+  await openTool(a, 'tuner');
+  const tuner = a.getByTestId('tuner');
+  await expect(tuner.locator('.tuner-note')).toHaveText('G3');
+  await expect(tuner.locator('.tuner-note')).toHaveClass(/in/);
+  // 200 Hz: still a G3, 35 cents sharp
+  await a.evaluate(() => ((window as unknown as { __osc: OscillatorNode }).__osc.frequency.value = 200));
+  await expect(tuner.locator('.tuner-read b')).toHaveText(/\+3[45]¢/);
+  await expect(tuner).toContainText('200.0 Hz');
+  await a.context().close();
+});

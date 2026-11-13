@@ -2,6 +2,7 @@
 // development server (the public MQTT brokers are replaced by server/relay.ts), with fake camera and microphone.
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { openTool } from './sim.ts';
 
 /** who someone is in a test: musicians all join alike; an observer comes with the observer's link */
 type Role = 'student' | 'teacher' | 'observer';
@@ -155,8 +156,8 @@ test('MIDI played on the on-screen keys lights up and sounds on the other side',
   await enter(b);
   await connected(a, 1);
 
-  await a.getByTestId('btn-keys').click();
-  await b.getByTestId('btn-keys').click();
+  await openTool(a, 'keys');
+  await openTool(b, 'keys');
   const key = a.locator('[data-note="60"]');
   const box = (await key.boundingBox())!;
   await a.mouse.move(box.x + box.width / 2, box.y + box.height * 0.8);
@@ -508,8 +509,8 @@ test('speaks French when the browser does, animates normally, and switches langu
   await expect(page.getByTestId('waiting')).toContainText('Invitez votre élève');
 
   // alone in the room, a reaction shows, whatever the system's motion setting (it is not followed)
-  await page.getByRole('button', { name: 'Réagir', exact: true }).click();
-  await page.getByRole('button', { name: 'Réagir 👏' }).click();
+  // (from the chat panel's reactions row)
+  await page.locator('.react-row').getByRole('button', { name: 'Réagir 👏' }).click();
   await expect
     .poll(() => page.locator('.reaction').evaluate((el) => Number(getComputedStyle(el).opacity)))
     .toBeGreaterThan(0.9);
@@ -539,7 +540,7 @@ test('speaks French when the browser does, animates normally, and switches langu
 test('the on-screen keys play the sampled grand piano', async ({ browser }) => {
   const page = await person(browser, 'Clara', 'teacher');
   await enter(page);
-  await page.getByTestId('btn-keys').click();
+  await openTool(page, 'keys');
   await expect(page.getByTestId('keyboard')).toBeVisible();
   type P = {
     sonora: {
@@ -821,7 +822,7 @@ test('settings are kept on this device: a rejoin finds the lesson as it was left
   await a.getByRole('group', { name: 'Your microphone' }).getByRole('button', { name: 'Voice only' }).click();
   await a.keyboard.press('Escape');
   await a.getByTestId('btn-mic').click();
-  await a.getByTestId('btn-keys').click();
+  await openTool(a, 'keys');
   await expect.poll(state).toEqual({ mic: false, mode: 'voice', echo: true });
 
   // leave, then come back to the same lesson (a new page load, as after closing the tab)
@@ -926,7 +927,7 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   await connected(b, 1);
 
   // the player opens from its button; nobody else sees it until a track is loaded
-  await a.getByTestId('btn-track').click();
+  await openTool(a, 'track');
   await expect(a.getByTestId('backing-track')).toBeVisible();
   await expect(b.getByTestId('backing-track')).toHaveCount(0);
   await a
@@ -991,6 +992,22 @@ test('a backing track plays on both sides, in time, with shared speed and key', 
   await playerB.getByTestId('track-play').click();
   await expect.poll(async () => (await state(a)).shared?.ref).toBe(leoId);
   await expect.poll(async () => (await state(a)).shared?.playing).toBe(true);
+
+  // with a count-in: a bar of clicks, then the track (a bar of 4 at 120 BPM: 2 s)
+  await a.getByTestId('backing-track').getByRole('checkbox', { name: 'Count-in' }).check();
+  await openTool(a, 'metronome');
+  const tempo = a.getByTestId('metronome').getByRole('spinbutton', { name: 'Tempo, beats per minute' });
+  await tempo.fill('120');
+  await tempo.press('Enter');
+  await playerB.getByTestId('track-play').click(); // his Play pauses it
+  await expect.poll(async () => (await state(a)).shared?.playing).toBe(false);
+  const before = (await state(a)).pos;
+  await a.getByTestId('backing-track').getByTestId('track-play').click();
+  await a.waitForTimeout(1200);
+  // still counting in: the track has not moved
+  expect(Math.abs((await state(a)).pos - before)).toBeLessThan(0.05);
+  await a.waitForTimeout(1800);
+  expect((await state(a)).pos).toBeGreaterThan(before + 0.3);
 
   // removed for everyone
   await a.getByRole('button', { name: 'Remove the track for everyone' }).click();
@@ -1058,4 +1075,50 @@ test('headphones or speakers: asked in the lobby, one tap in the bar, remembered
   await expect(a.getByTestId('btn-sound')).toContainText('Headphones');
   await expect.poll(async () => (await now()).processed).toBe(false);
   await a.context().close();
+});
+
+test('the Music strip: a shared metronome, started by one, heard and changed by both', async ({ browser }) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type M = {
+    sonora: {
+      selfId: string;
+      metronome: {
+        shared: { value: { running: boolean; bpm: number; beats: number; ref: string } };
+        lit: { value: { beat: number } | null };
+      };
+    };
+  };
+  const metro = (p: Page) => p.evaluate(() => (window as unknown as M).sonora.metronome.shared.value);
+  // nothing shows until it is opened or started
+  await expect(b.getByTestId('metronome')).toHaveCount(0);
+  await openTool(a, 'metronome');
+  const panel = a.getByTestId('metronome');
+  await panel.getByRole('spinbutton', { name: 'Tempo, beats per minute' }).fill('90');
+  await panel.getByRole('spinbutton', { name: 'Tempo, beats per minute' }).press('Enter');
+  await panel.getByRole('combobox', { name: 'Beats in a bar' }).selectOption('3');
+  await a.getByTestId('metro-play').click();
+  // started by her: in time with her, for both; it opens by itself on his side, with its tempo on the chip
+  const claraId = await a.evaluate(() => (window as unknown as M).sonora.selfId);
+  await expect.poll(async () => (await metro(b)).running).toBe(true);
+  expect(await metro(b)).toMatchObject({ bpm: 90, beats: 3, ref: claraId });
+  await expect(b.getByTestId('metronome')).toBeVisible();
+  await expect(b.getByTestId('chip-metronome')).toContainText('90');
+  // the beats light up on his side
+  await expect
+    .poll(() => b.evaluate(() => (window as unknown as M).sonora.metronome.lit.value?.beat ?? -1))
+    .toBeGreaterThan(-1);
+  // he speeds it up: for her too, without stopping
+  await b.getByTestId('metronome').getByRole('button', { name: 'Faster' }).click();
+  await expect.poll(async () => (await metro(a)).bpm).toBe(91);
+  expect((await metro(a)).running).toBe(true);
+  // she stops it: for him too
+  await a.getByTestId('metro-play').click();
+  await expect.poll(async () => (await metro(b)).running).toBe(false);
+  await a.context().close();
+  await b.context().close();
 });

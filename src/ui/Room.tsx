@@ -6,8 +6,7 @@ import {
   Check,
   DoorOpen,
   Ellipsis,
-  Keyboard,
-  ListMusic,
+  AudioLines,
   Lock,
   LockOpen,
   LogOut,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
   Settings,
   Share2,
-  SmilePlus,
   SwitchCamera,
   Video,
   VideoOff,
@@ -32,17 +30,16 @@ import {
 } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
 import { installUpdate } from '../app/update.ts';
-import { settings, update, updateMidi } from '../app/settings.ts';
+import { settings, update } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
 import { prettyCode } from '../net/code.ts';
 import { SignalBars } from './common.tsx';
 import { Logo, Wordmark } from './icons.tsx';
-import { chatOpen, keyboardOpen, menu, openSettings, sheet, sideTab, trackOpen } from './state.ts';
-import { BackingPlayer } from './BackingTrack.tsx';
+import { chatOpen, menu, openSettings, sheet, sideTab } from './state.ts';
+import { MusicStrip, stripShown, toggleMusic } from './Music.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { PeerTile, SelfPip, Waiting } from './Tiles.tsx';
 import { ChatPanel } from './Chat.tsx';
-import { PianoKeys } from './Keyboard.tsx';
 import { MidiSheet } from './MidiSheet.tsx';
 import { SettingsSheet } from './SettingsSheet.tsx';
 import { LockSheet, ShareSheet } from './ShareSheet.tsx';
@@ -66,37 +63,10 @@ const REACTIONS = ['👏', '👍', '❤️', '🎵', '😂', '🔥', '🙌', '�
 /** the microphone level in the control bar, bound to its element: no re-render at every frame */
 const micLevelStyle = computed(() => `transform:scaleY(${session.meter.level.value.toFixed(2)})`);
 
-/** an instrument or someone's notes are in play (true from the first note: not one change per note) */
-const midiActive = computed(
-  () =>
-    session.midi.devices.connected.value ||
-    session.peers.value.some((p) => p.remote?.midi.sending) ||
-    session.midi.lastLocal.value > 0,
-);
-
-/** The player shows: opened by hand, or by itself while a track is shared (unless hidden by hand). */
-function trackShows(): boolean {
-  const open = trackOpen.value;
-  return trackInPlay.value ? open !== false : open === true;
-}
-
-/** a backing track is shared in the lesson (or on its way): the player shows for everyone */
-const trackInPlay = computed(
-  () => !!session.backing.track.value || !!session.backing.incoming.value || !!session.backing.shared.value?.id,
-);
-
 export function Room() {
   const peers = session.peers.value;
   const rp = session.roomPhase.value;
   const denied = session.denied.value;
-  const s = settings.value;
-  const showKeys = keyboardOpen.value || (s.midi.keyboard && midiActive.value);
-  const showTrack = trackShows();
-  // a new track (or none any more): the player shows by itself again
-  const trackId = session.backing.shared.value?.id ?? null;
-  useEffect(() => {
-    trackOpen.value = null;
-  }, [trackId]);
 
   useEffect(() => {
     chatOpenTracker();
@@ -120,16 +90,8 @@ export function Room() {
         {!denied && rp !== 'joining' && <SelfPip />}
         <Reactions />
       </main>
-      {showTrack && <BackingPlayer />}
-      {showKeys && (
-        <PianoKeys
-          onClose={() => {
-            keyboardOpen.value = false;
-            updateMidi({ keyboard: false });
-          }}
-        />
-      )}
-      <ControlBar showKeys={showKeys} />
+      {stripShown.value && <MusicStrip />}
+      <ControlBar />
       {chatOpen.value && (sideTab.value === 'sound' ? <SoundPanel /> : <ChatPanel />)}
       {sheet.value === 'midi' && <MidiSheet />}
       {sheet.value === 'settings' && <SettingsSheet />}
@@ -382,7 +344,7 @@ function listeningNote(): string {
       });
 }
 
-function ControlBar({ showKeys }: { showKeys: boolean }) {
+function ControlBar() {
   const media = session.media;
   const mic = media.micOn.value;
   const cam = media.camOn.value;
@@ -391,8 +353,7 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
   const unread = session.chat.unread.value;
   const midiOn = session.midi.devices.connected.value;
   const sharing = media.extraKind.value === 'screen';
-  const trackShown = trackShows();
-  const toggleTrack = () => (trackOpen.value = !trackShown);
+  const music = stripShown.value;
   const open = menu.value;
   const [confirmLeave, setConfirmLeave] = useState(false);
   const toggleMenu = (m: typeof open) => (menu.value = open === m ? null : m);
@@ -508,26 +469,14 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
           <MidiLed on={midiOn} />
         </button>
         <button
-          class={`ctl hide-sm ${showKeys ? 'active' : ''}`}
-          onClick={() => {
-            const next = !showKeys;
-            keyboardOpen.value = next;
-            updateMidi({ keyboard: next });
-          }}
-          aria-pressed={showKeys}
-          data-testid="btn-keys"
+          class={`ctl ${music ? 'active' : ''}`}
+          onClick={toggleMusic}
+          aria-pressed={music}
+          title={t('Keys, backing track, metronome and tuner')}
+          data-testid="btn-music"
         >
-          <Keyboard />
-          <span>{t('Keys')}</span>
-        </button>
-        <button
-          class={`ctl ${trackShown ? 'active' : ''}`}
-          onClick={toggleTrack}
-          aria-pressed={trackShown}
-          data-testid="btn-track"
-        >
-          <ListMusic />
-          <span>{t('Track')}</span>
+          <AudioLines />
+          <span>{t('Music')}</span>
         </button>
         {media.canShareScreen ? (
           <button
@@ -544,34 +493,6 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
             <span>{t('Flip')}</span>
           </button>
         ) : null}
-        <div style="position:relative">
-          <button
-            class="ctl hide-sm"
-            onClick={() => toggleMenu('react')}
-            aria-haspopup="menu"
-            aria-expanded={open === 'react'}
-          >
-            <SmilePlus />
-            <span>{t('React')}</span>
-          </button>
-          {open === 'react' && (
-            <div class="menu" role="menu" style="min-width:auto">
-              <div class="emoji-row">
-                {REACTIONS.map((e) => (
-                  <button
-                    aria-label={t('React {emoji}', { emoji: e })}
-                    onClick={() => {
-                      session.react(e);
-                      menu.value = null;
-                    }}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
         <button
           class={`ctl ${chatOpen.value ? 'active' : ''}`}
           onClick={() => {
@@ -633,14 +554,14 @@ function ControlBar({ showKeys }: { showKeys: boolean }) {
               <button
                 class="menu-item"
                 onClick={() => {
-                  keyboardOpen.value = !showKeys;
-                  updateMidi({ keyboard: !showKeys });
+                  toggleMusic();
                   menu.value = null;
                 }}
               >
-                <Keyboard />
+                <AudioLines />
                 <span>
-                  <b>{showKeys ? t('Hide piano keys') : t('Show piano keys')}</b>
+                  <b>{music ? t('Hide the music tools') : t('Music tools')}</b>
+                  <small>{t('Keys, backing track, metronome and tuner')}</small>
                 </span>
               </button>
               {isMobile && (

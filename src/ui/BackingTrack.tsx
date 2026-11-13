@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-preact';
 import { session } from '../app/session.ts';
-import { settings } from '../app/settings.ts';
+import { settings, update } from '../app/settings.ts';
 import { t } from '../app/i18n.ts';
 import { clockOf, MIN_LOOP_S, stepRate } from '../media/backing-core.ts';
 import { trackOpen } from './state.ts';
@@ -211,6 +211,27 @@ export function BackingPlayer() {
                 </button>
               )}
             </span>
+            <label
+              class="track-ctl count-in"
+              title={t(
+                'Before the track starts: one bar of clicks at the metronome’s tempo ({beats} beats at {bpm} BPM)',
+                {
+                  beats: settings.value.metronome.beats,
+                  bpm: settings.value.metronome.bpm,
+                },
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={settings.value.metronome.countIn}
+                onChange={(e) =>
+                  update({
+                    metronome: { ...settings.value.metronome, countIn: (e.currentTarget as HTMLInputElement).checked },
+                  })
+                }
+              />
+              <span>{t('Count-in')}</span>
+            </label>
             {musicians.length > 1 && (
               <label
                 class="track-ctl"

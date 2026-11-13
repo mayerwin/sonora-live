@@ -17,6 +17,9 @@
 import { signal } from '@preact/signals';
 import { engine } from '../media/engine.ts';
 import { StretchPlayer } from '../media/stretch.ts';
+import { ClickVoice } from '../media/clicks.ts';
+import { ctxTimeAt } from '../media/clock.ts';
+import { clampBpm } from '../media/metronome-core.ts';
 import {
   cleanLoop,
   correction,
@@ -27,6 +30,7 @@ import {
   type Timeline,
 } from '../media/backing-core.ts';
 import { newId } from './chat.ts';
+import { oneWay, soundDelayFrom } from './sync.ts';
 import { toast } from './notify.ts';
 import { settings, update } from './settings.ts';
 import { t } from './i18n.ts';
@@ -65,6 +69,8 @@ export interface Shared {
   ref: string;
   ver: number;
   by: string;
+  /** a bar of clicks before the track starts (set by Play, cleared by the next change) */
+  countIn?: { beats: number; bpm: number } | null;
 }
 
 /** What the backing track needs of the lesson (the session in the app). */
@@ -109,6 +115,8 @@ export class BackingTrack {
   private plannedVer = -1;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastReport = 0;
+  /** the count-in's clicks */
+  private clicks: ClickVoice | null = null;
 
   constructor(private host: BackingHost) {}
 
@@ -178,7 +186,11 @@ export class BackingTrack {
     const from = dur > 0 && s.pos >= dur - 0.05 ? (s.loop?.a ?? 0) : s.pos;
     // whoever presses Play is about to sing or play along: the others hear the track in time with them (the
     // selector stays to change it by hand)
-    this.change({ playing: true, pos: from, anchor: performance.now() + LEAD_MS, ref: this.host.selfId() });
+    // a count-in: one bar at the metronome's tempo, then the track
+    const m = settings.peek().metronome;
+    const countIn = m.countIn ? { beats: Math.max(1, Math.min(12, m.beats)), bpm: clampBpm(m.bpm) } : null;
+    const lead = LEAD_MS + (countIn ? (countIn.beats * 60000) / countIn.bpm : 0);
+    this.change({ playing: true, pos: from, anchor: performance.now() + lead, ref: this.host.selfId(), countIn });
   }
 
   pause(): void {
@@ -246,7 +258,8 @@ export class BackingTrack {
   private change(patch: Partial<Shared>): void {
     const s = this.shared.peek();
     if (!s || !this.canControl) return;
-    this.shared.value = { ...s, ...patch, ver: s.ver + 1, by: this.host.selfId() };
+    // a count-in belongs to the Play that asked for it, not to the changes after it
+    this.shared.value = { ...s, countIn: null, ...patch, ver: s.ver + 1, by: this.host.selfId() };
     this.broadcast();
     this.reconcile();
   }
@@ -278,6 +291,7 @@ export class BackingTrack {
       ref: s.ref,
       ver: s.ver,
       by: s.by,
+      countIn: s.countIn ?? null,
     };
   }
 
@@ -313,6 +327,7 @@ export class BackingTrack {
       ref: typeof msg.ref === 'string' ? msg.ref : by,
       ver,
       by,
+      countIn: validCountIn(msg.countIn),
     };
     const had = this.track.peek();
     this.shared.value = next;
@@ -439,6 +454,7 @@ export class BackingTrack {
   }
 
   private unload(): void {
+    this.clicks?.cancel();
     this.player?.dispose();
     this.player = null;
     this.plannedVer = -1;
@@ -479,20 +495,13 @@ export class BackingTrack {
 
   /** half the round trip to someone (ms) */
   private oneWay(id: string): number {
-    const rtt = this.host.peers().find((p) => p.id === id)?.stats?.rtt;
-    return typeof rtt === 'number' ? rtt / 2 : 0;
+    return oneWay(this.host.peers(), id);
   }
 
-  /**
-   * How long the reference's sound takes to reach this side's ears (ms): their microphone's way out (as they said),
-   * the network, this side's jitter buffer and its speakers. Their own speakers do not count: each side's track is
-   * scheduled for the moment it is heard. 0 for the reference itself, or when the reference is not here.
-   */
+  /** How long the reference's sound takes to reach this side's ears (ms), kept steady (src/app/sync.ts). */
   private refDelay(s: Shared): number {
-    if (s.ref === this.host.selfId()) return 0;
-    const p = this.host.peers().find((x) => x.id === s.ref && x.link === 'connected');
-    if (!p?.stats || p.stats.rtt === null) return 0;
-    const want = (p.remote?.sendMs ?? 20) + p.stats.rtt / 2 + p.stats.bufferMs + engine.outputLatencyMs;
+    const want = soundDelayFrom(this.host.peers(), this.host.selfId(), s.ref);
+    if (want === 0) return 0;
     // kept steady: changed only when it moves by more than a few ms
     const cur = this.delay.peek();
     if (Math.abs(want - cur) > 12 || cur === 0) this.delay.value = Math.round(want);
@@ -553,6 +562,24 @@ export class BackingTrack {
     p.play(at, localTarget(tl, at, delay).pos, s.rate, s.semis, s.loop);
     this.plannedVer = s.ver;
     this.sounding.value = true;
+    if (s.countIn) this.countIn(s.countIn, at);
+  }
+
+  /** The count-in's clicks, heard here before the track starts at `at` (those still ahead). */
+  private countIn(c: { beats: number; bpm: number }, at: number): void {
+    const ctx = engine.ctx;
+    if (!ctx || !engine.trackBus) return;
+    if (!this.clicks) this.clicks = new ClickVoice(ctx, engine.trackBus);
+    const v = settings.peek().metronome.volume;
+    this.clicks.setVolume(v * v);
+    this.clicks.cancel();
+    const beat = 60000 / c.bpm;
+    const now = performance.now();
+    for (let k = c.beats; k >= 1; k--) {
+      const when = at - k * beat;
+      if (when < now) continue;
+      this.clicks.play(k === c.beats ? 'bar' : 'beat', ctxTimeAt(ctx, when));
+    }
   }
 
   /** The reference: where its track is heard, to everyone (every few seconds). */
@@ -573,4 +600,14 @@ export class BackingTrack {
   heardAt(epochMs: number): number | null {
     return this.player?.positionAt(epochMs - performance.timeOrigin) ?? null;
   }
+}
+
+/** A count-in from a message: a bar of 1 to 12 beats at a sensible tempo, or none. */
+function validCountIn(v: unknown): { beats: number; bpm: number } | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as { beats?: unknown; bpm?: unknown };
+  const beats = Math.round(Number(o.beats));
+  const bpm = Number(o.bpm);
+  if (!(beats >= 1 && beats <= 12) || !Number.isFinite(bpm)) return null;
+  return { beats, bpm: clampBpm(bpm) };
 }

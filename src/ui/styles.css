@@ -902,6 +902,28 @@ a:hover {
   text-transform: uppercase;
 }
 
+.react-row {
+  display: flex;
+  gap: 2px;
+  padding: 0 4px 6px;
+}
+
+.react-row button {
+  font-size: 17px;
+  line-height: 1;
+  padding: 5px;
+  border-radius: 8px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.react-row button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  transform: scale(1.15);
+}
+
 .menu-note {
   margin: 4px 10px 6px;
   font-size: 12px;
@@ -951,12 +973,11 @@ a:hover {
   height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   grid-template-areas:
     'top chat'
     'stage chat'
-    'track chat'
-    'keys chat'
+    'music chat'
     'bar chat';
   overflow: hidden;
 }
@@ -1101,6 +1122,9 @@ a:hover {
   min-height: 0;
   padding: 4px 16px 10px;
   display: grid;
+  /* a tall card (waiting for the others) scrolls in its place instead of spilling over the tools below */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .tiles {
@@ -2632,16 +2656,315 @@ emoji-picker {
 /* ----------------------------------------------------------------------------------------- backing track */
 
 .track {
-  grid-area: track;
   display: grid;
   gap: 6px;
+  padding: 8px 4px 2px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* ----------------------------------------------------------------------------------------- music strip */
+
+.music {
+  grid-area: music;
+  display: grid;
   margin: 0 16px 8px;
-  padding: 8px 12px;
+  padding: 4px 10px 6px;
   border-radius: 14px;
   background: var(--surface-2);
   border: 1px solid var(--line-2);
+  min-width: 0;
+}
+
+.music > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.music-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 2px 0 4px;
+}
+
+.music-head .grow {
+  flex: 1;
+}
+
+.music-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.music-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.music-chip.on {
+  background: rgba(245, 181, 68, 0.12);
+  border-color: rgba(245, 181, 68, 0.35);
+  color: var(--gold-2);
+}
+
+.chip-badge {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--gold);
+}
+
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(82, 214, 180, 0.18);
+}
+
+.tool {
+  display: grid;
+  gap: 6px;
+  padding: 8px 4px 4px;
   font-size: 13px;
   min-width: 0;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tool-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tool-ctl .lbl {
+  color: var(--muted);
+}
+
+.tool-ctl.check {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-ctl.check input {
+  accent-color: var(--gold);
+}
+
+.tool select {
+  max-width: 150px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+.tool .icon-btn.xs {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.tool .icon-btn.play {
+  color: #141018;
+  background: var(--gold);
+  border-radius: 50%;
+}
+
+.tool .icon-btn:disabled,
+.tool .btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.tool .btn-xs {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  border-radius: 7px;
+}
+
+.tool-vol {
+  flex: 1;
+  min-width: 140px;
+}
+
+.bpm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bpm small {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.bpm-input {
+  width: 58px;
+  height: 32px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 500;
+  border-radius: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  -moz-appearance: textfield;
+}
+
+.bpm-input::-webkit-outer-spin-button,
+.bpm-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.beats {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.beat {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--line-2);
+}
+
+.beat.first {
+  border-color: rgba(245, 181, 68, 0.5);
+}
+
+.beat.lit {
+  background: var(--text-2);
+  animation: beatfade 0.32s ease-out forwards;
+}
+
+.beat.lit.bar {
+  background: var(--gold);
+}
+
+@keyframes beatfade {
+  from {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat.lit {
+    animation: none;
+  }
+}
+
+.tuner-note {
+  min-width: 64px;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--text);
+  text-align: center;
+}
+
+.tuner-note.in {
+  color: var(--green);
+}
+
+.tuner-meter {
+  flex: 1;
+  min-width: 160px;
+  display: grid;
+  gap: 4px;
+}
+
+.tuner-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.tuner-scale i {
+  font-style: normal;
+}
+
+.tuner-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+}
+
+.tuner-zone {
+  position: absolute;
+  left: 45%;
+  width: 10%;
+  top: 0;
+  bottom: 0;
+  background: rgba(82, 214, 180, 0.18);
+}
+
+.tuner-needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--gold);
+  transition: left 0.08s linear;
+}
+
+.tuner-needle.in {
+  background: var(--green);
+}
+
+.tuner-read {
+  display: grid;
+  min-width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tuner-read b {
+  font-family: var(--mono);
+  font-size: 16px;
+}
+
+.tuner-read small {
+  color: var(--muted);
 }
 
 .track-row {
@@ -2764,6 +3087,15 @@ emoji-picker {
   color: var(--text);
 }
 
+.track-ctl.count-in {
+  cursor: pointer;
+  user-select: none;
+}
+
+.track-ctl.count-in input {
+  accent-color: var(--gold);
+}
+
 .track-vol {
   flex: 1;
   min-width: 140px;
@@ -2780,8 +3112,7 @@ emoji-picker {
 /* ----------------------------------------------------------------------------------------- keyboard */
 
 .keys {
-  grid-area: keys;
-  padding: 0 16px 4px;
+  padding: 8px 0 2px;
 }
 
 .keys-head {
@@ -2949,8 +3280,7 @@ emoji-picker {
     grid-template-areas:
       'top'
       'stage'
-      'track'
-      'keys'
+      'music'
       'bar';
   }
 
@@ -3082,12 +3412,30 @@ emoji-picker {
     grid-template-columns: 1fr;
   }
 
-  .keys {
-    padding: 0 8px 2px;
+  .music {
+    margin: 0 8px 6px;
+    padding: 4px 6px 6px;
   }
 
-  .track {
-    margin: 0 8px 6px;
+  .music {
+    max-height: 52dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .music-head {
+    position: sticky;
+    top: -4px;
+    z-index: 2;
+    background: var(--surface-2);
+  }
+
+  .music-chip {
+    padding: 0 9px;
+  }
+
+  .music-chip > span {
+    display: none;
   }
 
   .tile-label {

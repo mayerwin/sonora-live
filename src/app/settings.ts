@@ -21,6 +21,10 @@ export interface Settings {
   /** automatic level for music in pure sound, on speakers (slow, keeps crescendos); with headphones nothing is
    * processed */
   autoLevel: boolean;
+  /** the metronome this device starts with (tempo, bar, subdivision, accent) and its own volume */
+  metronome: { bpm: number; beats: number; sub: 1 | 2 | 3 | 4; accent: boolean; volume: number; countIn: boolean };
+  /** the tuner's reference pitch for A4 (Hz) */
+  tunerA4: number;
   /** what each sound output is, as the person said (by its name): browsers do not tell headphones from speakers */
   outputs: Record<string, 'headphones' | 'speakers'>;
   /** the others' MIDI waits for their sound (keys, notes, voice and microphone in time) */
@@ -70,6 +74,8 @@ export const DEFAULTS: Settings = {
   musicEcho: false,
   autoLevel: true,
   outputs: {},
+  tunerA4: 440,
+  metronome: { bpm: 100, beats: 4, sub: 1, accent: true, volume: 0.7, countIn: false },
   midiSync: true,
   audioQuality: 'high',
   videoQuality: 'hd',
@@ -111,6 +117,7 @@ function load(): Settings {
       ...DEFAULTS,
       ...s,
       midi: { ...DEFAULTS.midi, ...(s.midi ?? {}) },
+      metronome: { ...DEFAULTS.metronome, ...(s.metronome ?? {}) },
       turn: { ...DEFAULTS.turn, ...(s.turn ?? {}) },
     };
   } catch {

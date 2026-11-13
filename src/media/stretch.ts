@@ -8,6 +8,7 @@
 // timeline is on (src/media/backing-core.ts).
 
 import { wrap, type Loop } from './backing-core.ts';
+import { ctxTimeAt, perfTimeOf } from './clock.ts';
 
 interface StretchNode extends AudioWorkletNode {
   schedule(o: {
@@ -72,26 +73,12 @@ export class StretchPlayer {
     return new StretchPlayer(ctx, node, gain, buffer, latency);
   }
 
-  /** When (performance.now(), ms) context time `t` is heard, and the other way round. */
-  private clock(): { ctx: number; perf: number } {
-    const ts = this.ctx.getOutputTimestamp?.();
-    if (ts && typeof ts.contextTime === 'number' && typeof ts.performanceTime === 'number' && ts.performanceTime > 0)
-      return { ctx: ts.contextTime, perf: ts.performanceTime };
-    const c = this.ctx as AudioContext & { outputLatency?: number };
-    return {
-      ctx: this.ctx.currentTime - (c.baseLatency ?? 0) - (c.outputLatency ?? 0),
-      perf: performance.now(),
-    };
-  }
-
   toCtx(perf: number): number {
-    const c = this.clock();
-    return c.ctx + (perf - c.perf) / 1000;
+    return ctxTimeAt(this.ctx, perf);
   }
 
   toPerf(ctxTime: number): number {
-    const c = this.clock();
-    return c.perf + (ctxTime - c.ctx) * 1000;
+    return perfTimeOf(this.ctx, ctxTime);
   }
 
   /** the earliest moment (performance.now(), ms) a change can be heard with the node fully caught up */

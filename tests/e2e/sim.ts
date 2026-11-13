@@ -214,3 +214,10 @@ export async function lagBetween(
     { seconds, a, b },
   );
 }
+
+/** Open a tool of the Music strip (keys, track, metronome, tuner), opening the strip if needed. */
+export async function openTool(page: Page, tool: 'keys' | 'track' | 'metronome' | 'tuner'): Promise<void> {
+  if (!(await page.getByTestId('music').isVisible())) await page.getByTestId('btn-music').click();
+  const chip = page.getByTestId(`chip-${tool}`);
+  if ((await chip.getAttribute('aria-pressed')) !== 'true') await chip.click();
+}
