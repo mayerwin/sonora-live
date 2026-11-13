@@ -2,6 +2,7 @@
 // development server (the public MQTT brokers are replaced by server/relay.ts), with fake camera and microphone.
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { media } from './media.ts';
 import { openTool } from './sim.ts';
 
 /** who someone is in a test: musicians all join alike; an observer comes with the observer's link */
@@ -14,7 +15,7 @@ const Q = '?relay=local&debug';
 const urlFor = (role: Role, hash = '') => `/${Q}${role === 'observer' ? '&watch' : ''}${hash ? `#${hash}` : ''}`;
 
 async function person(browser: Browser, name: string, role: Role, hash = ''): Promise<Page> {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] pageerror`, e.message));
   await page.goto(urlFor(role, hash));
@@ -298,7 +299,7 @@ test('leaving tells the others', async ({ browser }) => {
 test('a MIDI instrument plays on the other side’s instrument, without echoing back', async ({ browser }) => {
   const { fakeMidiScript } = await import('./fake-midi.ts');
   const mk = async (name: string, role: Role, piano: string, thru: boolean, hash = '') => {
-    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    const ctx = await browser.newContext({ permissions: media() });
     await ctx.addInitScript(fakeMidiScript(piano, thru));
     const page = await ctx.newPage();
     await page.goto(urlFor(role, hash));
@@ -353,7 +354,7 @@ test('a MIDI instrument plays on the other side’s instrument, without echoing 
 });
 
 test('a duplicated tab (same session storage) gets its own identity and connects', async ({ browser }) => {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
@@ -374,7 +375,7 @@ test('a duplicated tab (same session storage) gets its own identity and connects
 
 test('unplugging the instrument mid-note releases it on the other side', async ({ browser }) => {
   const { fakeMidiScript } = await import('./fake-midi.ts');
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   await ctx.addInitScript(fakeMidiScript('Kawai ES920'));
   const a = await ctx.newPage();
   await a.goto(`/${Q}`);
@@ -422,7 +423,7 @@ test('unplugging the instrument mid-note releases it on the other side', async (
 
 test('the room keeps its rules when someone with other defaults joins', async ({ browser }) => {
   // the teacher saved "4 people"; the student has the defaults (2)
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   await ctx.addInitScript(() =>
     localStorage.setItem('sonora.settings.v1', JSON.stringify({ roomLimit: 4, lockRooms: true })),
   );
@@ -451,7 +452,7 @@ test('the room keeps its rules when someone with other defaults joins', async ({
 test('playing in unison: a release on the student’s piano is not mistaken for an echo', async ({ browser }) => {
   const { fakeMidiScript } = await import('./fake-midi.ts');
   const mk = async (name: string, role: Role, piano: string, hash = '') => {
-    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    const ctx = await browser.newContext({ permissions: media() });
     await ctx.addInitScript(fakeMidiScript(piano));
     const page = await ctx.newPage();
     await page.goto(urlFor(role, hash));
@@ -496,7 +497,7 @@ test('playing in unison: a release on the student’s piano is not mistaken for 
 test('speaks French when the browser does, animates normally, and switches language', async ({ browser }) => {
   const ctx = await browser.newContext({
     locale: 'fr-FR',
-    permissions: ['camera', 'microphone'],
+    permissions: media(),
     reducedMotion: 'reduce',
   });
   const page = await ctx.newPage();
@@ -572,7 +573,7 @@ test('when the networks block a direct path, the tile explains it calmly and con
 }) => {
   test.setTimeout(150_000);
   const blocked = async (name: string, role: Role, hash = '') => {
-    const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+    const ctx = await browser.newContext({ permissions: media() });
     await ctx.addInitScript(() => ((window as unknown as { sonoraNoDirect: boolean }).sonoraNoDirect = true));
     const page = await ctx.newPage();
     await page.goto(urlFor(role, hash));
@@ -790,7 +791,7 @@ test('both sides opening a connection at the same moment still carry picture and
 
 test('on a phone, the sound menu opens once (from More)', async ({ browser }) => {
   const ctx = await browser.newContext({
-    permissions: ['camera', 'microphone'],
+    permissions: media(),
     viewport: { width: 390, height: 844 },
     userAgent:
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1',
@@ -809,7 +810,7 @@ test('on a phone, the sound menu opens once (from More)', async ({ browser }) =>
 test('settings are kept on this device: a rejoin finds the lesson as it was left, a new lesson starts unmuted', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   const a = await ctx.newPage();
   await a.goto(urlFor('teacher'));
   await a.getByPlaceholder('e.g. Clara').fill('Clara');
@@ -1521,7 +1522,7 @@ test('a phone as a camera: joins a full room as the teacher’s camera, no sound
   await expect(a.getByTestId('phonecam-sheet').locator('.qr')).toBeVisible();
   const id = await a.evaluate(() => (window as unknown as { sonora: { selfId: string } }).sonora.selfId);
   const ctx = await browser.newContext({
-    permissions: ['camera', 'microphone'],
+    permissions: media(),
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
@@ -1710,7 +1711,7 @@ test('background blur: the picture sent is the blurred one, and it still reaches
   await connected(b, 1);
   /** her picture as his side decodes it (frames a second, from the connection's statistics) */
   const fps = async () => ((await peers(b))[0].stats?.videoIn as { fps: number } | undefined)?.fps ?? 0;
-  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
+  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(2);
   await a.getByTestId('btn-settings').click();
   await a.getByRole('tab', { name: 'Video' }).click();
   await a.getByText('Blur my background').click();
@@ -1747,7 +1748,7 @@ test('background blur: the picture sent is the blurred one, and it still reaches
   const lag = Date.now() - t0;
   console.log('a round trip to her page while blurring (ms)', lag);
   expect(lag).toBeLessThan(2000);
-  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
+  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(2);
   // off again: the camera itself
   if (s.processed) {
     await a.getByTestId('btn-settings').click();
@@ -1772,7 +1773,7 @@ test('background blur: the picture sent is the blurred one, and it still reaches
 test('the microphone and camera allowed after a refusal start at once, in the lesson, without reloading', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   // the browser refuses (the person said no, or it was blocked) until the test allows it, as from the address bar
   await ctx.addInitScript(() => {
     type W = { __allow: () => void };

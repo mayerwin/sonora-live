@@ -4,11 +4,12 @@
 // sound plays through it, and still reaches the other side.
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { media } from './media.ts';
 
 const Q = '?relay=local&debug';
 
 async function person(browser: Browser, name: string, hash = ''): Promise<Page> {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   const page = await ctx.newPage();
   await page.goto(`/${Q}${hash ? `#${hash}` : ''}`);
   await page.getByPlaceholder('e.g. Clara').fill(name);

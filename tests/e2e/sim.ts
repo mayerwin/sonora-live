@@ -3,6 +3,7 @@
 // recorded and compared in the page.
 
 import { expect, type Browser, type Page } from '@playwright/test';
+import { media } from './media.ts';
 import { usernameOf, type LinkProfile } from '../../server/netsim.ts';
 
 export interface SimOptions {
@@ -21,7 +22,7 @@ export interface SimOptions {
  * something to it).
  */
 export async function simPerson(browser: Browser, name: string, o: SimOptions): Promise<Page> {
-  const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const ctx = await browser.newContext({ permissions: media() });
   await ctx.addInitScript(
     ({ turn, user, extra }) => {
       try {

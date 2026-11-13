@@ -2,10 +2,11 @@
 // beep, so the numbers mean nothing; what is checked is that every stage runs and the report is complete).
 
 import { expect, test } from '@playwright/test';
+import { media } from './media.ts';
 
 test('the sound lab measures each processing in its own pass and reports', async ({ browser }) => {
   test.setTimeout(180_000);
-  const ctx = await browser.newContext({ permissions: ['microphone'] });
+  const ctx = await browser.newContext({ permissions: media('microphone') });
   const p = await ctx.newPage();
   const errors: string[] = [];
   p.on('pageerror', (e) => errors.push(e.message));
