@@ -3,7 +3,7 @@
 import { effect, signal } from '@preact/signals';
 import { settings, updateMidi } from '../app/settings.ts';
 
-export type SheetName = 'midi' | 'settings' | 'share' | 'lock' | 'peer-sound' | null;
+export type SheetName = 'midi' | 'settings' | 'share' | 'lock' | 'peer-sound' | 'shortcuts' | 'phone-cam' | null;
 /** the side panel's tab: the chat, or everyone's sound settings */
 export const sideTab = signal<'chat' | 'sound'>('chat');
 /** whose sound the 'peer-sound' sheet is about */

@@ -1379,3 +1379,155 @@ test('a shared score: same page for everyone, ink seen by all, undo, and saved w
   await a.getByTestId('score-close').click();
   await expect(b.getByTestId('score')).toHaveCount(0);
 });
+
+test('keyboard shortcuts: one key each, out of the way while typing or while the keys play the piano', async ({
+  browser,
+}) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  type M = { sonora: { media: { micOn: { value: boolean } }; metronome: { shared: { value: { running: boolean } } } } };
+  const mic = () => a.evaluate(() => (window as unknown as M).sonora.media.micOn.value);
+  const metro = () => a.evaluate(() => (window as unknown as M).sonora.metronome.shared.value.running);
+  await a.locator('body').click({ position: { x: 5, y: 300 } });
+  await a.keyboard.press('m');
+  expect(await mic()).toBe(false);
+  await a.keyboard.press('m');
+  expect(await mic()).toBe(true);
+  await a.keyboard.press('t');
+  await expect.poll(metro).toBe(true);
+  await a.keyboard.press('t');
+  await expect.poll(metro).toBe(false);
+  // typing a message is typing
+  if (!(await a.getByPlaceholder('Message').isVisible())) await a.getByTestId('btn-chat').click();
+  await a.getByPlaceholder('Message').fill('');
+  await a.getByPlaceholder('Message').press('m');
+  expect(await mic()).toBe(true);
+  await a.getByPlaceholder('Message').blur();
+  // the list
+  await a.keyboard.press('?');
+  await expect(a.getByTestId('shortcuts')).toContainText('Start or stop the metronome');
+  await a.keyboard.press('Escape');
+  await expect(a.getByTestId('shortcuts')).toHaveCount(0);
+  // the computer keyboard plays the piano: M is a note's neighbour, not the microphone
+  await a.getByTestId('btn-music').click();
+  await a.getByTestId('chip-keys').click();
+  const qwerty = a.getByRole('button', { name: /computer keys/i });
+  if ((await qwerty.getAttribute('class'))?.includes('btn-ghost')) await qwerty.click();
+  await a.locator('body').click({ position: { x: 5, y: 300 } });
+  await a.keyboard.press('m');
+  expect(await mic()).toBe(true);
+});
+
+test('a shared screen carries its sound: heard on the other side, on a channel of its own', async ({ browser }) => {
+  const a = await person(browser, 'Clara', 'teacher');
+  // a tab with a video playing: a picture and a 660 Hz tone, as getDisplayMedia would give them
+  await a.addInitScript(() => {
+    navigator.mediaDevices.getDisplayMedia = async () => {
+      const c = document.createElement('canvas');
+      c.width = 640;
+      c.height = 360;
+      const g = c.getContext('2d')!;
+      setInterval(() => {
+        g.fillStyle = `hsl(${(Date.now() / 10) % 360} 60% 50%)`;
+        g.fillRect(0, 0, 640, 360);
+      }, 50);
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 660;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.3;
+      const dest = ctx.createMediaStreamDestination();
+      osc.connect(gain).connect(dest);
+      osc.start();
+      return new MediaStream([...c.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    };
+  });
+  await a.reload();
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  await a.getByRole('button', { name: 'Share', exact: true }).click();
+  // his side: her screen's sound arrives as its own stream, and it is the tone
+  type W = { sonora: { peers: { value: { screenAudio: MediaStream | null }[] } } };
+  await expect
+    .poll(() => b.evaluate(() => !!(window as unknown as W).sonora.peers.value[0]?.screenAudio), { timeout: 15_000 })
+    .toBe(true);
+  const hz = await b.evaluate(async () => {
+    const s = (window as unknown as W).sonora.peers.value[0].screenAudio!;
+    const ctx = new AudioContext();
+    const an = ctx.createAnalyser();
+    an.fftSize = 8192;
+    ctx.createMediaStreamSource(s).connect(an);
+    // Chrome delivers a remote stream to an audio context only while an element plays it (the app's does)
+    await new Promise((r) => setTimeout(r, 1500));
+    const bins = new Float32Array(an.frequencyBinCount);
+    an.getFloatFrequencyData(bins);
+    let best = 0;
+    for (let i = 1; i < bins.length; i++) if (bins[i] > bins[best]) best = i;
+    return { hz: (best * ctx.sampleRate) / an.fftSize, db: bins[best] };
+  });
+  console.log('screen sound on the other side', hz);
+  expect(Math.abs(hz.hz - 660)).toBeLessThan(15);
+  expect(hz.db).toBeGreaterThan(-60);
+  // stopping the share ends its sound too
+  await a.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect
+    .poll(() =>
+      a.evaluate(
+        () =>
+          (window as unknown as { sonora: { media: { screenAudio: { value: unknown } } } }).sonora.media.screenAudio
+            .value,
+      ),
+    )
+    .toBeNull();
+});
+
+test('a phone as a camera: joins a full room as the teacher’s camera, no sound, shown next to her, taken away by her', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const code = await codeOf(a);
+  const b = await person(browser, 'Leo', 'student', code);
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  // the room is full (two people): the phone still comes in, as hers
+  await expect(a.getByTestId('lock-chip')).toContainText('2/2');
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('tab', { name: 'Video' }).click();
+  await a.getByTestId('settings-phonecam').click();
+  await expect(a.getByTestId('phonecam-sheet').locator('.qr')).toBeVisible();
+  const id = await a.evaluate(() => (window as unknown as { sonora: { selfId: string } }).sonora.selfId);
+  const ctx = await browser.newContext({
+    permissions: ['camera', 'microphone'],
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const phone = await ctx.newPage();
+  phone.on('pageerror', (e) => console.log('[phone] error', e.message));
+  await phone.goto(`/?relay=local&debug&cam=${id}&of=Clara#${code}`);
+  await expect(phone.getByTestId('camera-mode')).toContainText('Live: a camera of Clara', { timeout: 25_000 });
+  // on his side: a tile "Clara · phone" with a picture, and still two people
+  const tile = b.locator('[data-testid=tile]', { hasText: 'Clara · phone' });
+  await expect(tile).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => tile.evaluate((el) => el.querySelector('video')?.videoWidth ?? 0)).toBeGreaterThan(0);
+  await expect(b.getByTestId('lock-chip')).toContainText('2/2');
+  if (process.env.SHOTS) {
+    await phone.screenshot({ path: `${process.env.SHOTS}/phonecam-phone.png` });
+    await b.screenshot({ path: `${process.env.SHOTS}/phonecam-leo.png` });
+    await a.screenshot({ path: `${process.env.SHOTS}/phonecam-sheet.png` });
+  }
+  // it sends no sound and plays none
+  expect(await phone.evaluate(() => document.querySelectorAll('audio').length)).toBe(0);
+  // she sees it in her list, and takes it away
+  await expect(a.getByTestId('phonecam-list').locator('li')).toHaveCount(1);
+  await a.getByTestId('phonecam-list').getByRole('button').click();
+  await expect(phone.getByTestId('camera-mode')).toContainText('Clara took this camera away', { timeout: 15_000 });
+  await expect(tile).toHaveCount(0, { timeout: 15_000 });
+});

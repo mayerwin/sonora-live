@@ -28,6 +28,8 @@ export interface MemberInfo {
   role: Role;
   /** when it entered the room (its own clock, ms): the earliest member leads */
   since: number;
+  /** a camera of that member (a phone set by their instrument): no sound, shown with them, not counted */
+  of?: string;
 }
 
 export interface Policy {
@@ -233,7 +235,13 @@ export class Room {
   /** members plus admitted newcomers still connecting */
   private headcount(): number {
     const now = Date.now();
-    const ids = new Set(this.hooks.members().map((m) => m.id));
+    // a person's extra cameras are theirs: they take no place in the room
+    const ids = new Set(
+      this.hooks
+        .members()
+        .filter((m) => !m.of)
+        .map((m) => m.id),
+    );
     for (const [id, at] of this.pending) {
       if (now - at > PENDING_MS) this.pending.delete(id);
       else ids.add(id);
@@ -309,7 +317,9 @@ export class Room {
     const isMember = members.some((x) => x.id === info.id);
     const reloaded = this.reloaded(info);
     const policy = this.hooks.policy();
-    const full = policy.locked && this.headcount() >= policy.limit && !isMember && !this.pending.has(info.id);
+    const ownerHere = !!info.of && members.some((x) => x.id === info.of);
+    const full =
+      policy.locked && this.headcount() >= policy.limit && !isMember && !ownerHere && !this.pending.has(info.id);
     // a member that reloaded is not the leader any more (its old connection may still look alive here)
     const leader = leaderOf(reloaded ? members.filter((x) => x.id !== info.id) : members);
     if (leader?.id !== this.self.id) {
@@ -435,7 +445,8 @@ export function validInfo(x: unknown): x is MemberInfo {
     m.id.length < 40 &&
     typeof m.name === 'string' &&
     ROLES.has(m.role) &&
-    typeof m.since === 'number'
+    typeof m.since === 'number' &&
+    (m.of === undefined || (typeof m.of === 'string' && m.of.length < 40))
   );
 }
 

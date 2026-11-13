@@ -474,13 +474,8 @@ export const IT: Record<string, string> = {
   '{quality}. Smooth motion is kept first, so hands stay fluid.':
     '{quality}. La priorità va alla fluidità, così le mani restano nitide in movimento.',
   'Second camera': 'Seconda fotocamera',
-  'Show the keys from above (or your hands) next to your face. The others see both.':
-    'Mostra la tastiera dall’alto (o le mani) accanto al tuo viso. Gli altri vedono entrambe.',
   'Stop second camera': 'Ferma seconda fotocamera',
-  'Choose a camera…': 'Scegli una fotocamera…',
   Add: 'Aggiungi',
-  "Or join from a phone with the room's QR code, as an Observer, and point it at the keyboard.":
-    'Oppure entra da un telefono con il codice QR della stanza, come Osservatore, e puntalo sulla tastiera.',
   'Only for you: the others always see the real image.': 'Solo per te: gli altri vedono sempre l’immagine reale.',
   'Start with the camera off': 'Entra con la fotocamera spenta',
   'Meeting point': 'Punto d’incontro',
@@ -834,4 +829,44 @@ export const IT: Record<string, string> = {
   'Receiving {name}… {pct}%': 'Ricezione di {name}… {pct}%',
   'Opening {name}…': 'Apertura di {name}…',
   'Type, then Enter': 'Scrivi, poi Invio',
+  'Back to scrolling': 'Torna allo scorrimento',
+  'Camera on or off': 'Accendi o spegni la fotocamera',
+  'In the lesson': 'Durante la lezione',
+  'Keyboard shortcuts': 'Scorciatoie da tastiera',
+  'M mutes, V turns the camera off, Space plays the track, T starts the metronome… Press ? in the lesson for all of them.':
+    'M disattiva il microfono, V la fotocamera, Spazio avvia la base, T il metronomo… Premi ? durante la lezione per vederle tutte.',
+  'Microphone on or off': 'Attiva o disattiva il microfono',
+  'On the score': 'Sullo spartito',
+  'Play or pause the backing track': 'Avvia o metti in pausa la base musicale',
+  Playing: 'Suonare',
+  'Previous or next page': 'Pagina precedente o successiva',
+  'Show the shortcuts': 'Mostra le scorciatoie',
+  Space: 'Spazio',
+  'Start or stop the metronome': 'Avvia o ferma il metronomo',
+  'These shortcuts': 'Queste scorciatoie',
+  'While the computer keyboard plays the on-screen piano, its letters and Space are notes and the pedal.':
+    'Quando la tastiera del computer suona il pianoforte sullo schermo, le sue lettere e lo Spazio sono note e pedale.',
+  'A phone as a camera': 'Un telefono come videocamera',
+  'Allow the camera when asked.': 'Consenti la fotocamera quando richiesto.',
+  'Connecting to {name}’s lesson…': 'Connessione alla lezione di {name}…',
+  'Four phones at most: take one away to add another.':
+    'Al massimo quattro telefoni: togline uno per aggiungerne un altro.',
+  'Live: a camera of {name}': 'In diretta: una videocamera di {name}',
+  'More cameras': 'Altre videocamere',
+  'On the hands, the bow, the pedals': 'Sulle mani, l’archetto, i pedali',
+  'On your hands, the bow, the pedals: scan this with your phone’s camera and set it where it sees best. It joins as your camera, with no sound. Everyone sees it next to you.':
+    'Sulle tue mani, l’archetto, i pedali: inquadra questo codice con la fotocamera del telefono e posizionalo dove vede meglio. Entra come tua videocamera, senza audio. Tutti lo vedono accanto a te.',
+  'Open the camera app on the phone and point it at the code.': 'Apri la fotocamera del telefono e inquadra il codice.',
+  'Or a second camera on this computer…': 'Oppure una seconda videocamera su questo computer…',
+  'Phone {n}': 'Telefono {n}',
+  'Prop the phone up. Keep it plugged in for a long lesson.':
+    'Appoggia il telefono. Tienilo in carica per una lezione lunga.',
+  'Show the keys from above, your hands or your feet next to your face. The others see all of them.':
+    'Mostra la tastiera dall’alto, le mani o i piedi accanto al tuo viso. Gli altri vedono tutto.',
+  'Take away': 'Togli',
+  'The camera could not be opened': 'Impossibile aprire la fotocamera',
+  'Your phone is connected as a camera': 'Il tuo telefono è collegato come videocamera',
+  phone: 'telefono',
+  '{name} added a camera': '{name} ha aggiunto una videocamera',
+  '{name} took this camera away': '{name} ha tolto questa videocamera',
 };

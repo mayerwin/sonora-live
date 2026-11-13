@@ -475,13 +475,8 @@ export const DE: Record<string, string> = {
   '{quality}. Smooth motion is kept first, so hands stay fluid.':
     '{quality}. Flüssige Bewegung hat Vorrang, damit die Hände nicht ruckeln.',
   'Second camera': 'Zweite Kamera',
-  'Show the keys from above (or your hands) next to your face. The others see both.':
-    'Zeig die Tasten von oben (oder deine Hände) neben deinem Gesicht. Die anderen sehen beides.',
   'Stop second camera': 'Zweite Kamera beenden',
-  'Choose a camera…': 'Kamera wählen…',
   Add: 'Hinzufügen',
-  "Or join from a phone with the room's QR code, as an Observer, and point it at the keyboard.":
-    'Oder tritt mit einem Handy über den QR-Code des Raums als Zuschauer bei und richte es auf die Tastatur.',
   'Only for you: the others always see the real image.': 'Nur für dich: Die anderen sehen immer das echte Bild.',
   'Start with the camera off': 'Mit ausgeschalteter Kamera starten',
   'Meeting point': 'Treffpunkt',
@@ -834,4 +829,45 @@ export const DE: Record<string, string> = {
   'Receiving {name}… {pct}%': 'Empfange {name}… {pct} %',
   'Opening {name}…': 'Öffne {name}…',
   'Type, then Enter': 'Tippen, dann Enter',
+  'Back to scrolling': 'Zurück zum Blättern',
+  'Camera on or off': 'Kamera an oder aus',
+  'In the lesson': 'Im Unterricht',
+  'Keyboard shortcuts': 'Tastenkürzel',
+  'M mutes, V turns the camera off, Space plays the track, T starts the metronome… Press ? in the lesson for all of them.':
+    'M schaltet stumm, V die Kamera aus, Leertaste spielt die Spur, T startet das Metronom… Drück ? im Unterricht für alle.',
+  'Microphone on or off': 'Mikrofon an oder aus',
+  'On the score': 'In den Noten',
+  'Play or pause the backing track': 'Begleitspur abspielen oder pausieren',
+  Playing: 'Spielen',
+  'Previous or next page': 'Vorherige oder nächste Seite',
+  'Show the shortcuts': 'Tastenkürzel zeigen',
+  Space: 'Leertaste',
+  'Start or stop the metronome': 'Metronom starten oder stoppen',
+  'These shortcuts': 'Diese Tastenkürzel',
+  'While the computer keyboard plays the on-screen piano, its letters and Space are notes and the pedal.':
+    'Solange die Computertastatur die Klaviertasten spielt, sind ihre Buchstaben Töne und die Leertaste das Pedal.',
+  'A phone as a camera': 'Handy als Kamera',
+  'Allow the camera when asked.': 'Erlaube die Kamera, wenn gefragt wird.',
+  'Connecting to {name}’s lesson…': 'Verbinde mit dem Unterricht von {name}…',
+  'Four phones at most: take one away to add another.':
+    'Höchstens vier Handys: Entferne eins, um ein weiteres hinzuzufügen.',
+  'Live: a camera of {name}': 'Live: eine Kamera von {name}',
+  'More cameras': 'Weitere Kameras',
+  'On the hands, the bow, the pedals': 'Auf die Hände, den Bogen, die Pedale',
+  'On your hands, the bow, the pedals: scan this with your phone’s camera and set it where it sees best. It joins as your camera, with no sound. Everyone sees it next to you.':
+    'Auf deine Hände, den Bogen, die Pedale: Scanne das mit der Handykamera und stell das Handy dort auf, wo es am besten sieht. Es kommt als deine Kamera dazu, ohne Ton. Alle sehen es neben dir.',
+  'Open the camera app on the phone and point it at the code.':
+    'Öffne die Kamera-App auf dem Handy und richte sie auf den Code.',
+  'Or a second camera on this computer…': 'Oder eine zweite Kamera an diesem Computer…',
+  'Phone {n}': 'Handy {n}',
+  'Prop the phone up. Keep it plugged in for a long lesson.':
+    'Stell das Handy auf. Bei langem Unterricht am Ladekabel lassen.',
+  'Show the keys from above, your hands or your feet next to your face. The others see all of them.':
+    'Zeig die Tasten von oben, deine Hände oder Füße neben deinem Gesicht. Die anderen sehen alles.',
+  'Take away': 'Entfernen',
+  'The camera could not be opened': 'Die Kamera ließ sich nicht öffnen',
+  'Your phone is connected as a camera': 'Dein Handy ist als Kamera verbunden',
+  phone: 'Handy',
+  '{name} added a camera': '{name} hat eine Kamera hinzugefügt',
+  '{name} took this camera away': '{name} hat diese Kamera entfernt',
 };

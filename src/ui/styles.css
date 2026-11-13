@@ -3499,6 +3499,171 @@ emoji-picker {
   }
 }
 
+/* ---------------------------------------------------------------------------------------- phone cameras */
+
+.phonecam {
+  display: grid;
+  gap: 16px;
+}
+
+.phonecam-qr {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.phonecam-qr .qr {
+  width: 180px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fbf8f2;
+}
+
+.phonecam-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.phonecam-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.phonecam-list .grow {
+  flex: 1;
+}
+
+.cam-mode {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.cam-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cam-top,
+.cam-bottom {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: calc(14px + var(--safe-t, 0px)) 16px 14px;
+}
+
+.cam-bottom {
+  grid-row: 3;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.cam-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 14, 19, 0.7);
+  backdrop-filter: blur(12px);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.cam-status i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.cam-status.live i {
+  background: var(--red);
+  animation: rec-pulse 1.6s ease-out infinite;
+}
+
+.cam-status.stopped i,
+.cam-status.failed i {
+  background: var(--faint);
+}
+
+.cam-bottom .ctl {
+  background: rgba(15, 14, 19, 0.7);
+  backdrop-filter: blur(12px);
+}
+
+.cam-bottom .ctl.danger {
+  color: #ffc9c5;
+}
+
+@media (max-width: 520px) {
+  .phonecam-qr {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------- shortcuts */
+
+.shortcuts {
+  display: grid;
+  gap: 18px;
+}
+
+.shortcuts h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shortcuts dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  align-items: center;
+}
+
+.shortcuts dt {
+  display: flex;
+  gap: 4px;
+}
+
+.shortcuts dd {
+  margin: 0;
+  color: var(--text-2);
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  font: 600 12.5px/1 var(--sans, system-ui);
+  color: var(--text);
+}
+
 /* ---------------------------------------------------------------------------------------- host */
 
 .held-note {

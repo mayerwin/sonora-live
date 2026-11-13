@@ -41,6 +41,8 @@ export interface RemoteState {
   mic: boolean;
   cam: boolean;
   extra: 'screen' | 'camera' | null;
+  /** their shared screen's sound is on (it plays here only then) */
+  screenSound?: boolean;
   sound: SoundMode;
   stereo: boolean;
   /** their microphone's settings, which the others can change too (older versions: absent) */
@@ -74,6 +76,8 @@ export interface PeerView {
   audio: MediaStream | null;
   video: MediaStream | null;
   extra: MediaStream | null;
+  /** the sound of their shared screen (a video, a recording they play) */
+  screenAudio: MediaStream | null;
   stats: LinkStats | null;
   joinedAt: number;
   /** a background repair attempt: not shown until it connects */
@@ -139,6 +143,8 @@ interface Participant<L> {
   audio: MediaStream | null;
   video: MediaStream | null;
   extra: MediaStream | null;
+  /** the sound of their shared screen (a video, a recording they play) */
+  screenAudio: MediaStream | null;
   stats: LinkStats | null;
   /** the unreachable record is forgotten / the reloaded person's place given up */
   timer: Timer | null;
@@ -199,6 +205,7 @@ export class Participants<L extends LinkLike> {
       audio: p.audio,
       video: p.video,
       extra: p.extra,
+      screenAudio: p.screenAudio,
       stats: p.stats,
       joinedAt: p.joinedAt,
       quiet: p.quiet || undefined,
@@ -221,6 +228,11 @@ export class Participants<L extends LinkLike> {
       p.info = info;
       this.publish();
     }
+  }
+
+  /** What the room said about `id` (admitted, maybe not connected yet). */
+  knownInfo(id: string): MemberInfo | undefined {
+    return this.known.get(id) ?? this.people.get(id)?.info;
   }
 
   private stranger(id: string): MemberInfo {
@@ -248,6 +260,7 @@ export class Participants<L extends LinkLike> {
         audio: null,
         video: null,
         extra: null,
+        screenAudio: null,
         stats: null,
         timer: null,
       };

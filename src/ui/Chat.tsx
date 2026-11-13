@@ -121,7 +121,7 @@ export function ChatPanel() {
   const chat = session.chat;
   const messages = chat.messages.value;
   const typing = chat.typing.value;
-  const peers = session.peers.value;
+  const peers = session.peers.value.filter((p) => !p.info.of);
   const [text, setText] = useState('');
   const [emoji, setEmoji] = useState(false);
   const [drag, setDrag] = useState(false);

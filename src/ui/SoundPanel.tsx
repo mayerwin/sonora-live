@@ -398,7 +398,8 @@ function useLongPressTips(root: { current: HTMLElement | null }) {
 }
 
 export function SoundPanel() {
-  const peers = session.peers.value.filter((p) => p.link !== 'closed');
+  // people (their phones used as cameras carry no sound)
+  const peers = session.peers.value.filter((p) => p.link !== 'closed' && !p.info.of);
   void session.midi.version.value;
   const root = useRef<HTMLElement>(null);
   const tip = useLongPressTips(root);

@@ -73,7 +73,7 @@ export function ShareSheet() {
 
 export function LockSheet() {
   const policy = session.policy.value;
-  const count = 1 + session.peers.value.length;
+  const count = 1 + session.peers.value.filter((p) => !p.info.of).length;
   const held = session.controlsHeld.value;
   const set = (locked: boolean, limit: number) => {
     session.setPolicy({ locked, limit });

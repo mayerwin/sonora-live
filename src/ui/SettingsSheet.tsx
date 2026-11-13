@@ -13,6 +13,8 @@ import {
   TriangleAlert,
   Video,
   Volume2,
+  Keyboard,
+  Smartphone,
 } from 'lucide-preact';
 import { browserLang, LANGUAGES, t, type LanguageSetting } from '../app/i18n.ts';
 import { session } from '../app/session.ts';
@@ -397,37 +399,45 @@ function VideoTab({ devices }: { devices: DeviceLists }) {
           {t('{quality}. Smooth motion is kept first, so hands stay fluid.', { quality: videoLabel(s.videoQuality) })}
         </p>
       </div>
-      {!isMobile && devices.cams.length > 1 && (
+      {!isMobile && (
         <div class="section">
-          <h3>{t('Second camera')}</h3>
-          <p class="lead">{t('Show the keys from above (or your hands) next to your face. The others see both.')}</p>
-          {extra === 'camera' ? (
-            <button class="btn" onClick={() => media.stopExtra()}>
-              {t('Stop second camera')}
-            </button>
-          ) : (
-            <div style="display:flex;gap:8px">
-              <select
-                class="select"
-                value={second}
-                onChange={(e) => setSecond((e.currentTarget as HTMLSelectElement).value)}
-                aria-label={t('Second camera')}
-              >
-                <option value="">{t('Choose a camera…')}</option>
-                {devices.cams
-                  .filter((d) => d.deviceId !== media.cameraId)
-                  .map((d, i) => (
-                    <option value={d.deviceId}>{d.label || t('Camera {n}', { n: i + 1 })}</option>
-                  ))}
-              </select>
-              <button class="btn" disabled={!second} onClick={() => void media.addCamera(second)}>
-                <Video /> {t('Add')}
-              </button>
-            </div>
-          )}
-          <p class="lead" style="font-size:13px">
-            {t("Or join from a phone with the room's QR code, as an Observer, and point it at the keyboard.")}
+          <h3>{t('More cameras')}</h3>
+          <p class="lead">
+            {t('Show the keys from above, your hands or your feet next to your face. The others see all of them.')}
           </p>
+          <button
+            class="btn btn-sm"
+            style="justify-self:start"
+            onClick={() => (sheet.value = 'phone-cam')}
+            data-testid="settings-phonecam"
+          >
+            <Smartphone /> {t('A phone as a camera')}
+          </button>
+          {devices.cams.length > 1 &&
+            (extra === 'camera' ? (
+              <button class="btn" onClick={() => media.stopExtra()}>
+                {t('Stop second camera')}
+              </button>
+            ) : (
+              <div style="display:flex;gap:8px">
+                <select
+                  class="select"
+                  value={second}
+                  onChange={(e) => setSecond((e.currentTarget as HTMLSelectElement).value)}
+                  aria-label={t('Second camera')}
+                >
+                  <option value="">{t('Or a second camera on this computer…')}</option>
+                  {devices.cams
+                    .filter((d) => d.deviceId !== media.cameraId)
+                    .map((d, i) => (
+                      <option value={d.deviceId}>{d.label || t('Camera {n}', { n: i + 1 })}</option>
+                    ))}
+                </select>
+                <button class="btn" disabled={!second} onClick={() => void media.addCamera(second)}>
+                  <Video /> {t('Add')}
+                </button>
+              </div>
+            ))}
         </div>
       )}
       <div class="section">
@@ -661,6 +671,21 @@ function AboutTab() {
           </p>
         )}
       </div>
+      {!isMobile && (
+        <div class="section">
+          <h3>
+            <Keyboard size={16} style="vertical-align:-3px" /> {t('Keyboard shortcuts')}
+          </h3>
+          <p class="lead" style="font-size:13px">
+            {t(
+              'M mutes, V turns the camera off, Space plays the track, T starts the metronome… Press ? in the lesson for all of them.',
+            )}
+          </p>
+          <button class="btn btn-sm" style="justify-self:start" onClick={() => (sheet.value = 'shortcuts')}>
+            {t('Show the shortcuts')}
+          </button>
+        </div>
+      )}
       <div class="section">
         <h3>Sonora Live</h3>
         <p class="lead">

@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { AudioWaveform, Copy, MicOff, MonitorUp, Piano, QrCode, Share2, SwitchCamera, Video } from 'lucide-preact';
+import {
+  AudioWaveform,
+  Copy,
+  MicOff,
+  MonitorUp,
+  Piano,
+  QrCode,
+  Share2,
+  Smartphone,
+  SwitchCamera,
+  Video,
+} from 'lucide-preact';
 import { session, roleLabel, watching, type PeerView } from '../app/session.ts';
 import { settings } from '../app/settings.ts';
 import { isMobile } from '../app/platform.ts';
@@ -21,6 +32,8 @@ export function PeerTile({
 }) {
   const r = peer.remote;
   const role = peer.info.role;
+  /** a phone someone set by their instrument: their picture, from another angle */
+  const phone = !!peer.info.of;
   const stream = extra ? peer.extra : peer.video;
   const showVideo = !!stream && (extra ? !!r?.extra : r?.cam !== false);
   const [portrait, setPortrait] = useState(false);
@@ -62,7 +75,7 @@ export function PeerTile({
           <span>{peer.link === 'connected' ? (r ? t('Camera off') : t('Connecting…')) : ''}</span>
         </div>
       )}
-      {!extra && (
+      {!extra && !phone && (
         <div class="tile-badges">
           {r?.midi.sending && (
             <span class="chip chip-ok" title={t('{name} plays over MIDI', { name: peer.info.name })}>
@@ -97,12 +110,16 @@ export function PeerTile({
       )}
       <div class="tile-label">
         <span class="role-dot" title={roleLabel(role)}>
-          {extra ? <MonitorUp size={13} /> : <RoleIcon role={role} size={13} />}
+          {extra ? <MonitorUp size={13} /> : phone ? <Smartphone size={13} /> : <RoleIcon role={role} size={13} />}
         </span>
         <span class="name">
-          {extra ? `${peer.info.name} · ${r?.extra === 'camera' ? t('second camera') : t('screen')}` : peer.info.name}
+          {extra
+            ? `${peer.info.name} · ${r?.extra === 'camera' ? t('second camera') : t('screen')}`
+            : phone
+              ? `${peer.info.name} · ${t('phone')}`
+              : peer.info.name}
         </span>
-        {!extra && r && !r.mic && <MicOff class="muted-ico" aria-label={t('Microphone off')} />}
+        {!extra && !phone && r && !r.mic && <MicOff class="muted-ico" aria-label={t('Microphone off')} />}
       </div>
       {!extra && peer.link === 'reconnecting' && (
         <div class="tile-overlay">

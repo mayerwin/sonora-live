@@ -5,6 +5,7 @@
 //   transceiver 0  audio   instrument / voice
 //   transceiver 1  video   camera
 //   transceiver 2  video   extra: screen share or a second camera (e.g. pointed at the keys)
+//   transceiver 3  audio   the shared screen's sound (a video, a recording played for the others), stereo
 // Audio and video use separate MediaStreams on purpose: tracks of one stream are lip-synced, which holds the sound
 // back until the (slower) video is decoded. Here the sound is played the moment it arrives.
 //
@@ -19,8 +20,8 @@
 import { LatencyGuard } from './guard.ts';
 import { tuneOpus, type OpusTuning } from './sdp.ts';
 
-export type Slot = 'audio' | 'video' | 'extra';
-export const SLOTS: Slot[] = ['audio', 'video', 'extra'];
+export type Slot = 'audio' | 'video' | 'extra' | 'screenAudio';
+export const SLOTS: Slot[] = ['audio', 'video', 'extra', 'screenAudio'];
 
 export type LinkState = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 
@@ -156,7 +157,7 @@ export class PeerLink {
     this.pc = pc;
 
     if (this.initiator) {
-      // the offer carries the three media sections in a fixed order
+      // the offer carries the four media sections in a fixed order
       this.tx.audio = pc.addTransceiver(this.local.audio ?? 'audio', {
         direction: 'sendrecv',
         streams: [this.streams.audio],
@@ -168,6 +169,10 @@ export class PeerLink {
       this.tx.extra = pc.addTransceiver(this.local.extra ?? 'video', {
         direction: 'sendrecv',
         streams: [this.streams.extra],
+      });
+      this.tx.screenAudio = pc.addTransceiver(this.local.screenAudio ?? 'audio', {
+        direction: 'sendrecv',
+        streams: [this.streams.screenAudio],
       });
     }
     // MIDI goes first on the shared connection; files only fill what is left (priority: browsers that support it)
@@ -395,6 +400,10 @@ export class PeerLink {
       },
       'maintain-resolution',
     );
+    await set('screenAudio', (e) => {
+      e.maxBitrate = 160_000;
+      e.priority = 'medium';
+    });
   }
 
   // ------------------------------------------------------------------------------------------- data
@@ -575,11 +584,18 @@ export class PeerLink {
           : 'internet';
       out.path = String(lc?.protocol ?? 'udp').toUpperCase();
     }
+    // the sound of the person (not of their shared screen): its media section only
+    const audioMid = String(this.tx.audio?.mid ?? '0');
+    const otherAudio = (v: Record<string, unknown>) => {
+      const mid = String(v.mid ?? (v.localId ? (all.get(String(v.localId))?.mid ?? '') : ''));
+      return !!mid && mid !== audioMid;
+    };
     // the audio's own round trip (each RTCP report): a new measurement when its count moves
     for (const v of all.values()) {
       if (
         v.type === 'remote-inbound-rtp' &&
         v.kind === 'audio' &&
+        !otherAudio(v) &&
         typeof v.roundTripTime === 'number' &&
         v.roundTripTime > 0
       ) {
@@ -600,6 +616,7 @@ export class PeerLink {
       return d;
     };
     for (const v of all.values()) {
+      if ((v.type === 'inbound-rtp' || v.type === 'outbound-rtp') && v.kind === 'audio' && otherAudio(v)) continue;
       if (v.type === 'inbound-rtp' && v.kind === 'audio') {
         const d = delta('ain', {
           bytes: Number(v.bytesReceived ?? 0),

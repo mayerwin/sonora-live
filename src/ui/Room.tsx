@@ -28,6 +28,7 @@ import {
   Speech,
   Headphones,
   Circle,
+  Smartphone,
 } from 'lucide-preact';
 import { session, roleLabel } from '../app/session.ts';
 import { installUpdate } from '../app/update.ts';
@@ -47,6 +48,8 @@ import { LockSheet, ShareSheet } from './ShareSheet.tsx';
 import { t } from '../app/i18n.ts';
 import { RecChip, RecordMenu, RecoverBanner, clock } from './Record.tsx';
 import { ScoreView, scoreShown } from './Score.tsx';
+import { ShortcutsSheet, useShortcuts } from './Shortcuts.tsx';
+import { PhoneCamSheet } from './PhoneCam.tsx';
 
 /** MediaRecorder and a canvas's stream: every current browser (not some embedded web views) */
 const canRecord =
@@ -81,6 +84,7 @@ export function Room() {
   useEffect(() => {
     chatOpenTracker();
   }, [chatOpen.value]);
+  useShortcuts();
 
   return (
     <div class="room" data-chat={chatOpen.value} data-testid="room">
@@ -111,6 +115,8 @@ export function Room() {
       {sheet.value === 'share' && <ShareSheet />}
       {sheet.value === 'lock' && <LockSheet />}
       {sheet.value === 'peer-sound' && <PeerSoundSheet />}
+      {sheet.value === 'shortcuts' && <ShortcutsSheet />}
+      {sheet.value === 'phone-cam' && <PhoneCamSheet />}
     </div>
   );
 }
@@ -123,10 +129,17 @@ function chatOpenTracker(): void {
 function TileGrid() {
   const peers = session.peers.value;
   const tiles: { peer: (typeof peers)[number]; extra: boolean }[] = [];
+  const visible = (p: (typeof peers)[number]) => !(p.quiet && p.link !== 'connected');
   for (const p of peers) {
-    if (p.quiet && p.link !== 'connected') continue;
+    if (!visible(p) || p.info.of) continue;
     if (p.remote?.extra && p.extra) tiles.push({ peer: p, extra: true });
     tiles.push({ peer: p, extra: false });
+    // their phones, right after them
+    for (const c of peers) if (c.info.of === p.id && visible(c)) tiles.push({ peer: c, extra: false });
+  }
+  // the phones of this side (shown here too: the angle is checked at a glance), and of someone not here yet
+  for (const c of peers) {
+    if (c.info.of && visible(c) && !tiles.some((x) => x.peer === c)) tiles.push({ peer: c, extra: false });
   }
   const n = tiles.length;
   const cls = n === 1 ? 'n1' : n === 2 ? 'n2' : n <= 4 ? 'n4' : 'many';
@@ -143,7 +156,7 @@ function TopBar() {
   const code = session.code.value;
   const policy = session.policy.value;
   const peers = session.peers.value;
-  const count = 1 + peers.filter((p) => p.link !== 'closed').length;
+  const count = 1 + peers.filter((p) => p.link !== 'closed' && !p.info.of).length;
   const stats = peers.map((p) => p.stats).filter((x) => x && x.latencyMs != null);
   const worst = stats.reduce<number | null>((m, x) => Math.max(m ?? 0, x!.latencyMs!), null);
   const quality = stats.some((x) => x!.quality === 'poor')
@@ -605,6 +618,22 @@ function ControlBar() {
                         : t('Record the lesson')}
                     </b>
                     <small>{t('Saved on this device')}</small>
+                  </span>
+                </button>
+              )}
+              {!isMobile && (
+                <button
+                  class="menu-item"
+                  onClick={() => {
+                    menu.value = null;
+                    sheet.value = 'phone-cam';
+                  }}
+                  data-testid="more-phonecam"
+                >
+                  <Smartphone />
+                  <span>
+                    <b>{t('A phone as a camera')}</b>
+                    <small>{t('On the hands, the bow, the pedals')}</small>
                   </span>
                 </button>
               )}

@@ -43,7 +43,7 @@ const score = session.score;
 type Tool = 'view' | InkTool | 'text' | 'eraser';
 
 /** this side's tool and colour (its own colour first: a stable pick from its id) */
-const tool = signal<Tool>('view');
+export const tool = signal<Tool>('view');
 const color = signal<string | null>(null);
 const zoom = signal(1);
 /** hidden here by hand (until another score is opened) */

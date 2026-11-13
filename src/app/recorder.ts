@@ -30,6 +30,8 @@ export interface RecorderHost {
   camera(): MediaStreamTrack | null;
   extra(): { track: MediaStreamTrack; kind: 'screen' | 'camera' } | null;
   mic(): MediaStreamTrack | null;
+  /** this side's shared screen's sound, when it does not already play through the engine */
+  screenSound(): MediaStreamTrack | null;
   /** the audio context and what it plays besides the others' sound (the piano; the track and metronome) */
   context(): AudioContext | null;
   localSources(): AudioNode[];
@@ -351,7 +353,13 @@ export class Recorder {
       }
       const cam = p.video && p.remote?.cam !== false ? p.video : null;
       if (cam) used.add(cam);
-      out.push({ el: cam ? this.video(cam) : null, label: p.info.name, color: roleColor(p.info.role) });
+      // a phone used as someone's camera: only when it shows something
+      if (p.info.of && !cam) continue;
+      out.push({
+        el: cam ? this.video(cam) : null,
+        label: p.info.of ? `${p.info.name} · ${t('phone')}` : p.info.name,
+        color: roleColor(p.info.role),
+      });
     }
     const sheet = this.extraPicture?.();
     if (sheet) out.push({ el: sheet, label: '', main: true });
@@ -418,17 +426,23 @@ export class Recorder {
         },
       });
     }
-    for (const p of this.host.peers()) {
-      const a = p.audio;
-      if (!a || !a.getAudioTracks().length) continue;
-      want.set(p.id, {
-        key: a,
+    const stream = (key: string, a: MediaStream | null, same: unknown = a) => {
+      if (!a || !a.getAudioTracks().length) return;
+      want.set(key, {
+        key: same,
         make: () => {
           const src = ctx.createMediaStreamSource(a);
           return { node: src, src };
         },
       });
+    };
+    for (const p of this.host.peers()) {
+      stream(p.id, p.audio);
+      // what their shared screen plays
+      stream(`${p.id}:screen`, p.remote?.screenSound ? p.screenAudio : null);
     }
+    const mine = this.host.screenSound();
+    if (mine && mine.readyState === 'live') stream('self:screen', new MediaStream([mine]), mine);
     this.host.localSources().forEach((n, i) => want.set(`local${i}`, { key: n, make: () => ({ node: n }) }));
     for (const [k, f] of this.feeds) {
       if (want.get(k)?.key === f.key) continue;

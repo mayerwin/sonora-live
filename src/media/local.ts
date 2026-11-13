@@ -22,6 +22,8 @@ export class LocalMedia {
   readonly video = signal<MediaStreamTrack | null>(null);
   readonly extra = signal<MediaStreamTrack | null>(null);
   readonly extraKind = signal<'screen' | 'camera' | null>(null);
+  /** the shared screen's sound (a tab or the whole system, where the browser offers it) */
+  readonly screenAudio = signal<MediaStreamTrack | null>(null);
   readonly micOn = signal(true);
   readonly camOn = signal(true);
   /** sound mode of the current microphone track */
@@ -425,17 +427,90 @@ export class LocalMedia {
   }
 
   /** Share a screen or window (sheet music, a score editor) on the extra video slot. */
+  /**
+   * Share a screen, a window or a tab, with its sound when the browser offers it (Chrome: a tab's sound, or the
+   * whole system's on Windows; the person ticks "Share audio"). The sound goes out on its own stereo channel, with
+   * none of the microphone's processing. Here, a tab's own playback is silenced and the sound played through the
+   * audio engine instead: the echo canceller then knows it, and on speakers it does not go out a second time
+   * through the microphone.
+   */
   async shareScreen(): Promise<boolean> {
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: 15, max: 30 } },
-        audio: false,
-      });
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 2,
+          suppressLocalAudioPlayback: true,
+        } as MediaTrackConstraints,
+        // offered first: a tab with its sound (a video, a recording)
+        ...({ preferCurrentTab: false, systemAudio: 'include', selfBrowserSurface: 'exclude' } as object),
+      } as DisplayMediaStreamOptions);
       const t = s.getVideoTracks()[0];
       t.contentHint = 'detail';
       this.setExtra(t, 'screen');
+      const a = s.getAudioTracks()[0] ?? null;
+      if (a) a.contentHint = 'music';
+      this.setScreenAudio(a);
       return true;
     } catch {
+      return false;
+    }
+  }
+
+  private screenPlay: { src: MediaStreamAudioSourceNode } | null = null;
+
+  /** The shared screen's sound plays through the engine here (a tab's), not by itself (a whole screen's). */
+  get screenThroughEngine(): boolean {
+    return !!this.screenPlay;
+  }
+
+  private setScreenAudio(a: MediaStreamTrack | null): void {
+    const old = this.screenAudio.peek();
+    if (this.screenPlay) {
+      this.screenPlay.src.disconnect();
+      this.screenPlay = null;
+    }
+    this.screenAudio.value = a;
+    this.onTrack('screenAudio', a);
+    if (old && old !== a) old.stop();
+    if (!a) return;
+    a.addEventListener('ended', () => {
+      if (this.screenAudio.peek() === a) this.setScreenAudio(null);
+    });
+    // a tab whose own playback the browser silenced: heard here through the engine (and known to the echo
+    // canceller, and in a recording); a whole screen's sound is already heard as it is
+    const st = a.getSettings() as MediaTrackSettings & {
+      suppressLocalAudioPlayback?: boolean;
+      displaySurface?: string;
+    };
+    const ctx = engine.ensure();
+    if (st.suppressLocalAudioPlayback && ctx && engine.trackBus) {
+      const src = ctx.createMediaStreamSource(new MediaStream([a]));
+      src.connect(engine.trackBus);
+      this.screenPlay = { src };
+    }
+  }
+
+  /** A phone used as a camera: the back camera, no microphone. */
+  async startCameraOnly(quality: VideoQuality): Promise<boolean> {
+    this.facing.value = 'environment';
+    this.micOn.value = false;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints(quality, undefined, 'environment'),
+        audio: false,
+      });
+      const t = s.getVideoTracks()[0];
+      t.contentHint = 'motion';
+      this.video.value = t;
+      this.camOn.value = true;
+      this.onTrack('video', t);
+      return true;
+    } catch (e) {
+      this.videoProblem.value = problemOf(e);
       return false;
     }
   }
@@ -456,6 +531,8 @@ export class LocalMedia {
 
   private setExtra(t: MediaStreamTrack, kind: 'screen' | 'camera'): void {
     const old = this.extra.value;
+    // a screen's sound ends with that screen
+    if (this.screenAudio.peek()) this.setScreenAudio(null);
     t.addEventListener('ended', () => {
       if (this.extra.value === t) this.stopExtra();
     });
@@ -471,6 +548,7 @@ export class LocalMedia {
     this.extraKind.value = null;
     this.onTrack('extra', null);
     t?.stop();
+    if (this.screenAudio.peek()) this.setScreenAudio(null);
   }
 
   get cameraId(): string {

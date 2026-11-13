@@ -6,6 +6,7 @@ import { Toasts } from './common.tsx';
 import { Logo } from './icons.tsx';
 import { Lobby } from './Lobby.tsx';
 import { Room } from './Room.tsx';
+import { CameraMode } from './PhoneCam.tsx';
 import { t } from '../app/i18n.ts';
 
 export function App() {
@@ -24,6 +25,8 @@ export function App() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
+  // a phone used as someone's camera: that, and nothing else
+  if (session.camOf.value) return <CameraMode />;
   return (
     <>
       {phase === 'lobby' && <Lobby />}

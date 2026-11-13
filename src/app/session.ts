@@ -65,6 +65,14 @@ export const roleLabel = (r: Role): string => (r === 'observer' ? t('Observer') 
 /** Opened with an observer's link (`?watch`): joins to watch and listen, not to play. */
 export const watching = (): boolean => typeof location !== 'undefined' && /[?&]watch\b/.test(location.search);
 
+/** This page is a phone used as someone's camera (?cam=<their id>&of=<their name>). */
+function cameraOf(): { owner: string; name: string } | null {
+  if (typeof location === 'undefined') return null;
+  const q = new URLSearchParams(location.search);
+  const owner = q.get('cam');
+  return owner && owner.length < 40 ? { owner, name: (q.get('of') ?? '').slice(0, 40) } : null;
+}
+
 export type { PeerView, RemoteState } from './participants.ts';
 
 export interface Reaction {
@@ -75,6 +83,8 @@ export interface Reaction {
 }
 
 const STATS_EVERY_MS = 1000;
+/** the key of someone's screen sound among the audio elements (theirs is their id) */
+const SCREEN = ':screen';
 
 function initialPolicy(selfId: string): Policy {
   const s = settings.peek();
@@ -132,6 +142,7 @@ export class Session {
       return tr && kind ? { track: tr, kind } : null;
     },
     mic: () => (this.media.micOn.value ? (this.media.sentAudio.value ?? this.media.audio.value) : null),
+    screenSound: () => (this.media.screenThroughEngine ? null : this.media.screenAudio.value),
     context: () => {
       const ctx = engine.ensure();
       // the piano joins the mix only once it has sounded here (its nodes exist from then on)
@@ -164,12 +175,20 @@ export class Session {
   readonly needsTap = signal(false);
   /** an observer chose to send its playing too (MIDI sheet) */
   readonly observerPlays = signal(false);
-  readonly self = computed<MemberInfo>(() => ({
-    id: this.id.value,
-    name: settings.value.name.trim() || roleLabel(watching() ? 'observer' : 'player'),
-    role: watching() ? 'observer' : 'player',
-    since: this.since,
-  }));
+  /** this page is a phone used as someone's camera: whose */
+  readonly camOf = signal(cameraOf());
+  /** the phone camera's state, as it shows it */
+  readonly camState = signal<'connecting' | 'live' | 'stopped' | 'failed'>('connecting');
+  readonly self = computed<MemberInfo>(() => {
+    const cam = this.camOf.value;
+    if (cam) return { id: this.id.value, name: cam.name, role: 'observer', since: this.since, of: cam.owner };
+    return {
+      id: this.id.value,
+      name: settings.value.name.trim() || roleLabel(watching() ? 'observer' : 'player'),
+      role: watching() ? 'observer' : 'player',
+      since: this.since,
+    };
+  });
 
   /** this side's instrument reaches someone over MIDI: the microphone only needs to carry speech */
   readonly midiCarriesInstrument = computed(
@@ -250,7 +269,11 @@ export class Session {
         createLink: (info, initiator) => this.connect(info, initiator),
         acceptOffer: (from) => {
           const p = this.policy.peek();
-          const others = this.memberList().filter((m) => m.id !== from && m.id !== this.selfId).length;
+          const all = this.memberList();
+          // someone's phone used as a camera takes no place in the room
+          const info = this.parts.knownInfo(from);
+          if (info?.of && all.some((m) => m.id === info.of)) return true;
+          const others = all.filter((m) => m.id !== from && m.id !== this.selfId && !m.of).length;
           return !p.locked || others + 1 < p.limit;
         },
         onConnected: (link) => this.onConnected(link),
@@ -688,8 +711,14 @@ export class Session {
         audio: this.media.sentAudio.peek() ?? this.media.audio.peek(),
         video: this.media.video.peek(),
         extra: this.media.extra.peek(),
+        screenAudio: this.media.screenAudio.peek(),
       },
-      streams: { audio: new MediaStream(), video: new MediaStream(), extra: new MediaStream() },
+      streams: {
+        audio: new MediaStream(),
+        video: new MediaStream(),
+        extra: new MediaStream(),
+        screenAudio: new MediaStream(),
+      },
       params: this.sendParams(),
       tuning: DEFAULT_TUNING,
     });
@@ -743,6 +772,12 @@ export class Session {
 
   /** The other side introduced itself for the first time: now we can say who joined. */
   private announceJoin(peer: PeerView): void {
+    // a phone someone set up as their camera: said once, quietly
+    if (peer.info.of) {
+      const owner = peer.info.of === this.selfId ? null : peer.info.name;
+      this.chat.system(owner ? t('{name} added a camera', { name: owner }) : t('Your phone is connected as a camera'));
+      return;
+    }
     const name = peer.info.name;
     const role = roleLabel(peer.info.role);
     trackEvent('peer_joined', { role: peer.info.role });
@@ -757,7 +792,7 @@ export class Session {
 
   /** Someone left (or their connection was lost for good), a moment ago and not back since. */
   private announceLeave(info: MemberInfo, how: Departure): void {
-    if (this.phase.peek() !== 'room') return;
+    if (this.phase.peek() !== 'room' || info.of) return;
     const name = info.name;
     const bye = how === 'left';
     if (settings.peek().joinSound) chime('leave');
@@ -779,12 +814,14 @@ export class Session {
     this.backing.peerGone(id);
     this.score.peerGone(id);
     this.recorder.peerGone(id);
-    engine.playRemote(id, null);
-    const el = this.audioEls.get(id);
-    if (el) {
-      el.srcObject = null;
-      el.remove();
-      this.audioEls.delete(id);
+    for (const key of [id, `${id}${SCREEN}`]) {
+      engine.playRemote(key, null);
+      const el = this.audioEls.get(key);
+      if (el) {
+        el.srcObject = null;
+        el.remove();
+        this.audioEls.delete(key);
+      }
     }
   }
 
@@ -810,6 +847,8 @@ export class Session {
     const stream = new MediaStream([track]);
     this.parts.patch(id, { [slot]: stream });
     if (slot === 'audio') this.playAudio(id, stream);
+    // their screen's sound: an audio element of its own (through the engine while echo cancelling runs)
+    if (slot === 'screenAudio') this.screenSound(id);
   }
 
   /**
@@ -843,8 +882,57 @@ export class Session {
     update({ cleanNoise: on ? [...list, name].slice(-50) : list });
   }
 
+  /** Someone's screen sound plays while they share it (their state says so), and stops with it. */
+  private screenSound(id: string): void {
+    const p = this.peers.peek().find((x) => x.id === id);
+    const key = `${id}${SCREEN}`;
+    if (p?.remote?.screenSound && p.screenAudio) {
+      if (this.audioEls.get(key)?.srcObject !== p.screenAudio) this.playAudio(key, p.screenAudio);
+      return;
+    }
+    engine.playRemote(key, null);
+    const el = this.audioEls.get(key);
+    if (el) {
+      el.srcObject = null;
+      el.remove();
+      this.audioEls.delete(key);
+    }
+  }
+
+  // =========================================================================================== phone cameras
+
+  /** The phone joins as its owner's camera: the back camera, no microphone, nothing played. */
+  async enterAsCamera(): Promise<void> {
+    const ok = await this.media.startCameraOnly(settings.peek().videoQuality);
+    if (!ok) {
+      this.camState.value = 'failed';
+      return;
+    }
+    await this.enter();
+    const live = effect(() => {
+      if (this.camState.value === 'stopped') return live();
+      const owner = this.camOf.peek()?.owner;
+      const up = this.peers.value.some((p) => p.id === owner && p.link === 'connected');
+      this.camState.value = up ? 'live' : 'connecting';
+    });
+  }
+
+  leaveCamera(): void {
+    this.camState.value = 'stopped';
+    this.leave();
+  }
+
+  /** Take one of this person's phone cameras away. */
+  stopPhoneCam(id: string): void {
+    const p = this.peers.peek().find((x) => x.id === id);
+    if (p?.info.of !== this.selfId) return;
+    this.parts.link(id)?.sendControl({ t: 'cam-stop' });
+  }
+
   /** Remote sound plays from a plain audio element unless the engine needs it (routeAudio). */
   private playAudio(id: string, stream: MediaStream): void {
+    // a phone used as a camera plays nothing (its owner's microphone is next to it)
+    if (this.camOf.peek()) return;
     if (!this.audioHost) {
       this.audioHost = document.createElement('div');
       this.audioHost.hidden = true;
@@ -932,6 +1020,7 @@ export class Session {
       mic: m.micOn.peek() && !!m.audio.peek(),
       cam: m.camOn.peek() && !!m.video.peek(),
       extra: m.extra.peek() ? m.extraKind.peek() : null,
+      screenSound: !!m.screenAudio.peek(),
       sound: m.mode.peek(),
       stereo: m.stereo.peek(),
       soundSetting: settings.peek().sound,
@@ -984,6 +1073,7 @@ export class Session {
         void this.media.micOn.value;
         void this.media.camOn.value;
         void this.media.extra.value;
+        void this.media.screenAudio.value;
         void this.media.mode.value;
         void this.media.echo.value;
         void this.media.headphones.value;
@@ -1177,6 +1267,7 @@ export class Session {
           });
         }
         if (prevMidi?.sending && !st.midi?.sending) this.midi.peerGone(id);
+        this.screenSound(id);
         break;
       }
       case 'policy': {
@@ -1258,6 +1349,13 @@ export class Session {
         break;
       case 'rec':
         this.recorder.onControl(id, msg);
+        break;
+      case 'cam-stop':
+        // the owner took this phone away
+        if (this.camOf.peek()?.owner === id) {
+          this.camState.value = 'stopped';
+          this.leave();
+        }
         break;
       case 'sc':
       case 'sc-ink':
