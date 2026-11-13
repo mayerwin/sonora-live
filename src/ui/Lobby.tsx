@@ -89,7 +89,7 @@ export function Lobby() {
   const typed = useSignal('');
   const [busy, setBusy] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  const videoTrack = media.video.value;
+  const videoTrack = media.sentVideo.value ?? media.video.value;
   const stream = useMemo(() => (videoTrack ? new MediaStream([videoTrack]) : null), [videoTrack]);
   const clipping = session.meter.clipping.value;
   const typedCode = useComputed(() => normalizeRoomCode(typed.value));

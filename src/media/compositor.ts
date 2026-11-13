@@ -2,6 +2,8 @@
 // as the lesson is, with names. Driven by a worker's timer: a page in the background has its own timers slowed to
 // once a second, a worker's are not, so the recording keeps its frame rate when the tab is hidden.
 
+import { workerTicker } from './ticker.ts';
+
 export interface CompSource {
   /** what to draw: a video (a camera, a screen) or a canvas (the score); none (or no picture yet): their initial */
   el: HTMLVideoElement | HTMLCanvasElement | null;
@@ -57,13 +59,11 @@ export function layout(n: number, mainIndex: number, w: number, h: number): Rect
   return rects;
 }
 
-const TICKER = `let t=null;onmessage=(e)=>{clearInterval(t);if(e.data>0)t=setInterval(()=>postMessage(0),e.data)}`;
-
 export class Compositor {
   readonly canvas: HTMLCanvasElement;
   readonly stream: MediaStream;
   private g: CanvasRenderingContext2D;
-  private ticker: Worker | null = null;
+  private stopTicker: (() => void) | null = null;
   private track: CanvasCaptureMediaStreamTrack;
 
   constructor(
@@ -83,16 +83,12 @@ export class Compositor {
 
   start(): void {
     this.draw();
-    const url = URL.createObjectURL(new Blob([TICKER], { type: 'text/javascript' }));
-    this.ticker = new Worker(url);
-    URL.revokeObjectURL(url);
-    this.ticker.onmessage = () => this.draw();
-    this.ticker.postMessage(Math.round(1000 / this.fps));
+    this.stopTicker = workerTicker(Math.round(1000 / this.fps), () => this.draw());
   }
 
   stop(): void {
-    this.ticker?.terminate();
-    this.ticker = null;
+    this.stopTicker?.();
+    this.stopTicker = null;
     for (const t of this.stream.getTracks()) t.stop();
   }
 

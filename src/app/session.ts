@@ -28,6 +28,7 @@ import { Chat, MAX_FILE_BYTES, newId, type ChatMessage } from './chat.ts';
 import { BackingTrack, MAX_TRACK_BYTES, type BackingHost, type TrackMeta } from './backing.ts';
 import { Metronome } from './metronome.ts';
 import { Recorder } from './recorder.ts';
+import { SharedVideo } from './youtube.ts';
 import { MAX_SCORE_BYTES, Score, type ScoreMeta } from './score.ts';
 import { runSoundCheck, type CheckResult } from '../media/soundcheck.ts';
 import { bumpTitle, buzz, chime, setTitleRoom, systemNotify, toast, unlockChimes } from './notify.ts';
@@ -130,12 +131,14 @@ export class Session {
     ...this.toolHost,
     sendFile: (meta, blob, to) => this.sendScoreFile(meta, blob, to),
   });
+  /** a YouTube video watched together (src/app/youtube.ts) */
+  readonly video = new SharedVideo(this.toolHost);
   /** recording the lesson on this device (src/app/recorder.ts) */
   readonly recorder = new Recorder({
     selfId: () => this.selfId,
     selfName: () => this.self.peek().name,
     peers: () => this.peers.value,
-    camera: () => (this.media.camOn.value ? this.media.video.value : null),
+    camera: () => (this.media.camOn.value ? this.media.sentVideo.value : null),
     extra: () => {
       const tr = this.media.extra.value;
       const kind = this.media.extraKind.value;
@@ -590,6 +593,7 @@ export class Session {
     this.chat.clear();
     this.backing.clear();
     this.score.clear();
+    this.video.clear();
     this.metronome.clear();
     this.knocks.value = [];
     if (this.statsTimer) clearInterval(this.statsTimer);
@@ -709,7 +713,7 @@ export class Session {
       iceServers: servers,
       tracks: {
         audio: this.media.sentAudio.peek() ?? this.media.audio.peek(),
-        video: this.media.video.peek(),
+        video: this.media.sentVideo.peek(),
         extra: this.media.extra.peek(),
         screenAudio: this.media.screenAudio.peek(),
       },
@@ -766,6 +770,7 @@ export class Session {
     this.knocks.value = this.knocks.peek().filter((k) => k.id !== link.id);
     this.backing.onConnected(link.id);
     this.score.onConnected(link.id);
+    this.video.onConnected(link.id);
     this.metronome.onConnected(link.id);
     this.recorder.onConnected((m) => link.sendControl(m));
   }
@@ -1037,6 +1042,7 @@ export class Session {
         device: d.connected.peek() ? d.currentName.peek() : '',
         sending: d.connected.peek() && this.midi.sending.peek(),
         receiving: this.midi.playOn.peek() !== 'off',
+        sound: settings.peek().midi.sound,
       },
       away: document.hidden,
     };
@@ -1212,6 +1218,19 @@ export class Session {
         this.midi.setOutChannel(m.outChannel);
         this.midi.piano.setVolume(m.pianoVolume);
         this.midi.piano.setReverb(m.reverb);
+        this.midi.piano.setSound('local', m.sound);
+      }),
+    );
+    // the background blur follows its setting (a phone used as a camera never blurs)
+    this.disposers.push(
+      effect(() => {
+        this.media.setBlur(settings.value.blur && !this.camOf.peek());
+      }),
+    );
+    // what the others play sounds as they chose it (a grand, an electric piano, an organ, strings)
+    this.disposers.push(
+      effect(() => {
+        for (const p of this.peers.value) this.midi.piano.setSound(p.id, p.remote?.midi.sound ?? 'grand');
       }),
     );
     this.disposers.push(
@@ -1356,6 +1375,9 @@ export class Session {
           this.camState.value = 'stopped';
           this.leave();
         }
+        break;
+      case 'yt':
+        this.video.onControl(id, msg);
         break;
       case 'sc':
       case 'sc-ink':

@@ -105,7 +105,8 @@ export default defineConfig({
       workbox: {
         // the app's code is precached for offline use; pages are not (they come from the network first, below)
         globPatterns: ['**/*.{js,css,svg,woff2,webmanifest,wasm}', 'icons/*.png'],
-        globIgnores: ['piano/**', 'social/**', 'emoji/**'],
+        // the background blur's segmentation (11 MB): fetched the first time blur is turned on, then kept (below)
+        globIgnores: ['piano/**', 'social/**', 'emoji/**', 'assets/selfie_segmentation*'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: null,
         // a new version takes over at once (the running page decides when to reload: src/app/update.ts)
@@ -113,6 +114,12 @@ export default defineConfig({
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            // the background blur's model and WebAssembly (hashed names: a new version is a new file)
+            urlPattern: ({ url }) => url.pathname.includes('/assets/selfie_segmentation'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'sonora-blur-v1', expiration: { maxEntries: 12 } },
+          },
           {
             // the page: always the newest one online; the last one seen when offline
             urlPattern: ({ request }) => request.mode === 'navigate',

@@ -173,7 +173,7 @@ type Corner = 'br' | 'bl' | 'tr' | 'tl';
 
 export function SelfPip() {
   const media = session.media;
-  const track = media.video.value;
+  const track = media.sentVideo.value ?? media.video.value;
   const stream = useMemo(() => (track ? new MediaStream([track]) : null), [track]);
   const s = settings.value;
   const me = session.self.value;

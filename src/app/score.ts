@@ -7,6 +7,7 @@ import { signal } from '@preact/signals';
 import { validInk, type Ink, type Stroke } from '../media/ink-core.ts';
 import { isImage, isPdf, openScore, type ScoreDoc } from '../media/pdf.ts';
 import { annotatedName, exportAnnotated } from '../media/pdf-export.ts';
+import { keep } from '../media/library.ts';
 import type { PeerView } from './participants.ts';
 import { newId } from './chat.ts';
 import { toast } from './notify.ts';
@@ -96,6 +97,7 @@ export class Score {
       return false;
     }
     const meta: ScoreMeta = { id: newId(), name: f.name.slice(0, 120), size: f.size, mime: f.type };
+    void keep('score', meta.name, f);
     this.resetInk();
     this.setFile({ ...meta, owner: this.host.selfId(), blob: f });
     this.change({ id: meta.id, name: meta.name, page: 0 });
@@ -394,6 +396,7 @@ export class Score {
     if (s && s.id !== meta.id) return;
     if (this.file.peek()?.id === meta.id) return;
     this.setFile({ ...meta, owner: from, blob });
+    void keep('score', meta.name, blob);
     if (!s) this.shared.value = { id: meta.id, name: meta.name, page: 0, ver: 0, by: from };
     const name = this.host.peers().find((p) => p.id === from)?.info.name ?? t('Someone');
     this.host.note(t('{name} shared a score: {file}', { name, file: meta.name }));

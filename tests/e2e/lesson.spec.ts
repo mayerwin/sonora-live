@@ -1328,8 +1328,9 @@ test('a shared score: same page for everyone, ink seen by all, undo, and saved w
   const ink = (p: Page) => p.evaluate(() => (window as unknown as S).sonora.score.ink.value.map((k) => k.page));
 
   await a.getByTestId('btn-music').click();
-  const chooser = a.waitForEvent('filechooser');
   await a.getByTestId('chip-score').click();
+  const chooser = a.waitForEvent('filechooser');
+  await a.getByTestId('score-open').click();
   await (await chooser).setFiles({ name: 'Etude.pdf', mimeType: 'application/pdf', buffer: pdf });
   // it opens by itself on his side, on the same page
   await expect(a.getByTestId('score-page')).toHaveText('1 of 2');
@@ -1530,4 +1531,207 @@ test('a phone as a camera: joins a full room as the teacher’s camera, no sound
   await a.getByTestId('phonecam-list').getByRole('button').click();
   await expect(phone.getByTestId('camera-mode')).toContainText('Clara took this camera away', { timeout: 15_000 });
   await expect(tile).toHaveCount(0, { timeout: 15_000 });
+});
+
+test('comforts: the library reopens last week’s track in one tap, the keys can be an organ for both, the lesson timer', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  type S = {
+    sonora: {
+      selfId: string;
+      backing: { track: { value: { name: string } | null } };
+      midi: { piano: { soundOf(id: string): string } };
+    };
+  };
+  // a track used once is kept on her device
+  await openTool(a, 'track');
+  await a
+    .getByTestId('backing-track')
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'Autumn Leaves.wav', mimeType: 'audio/wav', buffer: wav(4) });
+  await expect(b.getByTestId('backing-track')).toContainText('Autumn Leaves.wav', { timeout: 20_000 });
+  await a.getByRole('button', { name: 'Remove the track for everyone' }).click();
+  await expect(b.getByTestId('backing-track')).toHaveCount(0);
+  // … and opened again, for both, with one tap
+  await openTool(a, 'track');
+  const recent = a.getByTestId('recent-track');
+  await expect(recent).toContainText('Autumn Leaves');
+  await recent.getByRole('button', { name: /Autumn Leaves/ }).click();
+  await expect(b.getByTestId('backing-track')).toContainText('Autumn Leaves.wav', { timeout: 20_000 });
+  // he received it: kept on his device too
+  await b.getByTestId('btn-settings').click();
+  await b.getByRole('tab', { name: 'General' }).click();
+  await expect(b.getByTestId('library-list')).toContainText('Autumn Leaves.wav');
+  await b.keyboard.press('Escape');
+
+  // her keys as an organ: what she plays sounds as an organ on his side too
+  await openTool(a, 'keys');
+  await a.getByTestId('instrument-sound').selectOption('organ');
+  const claraId = await a.evaluate(() => (window as unknown as S).sonora.selfId);
+  await expect
+    .poll(() => b.evaluate((id) => (window as unknown as S).sonora.midi.piano.soundOf(id), claraId))
+    .toBe('organ');
+  expect(await a.evaluate(() => (window as unknown as S).sonora.midi.piano.soundOf('local'))).toBe('organ');
+
+  // the lesson timer: off by default, then in the top bar
+  await expect(a.getByTestId('lesson-timer')).toHaveCount(0);
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('tab', { name: 'Room' }).click();
+  await a.getByTestId('timer-on').check();
+  await a.getByRole('button', { name: '45 min' }).click();
+  await a.keyboard.press('Escape');
+  await expect(a.getByTestId('lesson-timer')).toHaveText(/^4[45]:\d\d$/);
+});
+
+test('YouTube together: shared by one, playing in time on both sides', async ({ browser }) => {
+  // YouTube's player, as its API gives it (no internet in tests): a clock that plays, pauses and seeks
+  const fakeYouTube = () => {
+    class Player {
+      t = 0;
+      at = 0;
+      state = 2;
+      rate = 1;
+      constructor(el: HTMLElement, o: { events: { onReady: () => void } }) {
+        el.textContent = 'video';
+        setTimeout(() => o.events.onReady(), 50);
+      }
+      now() {
+        return this.state === 1 ? this.t + ((performance.now() - this.at) / 1000) * this.rate : this.t;
+      }
+      playVideo() {
+        this.t = this.now();
+        this.at = performance.now();
+        this.state = 1;
+      }
+      pauseVideo() {
+        this.t = this.now();
+        this.state = 2;
+      }
+      seekTo(s: number) {
+        this.t = s;
+        this.at = performance.now();
+      }
+      getCurrentTime() {
+        return this.now();
+      }
+      getDuration() {
+        return 300;
+      }
+      getPlayerState() {
+        return this.state;
+      }
+      setPlaybackRate(r: number) {
+        this.t = this.now();
+        this.at = performance.now();
+        this.rate = r;
+      }
+      mute() {}
+      unMute() {}
+      setVolume() {}
+      destroy() {}
+    }
+    (window as unknown as { YT: unknown }).YT = { Player };
+  };
+  const a = await person(browser, 'Clara', 'teacher');
+  await a.addInitScript(fakeYouTube);
+  await a.reload();
+  await a.getByPlaceholder('e.g. Clara').fill('Clara');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await b.addInitScript(fakeYouTube);
+  await b.reload();
+  await b.getByPlaceholder('e.g. Clara').fill('Leo');
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  await openTool(a, 'track');
+  await a.getByTestId('yt-link').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10');
+  await a.getByTestId('yt-open').click();
+  await expect(b.getByTestId('youtube')).toBeVisible({ timeout: 15_000 });
+  await expect(b.getByTestId('yt-controls')).toBeVisible();
+  await a.getByTestId('yt-play').click();
+  type V = { sonora: { video: { currentTime(): number | null; delay: { value: number } } } };
+  const pos = (p: Page) => p.evaluate(() => (window as unknown as V).sonora.video.currentTime() ?? -1);
+  await expect.poll(() => pos(b), { timeout: 10_000 }).toBeGreaterThan(1);
+  // both at the same place (within a seek's threshold and the way between them)
+  await a.waitForTimeout(1500);
+  const [pa, pb] = await Promise.all([pos(a), pos(b)]);
+  // he plays it as late as her sound reaches him: in time with her, as he hears her
+  const delay = await b.evaluate(() => (window as unknown as V).sonora.video.delay.value / 1000);
+  console.log('youtube positions', pa, pb, 'his delay', delay);
+  expect(Math.abs(pa - pb - delay)).toBeLessThan(0.12);
+  // he seeks: for her too
+  await b
+    .getByTestId('yt-controls')
+    .locator('input[type=range]')
+    .evaluate((el: HTMLInputElement) => {
+      el.value = '120';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  await expect.poll(() => pos(a), { timeout: 10_000 }).toBeGreaterThan(119);
+});
+
+test('background blur: the picture sent is the blurred one, and it still reaches the other side', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const a = await person(browser, 'Clara', 'teacher');
+  await enter(a);
+  const b = await person(browser, 'Leo', 'student', await codeOf(a));
+  await enter(b);
+  await connected(a, 1);
+  await connected(b, 1);
+  /** her picture as his side decodes it (frames a second, from the connection's statistics) */
+  const fps = async () => ((await peers(b))[0].stats?.videoIn as { fps: number } | undefined)?.fps ?? 0;
+  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('tab', { name: 'Video' }).click();
+  await a.getByText('Blur my background').click();
+  await a.keyboard.press('Escape');
+  type M = {
+    sonora: {
+      media: {
+        video: { value: MediaStreamTrack | null };
+        sentVideo: { value: MediaStreamTrack | null };
+        blurFailed: { value: boolean };
+      };
+    };
+  };
+  // the segmentation loads (served with the app), then the sent picture is the processed one
+  await expect
+    .poll(
+      () =>
+        a.evaluate(() => {
+          const m = (window as unknown as M).sonora.media;
+          return { failed: m.blurFailed.value, processed: !!m.sentVideo.value && m.sentVideo.value !== m.video.value };
+        }),
+      { timeout: 40_000 },
+    )
+    .toEqual({ failed: false, processed: true });
+  // his side keeps receiving her picture, now the blurred one
+  await b.waitForTimeout(3000);
+
+  await expect.poll(fps, { timeout: 15_000 }).toBeGreaterThan(5);
+  // off again: the camera itself
+  const t0 = Date.now();
+  await a.evaluate(() => 1);
+  console.log('a round trip to her page while blurring (ms)', Date.now() - t0);
+  await a.getByTestId('btn-settings').click();
+  await a.getByRole('tab', { name: 'Video' }).click();
+  await a.getByText('Blur my background').click();
+  await expect
+    .poll(() =>
+      a.evaluate(() => {
+        const m = (window as unknown as M).sonora.media;
+        return m.sentVideo.value === m.video.value;
+      }),
+    )
+    .toBe(true);
 });

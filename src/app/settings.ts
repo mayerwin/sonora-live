@@ -1,5 +1,6 @@
 // Preferences, kept in this browser only (localStorage). Nothing about a lesson is stored anywhere else.
 
+import type { InstrumentSound } from '../midi/synth.ts';
 import { effect, signal } from '@preact/signals';
 import type { AudioQuality, VideoQuality } from '../media/constraints.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -27,6 +28,10 @@ export interface Settings {
   record: { quality: '720p' | '1080p'; voices: boolean };
   /** in rooms one opens: hold the shared controls (remembered from the last time) */
   holdControls: boolean;
+  /** the lesson timer in the top bar (this side only): off, counting up, or a length to count down */
+  timer: { on: boolean; minutes: 0 | 30 | 45 | 60 | 90 };
+  /** blur the camera's background */
+  blur: boolean;
   /** the sound check's measurements: the delay beyond what the browser reports (ms), per output and microphone */
   calibration: Record<string, number>;
   /** the tuner's reference pitch for A4 (Hz) */
@@ -68,6 +73,8 @@ export interface Settings {
     /** the on-screen keys were left open */
     keysOpen: boolean;
     qwerty: boolean;
+    /** the built-in instrument's sound, as the others hear what this side plays */
+    sound: InstrumentSound;
   };
   turn: TurnConfig;
 }
@@ -85,6 +92,8 @@ export const DEFAULTS: Settings = {
   metronome: { bpm: 100, beats: 4, sub: 1, accent: true, volume: 0.7, countIn: false },
   record: { quality: '720p', voices: false },
   holdControls: false,
+  timer: { on: false, minutes: 0 },
+  blur: false,
   midiSync: true,
   audioQuality: 'high',
   videoQuality: 'hd',
@@ -111,6 +120,7 @@ export const DEFAULTS: Settings = {
     keyboard: true,
     keysOpen: false,
     qwerty: false,
+    sound: 'grand',
   },
   turn: { urls: '', username: '', credential: '' },
 };
@@ -128,6 +138,7 @@ function load(): Settings {
       midi: { ...DEFAULTS.midi, ...(s.midi ?? {}) },
       metronome: { ...DEFAULTS.metronome, ...(s.metronome ?? {}) },
       record: { ...DEFAULTS.record, ...(s.record ?? {}) },
+      timer: { ...DEFAULTS.timer, ...(s.timer ?? {}) },
       turn: { ...DEFAULTS.turn, ...(s.turn ?? {}) },
     };
   } catch {

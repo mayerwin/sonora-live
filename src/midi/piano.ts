@@ -16,6 +16,7 @@
 //   • a soft limiter, so a fortissimo chord with the pedal down never distorts.
 // Latency: notes start immediately on an "interactive" audio context, at the sample's first sample.
 
+import { synthNote, type InstrumentSound } from './synth.ts';
 import { signal } from '@preact/signals';
 import versions from 'virtual:sonora-assets';
 import { engine } from '../media/engine.ts';
@@ -150,7 +151,11 @@ function isAppleWebKit(): boolean {
 
 interface Voice {
   note: number;
-  src: AudioBufferSourceNode | OscillatorNode;
+  src: AudioScheduledSourceNode;
+  /** the other sources of a synthesised note, stopped with it */
+  others?: AudioScheduledSourceNode[];
+  /** a synthesised sound's own release (every key has a damper) */
+  releaseTau?: number;
   out: GainNode;
   player: string;
   started: number;
@@ -184,6 +189,8 @@ export class Piano {
   private master!: GainNode;
   private buffers = new Map<string, { buf: AudioBuffer; offset: number }>();
   private voices: Voice[] = [];
+  /** players whose notes sound as another instrument than the grand */
+  private sounds = new Map<string, InstrumentSound>();
   private pedals = new Map<string, PlayerPedals>();
   private format: 'ogg' | 'm4a' = 'ogg';
   private loading: Promise<void> | null = null;
@@ -366,6 +373,16 @@ export class Piano {
     return p;
   }
 
+  /** Whose playing sounds as what (each player's own choice: the others hear it as they chose). */
+  setSound(player: string, sound: InstrumentSound): void {
+    if (sound === 'grand') this.sounds.delete(player);
+    else this.sounds.set(player, sound);
+  }
+
+  soundOf(player: string): InstrumentSound {
+    return this.sounds.get(player) ?? 'grand';
+  }
+
   noteOn(note: number, vel: number, player = 'local'): void {
     const ctx = this.context();
     if (!ctx || note < 21 || note > 108) return;
@@ -373,7 +390,24 @@ export class Piano {
     const pedals = this.pedal(player);
     if (pedals.soft) vel = Math.max(1, Math.round(vel * 0.82));
     // the hammer re-strikes the same string: damp what it was still sounding
-    for (const v of this.voices) if (v.note === note && !v.releasing) this.release(v, now, 0.04);
+    for (const v of this.voices) if (v.note === note && v.player === player && !v.releasing) this.release(v, now, 0.04);
+    const sound = this.soundOf(player);
+    if (sound !== 'grand') {
+      const s = synthNote(ctx, this.bus, sound, note, vel);
+      this.track({
+        note,
+        src: s.main,
+        others: s.others,
+        releaseTau: s.releaseTau,
+        out: s.out,
+        player,
+        started: now,
+        keyDown: true,
+        sostenuto: false,
+        releasing: false,
+      });
+      return;
+    }
     const gain = velocityGain(vel);
     // very soft playing is also darker
     const cutoff = vel < 56 ? 900 + Math.pow(vel / 56, 1.6) * 9000 : pedals.soft ? 6500 : 0;
@@ -468,6 +502,7 @@ export class Piano {
         victim.out.gain.setValueAtTime(victim.out.gain.value, now);
         victim.out.gain.linearRampToValueAtTime(0, now + 0.012);
         victim.src.stop(now + 0.015);
+        for (const o of victim.others ?? []) o.stop(now + 0.015);
       } catch {
         // already stopped
       }
@@ -489,6 +524,7 @@ export class Piano {
 
   /** The damper falls on the string (none in the top octave and a half). */
   private damp(v: Voice, now: number): void {
+    if (v.releaseTau) return this.release(v, now, v.releaseTau);
     if (v.note >= FIRST_UNDAMPED) return;
     const tau = 0.05 + 0.22 * Math.pow(1 - (v.note - 21) / 69, 1.5);
     this.release(v, now, tau);
@@ -502,6 +538,7 @@ export class Piano {
       v.out.gain.setValueAtTime(v.out.gain.value, now);
       v.out.gain.setTargetAtTime(0, now, tau);
       v.src.stop(now + tau * 7);
+      for (const o of v.others ?? []) o.stop(now + tau * 7);
     } catch {
       // already stopped
     }

@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Download,
   Eraser,
+  FileText,
+  Upload,
   Hand,
   Highlighter,
   Maximize2,
@@ -37,6 +39,7 @@ import {
 } from '../media/ink-core.ts';
 import { newId } from '../app/chat.ts';
 import { HeldNote } from './Host.tsx';
+import { Recent } from './Library.tsx';
 
 const score = session.score;
 
@@ -74,6 +77,35 @@ export function pickScore(): void {
     if (f && score.load(f)) scoreHidden.value = false;
   };
   input.click();
+}
+
+/** The strip's score panel while no score is open: a file, or one used before. */
+export function ScorePicker() {
+  const can = score.canControl && !session.controlsHeld.value;
+  return (
+    <div class="tool score-pick" data-testid="score-pick">
+      <HeldNote />
+      <div class="tool-row">
+        <FileText size={18} class="track-ico" />
+        <span class="muted grow">
+          {t('No score open. A PDF or a photo of the page: everyone sees it, and can write on it.')}
+        </span>
+        {can && (
+          <button class="btn btn-sm btn-ghost" onClick={pickScore} data-testid="score-open">
+            <Upload size={15} /> {t('Open a score')}
+          </button>
+        )}
+      </div>
+      {can && (
+        <Recent
+          kind="score"
+          onOpen={(f) => {
+            if (score.load(f)) scoreHidden.value = false;
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 /** the page and its ink as drawn now, for the recording */

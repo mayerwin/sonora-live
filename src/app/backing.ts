@@ -14,6 +14,7 @@
 //
 // Who may change it: musicians. Observers hear it and set their own volume.
 
+import { keep } from '../media/library.ts';
 import { signal } from '@preact/signals';
 import { engine } from '../media/engine.ts';
 import { StretchPlayer } from '../media/stretch.ts';
@@ -141,6 +142,7 @@ export class BackingTrack {
       return;
     }
     engine.ensure();
+    void keep('track', file.name.slice(0, 120), file);
     const meta: TrackMeta = { id: newId(), name: file.name.slice(0, 120), size: file.size, mime: file.type };
     this.setTrack({ ...meta, owner: this.host.selfId(), blob: file, url: URL.createObjectURL(file) });
     const prev = this.shared.peek();
@@ -403,6 +405,8 @@ export class BackingTrack {
     if (this.track.peek()?.id === meta.id) return;
     const peer = this.host.peers().find((p) => p.id === from);
     this.setTrack({ ...meta, owner: from, blob, url: URL.createObjectURL(blob) });
+    // kept in this device's library, to open again next time
+    void keep('track', meta.name, blob);
     if (!s) {
       this.shared.value = {
         id: meta.id,

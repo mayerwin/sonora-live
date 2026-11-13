@@ -18,6 +18,7 @@
 // No browser API is used here: links are created by the host, time comes from the host, so the whole lifecycle is
 // tested with a fake clock and fake links (tests/unit/participants.test.ts).
 
+import type { InstrumentSound } from '../midi/synth.ts';
 import type { SoundMode } from '../media/constraints.ts';
 import type { EchoSetting, SoundSetting } from './settings.ts';
 import type { PlayOn } from '../midi/hub.ts';
@@ -63,7 +64,7 @@ export interface RemoteState {
   /** where they play the others' MIDI: their setting, and whether they send theirs */
   midiPlayOn?: PlayOn;
   midiSend?: boolean;
-  midi: { device: string; sending: boolean; receiving: boolean };
+  midi: { device: string; sending: boolean; receiving: boolean; sound?: InstrumentSound };
   away: boolean;
 }
 

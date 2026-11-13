@@ -48,6 +48,8 @@ import { LockSheet, ShareSheet } from './ShareSheet.tsx';
 import { t } from '../app/i18n.ts';
 import { RecChip, RecordMenu, RecoverBanner, clock } from './Record.tsx';
 import { ScoreView, scoreShown } from './Score.tsx';
+import { LessonTimer } from './Timer.tsx';
+import { YouTubeView, videoShown } from './Video.tsx';
 import { ShortcutsSheet, useShortcuts } from './Shortcuts.tsx';
 import { PhoneCamSheet } from './PhoneCam.tsx';
 
@@ -79,7 +81,7 @@ export function Room() {
   const peers = session.peers.value;
   const rp = session.roomPhase.value;
   const denied = session.denied.value;
-  const withScore = scoreShown.value && !denied && rp !== 'joining';
+  const withScore = (scoreShown.value || videoShown.value) && !denied && rp !== 'joining';
 
   useEffect(() => {
     chatOpenTracker();
@@ -92,7 +94,16 @@ export function Room() {
       <TopBar />
       <main class={`stage ${withScore ? 'with-score' : ''}`}>
         <Banners />
-        {withScore && <ScoreView />}
+        {withScore &&
+          (scoreShown.value ? (
+            <div class="stage-main">
+              <ScoreView />
+              {/* a video too: small, in the score's corner */}
+              {videoShown.value && <YouTubeView small />}
+            </div>
+          ) : (
+            <YouTubeView />
+          ))}
         {denied ? (
           <Knocking />
         ) : rp === 'joining' ? (
@@ -198,6 +209,7 @@ function TopBar() {
       </button>
       <RecChip />
       <span class="spacer" />
+      <LessonTimer />
       {stats.length > 0 && (
         <button class="net-chip" onClick={() => openSettings('connection')} title={t('Connection details')}>
           <SignalBars quality={quality} />

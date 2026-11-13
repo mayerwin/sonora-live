@@ -23,6 +23,8 @@ import { t } from '../app/i18n.ts';
 import { clockOf, MIN_LOOP_S, stepRate } from '../media/backing-core.ts';
 import { trackOpen } from './state.ts';
 import { HeldNote } from './Host.tsx';
+import { Recent } from './Library.tsx';
+import { VideoControls } from './Video.tsx';
 
 const ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac,.aif,.aiff';
 
@@ -68,6 +70,8 @@ export function BackingPlayer() {
         }}
       />
       <HeldNote />
+      <VideoControls />
+      {can && !tr && !incoming && !s?.id && <Recent kind="track" onOpen={(f) => b.load(f)} />}
       <div class="track-row">
         <FileMusic class="track-ico" />
         <div class="track-name" title={tr?.name}>

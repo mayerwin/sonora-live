@@ -32,6 +32,8 @@ import { midiSyncTip } from './SoundPanel.tsx';
 import { sheet, settingsTab, type SettingsTab } from './state.ts';
 import { GitHubIcon } from './icons.tsx';
 import { RecordingsSection } from './Record.tsx';
+import { TimerSettings } from './Timer.tsx';
+import { LibrarySection } from './Library.tsx';
 
 const tabs = (): { id: SettingsTab; label: string }[] => [
   { id: 'audio', label: t('Sound') },
@@ -442,6 +444,16 @@ function VideoTab({ devices }: { devices: DeviceLists }) {
       )}
       <div class="section">
         <ToggleRow
+          title={t('Blur my background')}
+          sub={
+            session.media.blurFailed.value
+              ? t('Not possible in this browser: try an up-to-date Chrome, Edge or Firefox.')
+              : t('Done on this device; the first time takes a few seconds to load. It uses some battery.')
+          }
+          checked={s.blur}
+          onChange={(v) => update({ blur: v })}
+        />
+        <ToggleRow
           title={t('Mirror my preview')}
           sub={t('Only for you: the others always see the real image.')}
           checked={s.mirror}
@@ -470,6 +482,15 @@ function RoomTab() {
             update({ lockRooms: v });
           }}
         />
+      </div>
+      <div class="section">
+        <h3>{t('Lesson timer')}</h3>
+        <p class="lead" style="font-size:13px">
+          {t(
+            'Only for you, in the top bar: the time since the lesson started, or the time left, with a soft chime five minutes before the end.',
+          )}
+        </p>
+        <TimerSettings />
       </div>
       <RecordingsSection />
       <div class="section">
@@ -671,6 +692,7 @@ function AboutTab() {
           </p>
         )}
       </div>
+      <LibrarySection />
       {!isMobile && (
         <div class="section">
           <h3>

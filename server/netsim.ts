@@ -2,7 +2,8 @@
 // client's packets as its username says. Browsers forced through it (`?nodirect`, and this server as their TURN
 // server) carry everything over it: sound, video, MIDI and the data channels, as on a real long-distance link.
 //
-//   username  sim-<up>-<down>[-<jitter>[-<loss>]]   ms from the client to the relay, ms back, ± ms, % lost
+//   username  sim-<up>-<down>[-<jitter>[-<loss>[-<kbps>]]]   ms from the client to the relay, ms back, ± ms,
+//             % lost, and the link's capacity each way (kbit/s; a router's queue of a quarter second, then drops)
 //
 // Between two browsers the one-way delay is the sender's <up> plus the receiver's <down>: `sim-50-50` on both sides
 // is 100 ms each way (200 ms round trip). Jitter delays each packet by up to that much more, in order (as a
@@ -62,18 +63,21 @@ export interface LinkProfile {
   jitter: number;
   /** share of packets lost, 0..1 */
   loss: number;
+  /** capacity each way, kbit/s (0: unlimited) */
+  kbps?: number;
 }
 
 /** The link a username asks for (`sim-<up>-<down>[-<jitter>[-<loss %>]]`); no delay for any other name. */
 export function profileOf(username: string): LinkProfile {
-  const m = /^sim-(\d+)-(\d+)(?:-(\d+))?(?:-(\d+(?:\.\d+)?))?$/.exec(username);
+  const m = /^sim-(\d+)-(\d+)(?:-(\d+))?(?:-(\d+(?:\.\d+)?))?(?:-(\d+))?$/.exec(username);
   if (!m) return { up: 0, down: 0, jitter: 0, loss: 0 };
-  return { up: +m[1], down: +m[2], jitter: +(m[3] ?? 0), loss: +(m[4] ?? 0) / 100 };
+  return { up: +m[1], down: +m[2], jitter: +(m[3] ?? 0), loss: +(m[4] ?? 0) / 100, kbps: +(m[5] ?? 0) };
 }
 
 /** The username for a link profile. */
 export function usernameOf(p: Partial<LinkProfile>): string {
-  return `sim-${p.up ?? 0}-${p.down ?? 0}-${p.jitter ?? 0}-${(p.loss ?? 0) * 100}`;
+  const base = `sim-${p.up ?? 0}-${p.down ?? 0}-${p.jitter ?? 0}-${(p.loss ?? 0) * 100}`;
+  return p.kbps ? `${base}-${p.kbps}` : base;
 }
 
 interface Attr {
@@ -204,23 +208,44 @@ interface Allocation {
  * reordering would make TCP-like transports, SCTP included, take it for loss and slow down). One timer per lane:
  * separate timers would fire out of order (they round to whole milliseconds).
  */
+/** how long a capped link's router holds packets before it drops new ones (ms) */
+const QUEUE_MS = 250;
+
 class Lane {
   private queue: { at: number; fn: () => void }[] = [];
   private last = 0;
+  /** a capped link is sending until then (ms) */
+  private busy = 0;
+  /** packets dropped because the link's queue was full */
+  dropped = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private delay: () => number;
   private jitter: () => number;
   private loss: () => number;
-  constructor(delay: () => number, jitter: () => number, loss: () => number) {
+  private kbps: () => number;
+  constructor(delay: () => number, jitter: () => number, loss: () => number, kbps: () => number = () => 0) {
     this.delay = delay;
     this.jitter = jitter;
     this.loss = loss;
+    this.kbps = kbps;
   }
 
-  push(fn: () => void): void {
+  push(fn: () => void, bytes = 0): void {
     if (this.loss() > 0 && Math.random() < this.loss()) return;
     const now = performance.now();
-    const at = Math.max(this.last, now + this.delay() + Math.random() * this.jitter());
+    let leaves = now;
+    const rate = this.kbps();
+    if (rate > 0 && bytes > 0) {
+      // the link sends one packet after another at its rate; a router holds a quarter second, then drops
+      const start = Math.max(now, this.busy);
+      if (start - now > QUEUE_MS) {
+        this.dropped++;
+        return;
+      }
+      this.busy = start + ((bytes + 28) * 8) / rate;
+      leaves = this.busy;
+    }
+    const at = Math.max(this.last, leaves + this.delay() + Math.random() * this.jitter());
     this.last = at;
     if (at - now < 0.5 && !this.queue.length) return fn();
     this.queue.push({ at, fn });
@@ -278,11 +303,13 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
           () => profile().up,
           () => profile().jitter,
           () => profile().loss,
+          () => profile().kbps ?? 0,
         ),
         down: new Lane(
           () => profile().down,
           () => profile().jitter,
           () => profile().loss,
+          () => profile().kbps ?? 0,
         ),
       };
       lanes.set(k, l);
@@ -294,7 +321,7 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
   const toClient = (r: RemoteInfo, b: Buffer) => {
     lanesOf(r).down.push(() => {
       if (!closed) send(sock, b, r.port, r.address);
-    });
+    }, b.length);
   };
 
   const fromRelay = (a: Allocation, data: Buffer, from: RemoteInfo) => {
@@ -440,7 +467,7 @@ export function startNetsim(port = 3479, host = '127.0.0.1'): Promise<Netsim> {
     if (!allocs.has(keyOf(r))) return handle(b, r);
     lanesOf(r).up.push(() => {
       if (!closed) handle(b, r);
-    });
+    }, b.length);
   });
 
   return new Promise((resolve, reject) => {

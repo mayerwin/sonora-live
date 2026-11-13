@@ -3,7 +3,7 @@
 // starts (a track, the metronome) opens by itself for everyone; a dot shows which tools are in use.
 
 import { HeldNote } from './Host.tsx';
-import { computed } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   FileText,
@@ -24,7 +24,10 @@ import { MAX_BPM, MIN_BPM, tapTempo, type MetronomeSetup } from '../media/metron
 import { detectPitch, nearestNote } from '../media/pitch.ts';
 import { engine } from '../media/engine.ts';
 import { BackingPlayer } from './BackingTrack.tsx';
-import { pickScore, scoreHidden, scoreShown } from './Score.tsx';
+import { ScorePicker, scoreHidden, scoreShown } from './Score.tsx';
+
+/** the score panel (to open one) is out */
+const scorePickOpen = signal(false);
 import { noteName, PianoKeys } from './Keyboard.tsx';
 import { keyboardOpen, metroOpen, musicOpen, trackOpen, tunerOpen } from './state.ts';
 
@@ -38,7 +41,11 @@ export const midiActive = computed(
 
 /** a backing track is shared in the lesson (or on its way) */
 export const trackInPlay = computed(
-  () => !!session.backing.track.value || !!session.backing.incoming.value || !!session.backing.shared.value?.id,
+  () =>
+    !!session.backing.track.value ||
+    !!session.backing.incoming.value ||
+    !!session.backing.shared.value?.id ||
+    !!session.video.shared.value?.id,
 );
 
 /** What each tool shows now: opened by hand, or by itself while it is in use (unless hidden by hand). */
@@ -130,12 +137,12 @@ export function MusicStrip() {
       id: 'score',
       label: t('Score'),
       icon: FileText,
-      on: scoreShown.value,
+      on: scoreShown.value || (scorePickOpen.value && !session.score.shared.value?.id),
       busy: !!session.score.shared.value?.id,
-      // open one (shared with everyone), or show and hide the one open
+      // show and hide the one open, or the panel to open one (a file, or one used before)
       toggle: () => {
         if (session.score.shared.peek()?.id) scoreHidden.value = !scoreHidden.peek();
-        else pickScore();
+        else scorePickOpen.value = !scorePickOpen.peek();
       },
     },
   ];
@@ -172,6 +179,7 @@ export function MusicStrip() {
       {s.track && <BackingPlayer />}
       {s.metronome && <MetronomePanel />}
       {s.tuner && <TunerPanel />}
+      {scorePickOpen.value && !session.score.shared.value?.id && <ScorePicker />}
       {s.keys && <PianoKeys onClose={() => setKeys(false)} />}
     </section>
   );

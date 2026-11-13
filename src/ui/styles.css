@@ -3499,6 +3499,194 @@ emoji-picker {
   }
 }
 
+/* ---------------------------------------------------------------------------------------- timer */
+
+.timer-wrap {
+  position: relative;
+}
+
+.timer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-chip.soon {
+  color: var(--gold-2);
+  border-color: rgba(245, 181, 68, 0.45);
+  background: var(--gold-soft);
+}
+
+.timer-chip.over {
+  color: #ffc9c5;
+  border-color: rgba(255, 93, 85, 0.4);
+  background: var(--red-soft);
+}
+
+.timer-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+  left: auto;
+  right: 0;
+  transform: none;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  min-width: 300px;
+}
+
+.timer-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------------------------- youtube */
+
+.stage-main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+
+.yt {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line-2);
+}
+
+.yt-frame,
+.yt-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.yt.small {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: min(320px, 40%);
+  aspect-ratio: 16 / 9;
+  z-index: 5;
+  box-shadow: var(--shadow-lg);
+}
+
+.yt-fail {
+  position: absolute;
+  inset: auto 0 0;
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.yt-add,
+.yt-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.yt-add .input {
+  flex: 1;
+  min-width: 200px;
+  height: 34px;
+}
+
+.yt-seek {
+  flex: 1;
+  min-width: 120px;
+}
+
+.yt-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.yt-note {
+  flex-basis: 100%;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------------------- library */
+
+.recent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.recent-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.recent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.recent-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-chip:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.score-pick .tool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* ---------------------------------------------------------------------------------------- phone cameras */
 
 .phonecam {

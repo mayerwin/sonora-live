@@ -488,3 +488,48 @@ test('the sound check tells speakers from headphones, and measures Bluetooth hea
   await a.context().close();
   await b.context().close();
 });
+
+for (const kbps of [1500, 700]) {
+  test(`a narrow link (${kbps} kbit/s each way): the picture gives way, his sound stays whole`, async () => {
+    test.setTimeout(120_000);
+    const a = await simPerson(browser!, 'Clara', { turn: sim.url, settings: { echo: 'off' } });
+    const b = await simPerson(browser!, 'Leo', {
+      turn: sim.url,
+      net: { up: 20, down: 20, jitter: 2, kbps },
+      settings: { echo: 'off', autoLevel: false },
+      hash: await codeOf(a),
+    });
+    await linked(a, 1);
+    await linked(b, 1);
+    // he plays: a steady tone into his microphone (sound that must arrive whole)
+    await b.evaluate(() => {
+      const s = (window as unknown as W).__sim;
+      const o = s.ctx.createOscillator();
+      o.frequency.value = 330;
+      const g = s.ctx.createGain();
+      g.gain.value = 0.2;
+      o.connect(g).connect(s.mic);
+      o.start();
+    });
+    // the congestion control finds the link's size
+    await a.waitForTimeout(15_000);
+    const before = await audioIn(a);
+    await a.waitForTimeout(10_000);
+    const after = await audioIn(a);
+    const concealed = (after.concealed - before.concealed) / Math.max(1, after.samples - before.samples);
+    type S = { stats: { videoIn: { kbps: number; fps: number; h: number } | null; audioInKbps: number } | null };
+    const stats = await a.evaluate(
+      () => (window as unknown as { sonora: { peers: { value: S[] } } }).sonora.peers.value[0].stats,
+    );
+    console.log(
+      `${kbps} kbit/s: ${(concealed * 100).toFixed(2)}% of his sound concealed; his sound ${stats?.audioInKbps} kbit/s, his picture ${stats?.videoIn?.kbps} kbit/s at ${stats?.videoIn?.fps} fps, ${stats?.videoIn?.h}p`,
+    );
+    // the sound first: (almost) nothing invented by the jitter buffer
+    expect(concealed).toBeLessThan(0.01);
+    // the picture fits in what is left, and still moves
+    expect(stats?.videoIn?.kbps ?? 0).toBeLessThan(kbps);
+    expect(stats?.videoIn?.fps ?? 0).toBeGreaterThan(4);
+    await a.context().close();
+    await b.context().close();
+  });
+}

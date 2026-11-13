@@ -1,6 +1,7 @@
 // The local camera, microphone and screen. Every change produces a new track that the session sends with
 // RTCRtpSender.replaceTrack, so switching devices or sound modes is seamless for the other side.
 
+import { Blurred, setSystemBlur, systemBlur } from './blur.ts';
 import { effect, signal } from '@preact/signals';
 import { PictureWatch } from './picture.ts';
 import { engine } from './engine.ts';
@@ -22,6 +23,11 @@ export class LocalMedia {
   readonly video = signal<MediaStreamTrack | null>(null);
   readonly extra = signal<MediaStreamTrack | null>(null);
   readonly extraKind = signal<'screen' | 'camera' | null>(null);
+  /** what the camera sends (and the previews show): the camera itself, or with its background blurred */
+  readonly sentVideo = signal<MediaStreamTrack | null>(null);
+  readonly blur = signal(false);
+  /** the blur could not start here (an old browser, no WebAssembly SIMD, no memory) */
+  readonly blurFailed = signal(false);
   /** the shared screen's sound (a tab or the whole system, where the browser offers it) */
   readonly screenAudio = signal<MediaStreamTrack | null>(null);
   readonly micOn = signal(true);
@@ -193,7 +199,7 @@ export class LocalMedia {
     this.video.value = t;
     this.lastCamId = t.getSettings().deviceId;
     this.picture.watch(t);
-    this.onTrack('video', t);
+    void this.emitVideo(t);
     if (old && old !== t) old.stop();
   }
 
@@ -322,7 +328,7 @@ export class LocalMedia {
         this.videoProblem.value = problemOf(e);
         this.video.value = null;
         this.picture.stop();
-        this.onTrack('video', null);
+        void this.emitVideo(null);
       }
     });
   }
@@ -395,7 +401,7 @@ export class LocalMedia {
         const t = this.video.value;
         this.video.value = null;
         this.picture.stop();
-        this.onTrack('video', null);
+        void this.emitVideo(null);
         t?.stop();
         return;
       }
@@ -494,6 +500,45 @@ export class LocalMedia {
     }
   }
 
+  private blurred: Blurred | null = null;
+  private videoGen = 0;
+
+  /** Send the camera's picture (or nothing), with its background blurred when asked. */
+  private async emitVideo(t: MediaStreamTrack | null): Promise<void> {
+    const gen = ++this.videoGen;
+    const old = this.blurred;
+    const plain = () => {
+      this.blurred = null;
+      this.sentVideo.value = t;
+      this.onTrack('video', t);
+      if (old && old.track !== t) old.stop();
+    };
+    if (!t || !this.blur.peek()) {
+      if (t && systemBlur(t)) await setSystemBlur(t, false);
+      return plain();
+    }
+    // the system's own blur, where the camera offers it: nothing to do here
+    if (systemBlur(t) && (await setSystemBlur(t, true))) return plain();
+    try {
+      const b = await Blurred.create(t);
+      if (gen !== this.videoGen) return b.stop();
+      this.blurred = b;
+      this.sentVideo.value = b.track;
+      this.onTrack('video', b.track);
+      old?.stop();
+      this.blurFailed.value = false;
+    } catch {
+      this.blurFailed.value = true;
+      if (gen === this.videoGen) plain();
+    }
+  }
+
+  setBlur(on: boolean): void {
+    if (on === this.blur.peek()) return;
+    this.blur.value = on;
+    void this.emitVideo(this.video.peek());
+  }
+
   /** A phone used as a camera: the back camera, no microphone. */
   async startCameraOnly(quality: VideoQuality): Promise<boolean> {
     this.facing.value = 'environment';
@@ -507,7 +552,7 @@ export class LocalMedia {
       t.contentHint = 'motion';
       this.video.value = t;
       this.camOn.value = true;
-      this.onTrack('video', t);
+      void this.emitVideo(t);
       return true;
     } catch (e) {
       this.videoProblem.value = problemOf(e);
